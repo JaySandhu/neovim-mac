@@ -11,7 +11,8 @@
 		69240E1D242B9855004E0DE0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 69240E1C242B9855004E0DE0 /* Assets.xcassets */; };
 		69240E20242B9855004E0DE0 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 69240E1E242B9855004E0DE0 /* MainMenu.xib */; };
 		69240E23242B9855004E0DE0 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 69240E22242B9855004E0DE0 /* main.m */; };
-		69240E2E242B9855004E0DE0 /* NeovimTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 69240E2D242B9855004E0DE0 /* NeovimTests.m */; };
+		69240E3C242BA3DA004E0DE0 /* BumpAllocator.mm in Sources */ = {isa = PBXBuildFile; fileRef = 69240E3A242BA3B1004E0DE0 /* BumpAllocator.mm */; };
+		69240E40242BA40E004E0DE0 /* DeathTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 69240E3E242BA401004E0DE0 /* DeathTest.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -33,8 +34,11 @@
 		69240E21242B9855004E0DE0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		69240E22242B9855004E0DE0 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		69240E29242B9855004E0DE0 /* NeovimTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NeovimTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		69240E2D242B9855004E0DE0 /* NeovimTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = NeovimTests.m; sourceTree = "<group>"; };
 		69240E2F242B9855004E0DE0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		69240E39242BA280004E0DE0 /* bump_allocator.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = bump_allocator.hpp; sourceTree = "<group>"; };
+		69240E3A242BA3B1004E0DE0 /* BumpAllocator.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = BumpAllocator.mm; sourceTree = "<group>"; };
+		69240E3D242BA401004E0DE0 /* DeathTest.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DeathTest.h; sourceTree = "<group>"; };
+		69240E3E242BA401004E0DE0 /* DeathTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DeathTest.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -79,6 +83,7 @@
 			children = (
 				69240E19242B9854004E0DE0 /* AppDelegate.h */,
 				69240E1A242B9854004E0DE0 /* AppDelegate.m */,
+				69240E39242BA280004E0DE0 /* bump_allocator.hpp */,
 				69240E22242B9855004E0DE0 /* main.m */,
 			);
 			path = src;
@@ -87,7 +92,9 @@
 		69240E2C242B9855004E0DE0 /* test */ = {
 			isa = PBXGroup;
 			children = (
-				69240E2D242B9855004E0DE0 /* NeovimTests.m */,
+				69240E3A242BA3B1004E0DE0 /* BumpAllocator.mm */,
+				69240E3D242BA401004E0DE0 /* DeathTest.h */,
+				69240E3E242BA401004E0DE0 /* DeathTest.m */,
 				69240E2F242B9855004E0DE0 /* Info.plist */,
 			);
 			path = test;
@@ -211,7 +218,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				69240E2E242B9855004E0DE0 /* NeovimTests.m in Sources */,
+				69240E40242BA40E004E0DE0 /* DeathTest.m in Sources */,
+				69240E3C242BA3DA004E0DE0 /* BumpAllocator.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
