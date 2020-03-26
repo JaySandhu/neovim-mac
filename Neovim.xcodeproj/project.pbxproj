@@ -13,6 +13,8 @@
 		69240E23242B9855004E0DE0 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 69240E22242B9855004E0DE0 /* main.m */; };
 		69240E3C242BA3DA004E0DE0 /* BumpAllocator.mm in Sources */ = {isa = PBXBuildFile; fileRef = 69240E3A242BA3B1004E0DE0 /* BumpAllocator.mm */; };
 		69240E40242BA40E004E0DE0 /* DeathTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 69240E3E242BA401004E0DE0 /* DeathTest.m */; };
+		693550E9242CBFE500FB0A94 /* circular_buffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 693550E7242CBFE500FB0A94 /* circular_buffer.cpp */; };
+		693550EB242CBFFD00FB0A94 /* CircularBuffer.mm in Sources */ = {isa = PBXBuildFile; fileRef = 693550EA242CBFFD00FB0A94 /* CircularBuffer.mm */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -39,6 +41,9 @@
 		69240E3A242BA3B1004E0DE0 /* BumpAllocator.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = BumpAllocator.mm; sourceTree = "<group>"; };
 		69240E3D242BA401004E0DE0 /* DeathTest.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DeathTest.h; sourceTree = "<group>"; };
 		69240E3E242BA401004E0DE0 /* DeathTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DeathTest.m; sourceTree = "<group>"; };
+		693550E7242CBFE500FB0A94 /* circular_buffer.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = circular_buffer.cpp; sourceTree = "<group>"; };
+		693550E8242CBFE500FB0A94 /* circular_buffer.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = circular_buffer.hpp; sourceTree = "<group>"; };
+		693550EA242CBFFD00FB0A94 /* CircularBuffer.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = CircularBuffer.mm; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -84,6 +89,8 @@
 				69240E19242B9854004E0DE0 /* AppDelegate.h */,
 				69240E1A242B9854004E0DE0 /* AppDelegate.m */,
 				69240E39242BA280004E0DE0 /* bump_allocator.hpp */,
+				693550E8242CBFE500FB0A94 /* circular_buffer.hpp */,
+				693550E7242CBFE500FB0A94 /* circular_buffer.cpp */,
 				69240E22242B9855004E0DE0 /* main.m */,
 			);
 			path = src;
@@ -93,6 +100,7 @@
 			isa = PBXGroup;
 			children = (
 				69240E3A242BA3B1004E0DE0 /* BumpAllocator.mm */,
+				693550EA242CBFFD00FB0A94 /* CircularBuffer.mm */,
 				69240E3D242BA401004E0DE0 /* DeathTest.h */,
 				69240E3E242BA401004E0DE0 /* DeathTest.m */,
 				69240E2F242B9855004E0DE0 /* Info.plist */,
@@ -210,6 +218,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				69240E23242B9855004E0DE0 /* main.m in Sources */,
+				693550E9242CBFE500FB0A94 /* circular_buffer.cpp in Sources */,
 				69240E1B242B9854004E0DE0 /* AppDelegate.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -219,6 +228,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				69240E40242BA40E004E0DE0 /* DeathTest.m in Sources */,
+				693550EB242CBFFD00FB0A94 /* CircularBuffer.mm in Sources */,
 				69240E3C242BA3DA004E0DE0 /* BumpAllocator.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
