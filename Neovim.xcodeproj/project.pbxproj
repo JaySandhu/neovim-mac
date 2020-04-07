@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		6904995F24377F2B002C7B95 /* neovim_controller.mm in Sources */ = {isa = PBXBuildFile; fileRef = 6904995D24377F2B002C7B95 /* neovim_controller.mm */; };
 		69240E1B242B9854004E0DE0 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 69240E1A242B9854004E0DE0 /* AppDelegate.m */; };
 		69240E1D242B9855004E0DE0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 69240E1C242B9855004E0DE0 /* Assets.xcassets */; };
 		69240E20242B9855004E0DE0 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 69240E1E242B9855004E0DE0 /* MainMenu.xib */; };
@@ -15,6 +16,8 @@
 		69240E40242BA40E004E0DE0 /* DeathTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 69240E3E242BA401004E0DE0 /* DeathTest.m */; };
 		693550E9242CBFE500FB0A94 /* circular_buffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 693550E7242CBFE500FB0A94 /* circular_buffer.cpp */; };
 		693550EB242CBFFD00FB0A94 /* CircularBuffer.mm in Sources */ = {isa = PBXBuildFile; fileRef = 693550EA242CBFFD00FB0A94 /* CircularBuffer.mm */; };
+		6945A1552434E593005D68ED /* neovim.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6945A1532434E593005D68ED /* neovim.cpp */; };
+		6955FE6624363AD400008191 /* NVWindowController.mm in Sources */ = {isa = PBXBuildFile; fileRef = 6955FE6524363AD400008191 /* NVWindowController.mm */; };
 		695BBE9524349ED1007CF9F5 /* spawn.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 695BBE9324349ED1007CF9F5 /* spawn.cpp */; };
 		695BBE982434BAAC007CF9F5 /* Spawn.mm in Sources */ = {isa = PBXBuildFile; fileRef = 695BBE962434BA76007CF9F5 /* Spawn.mm */; };
 		695C0ABD242E274800266D89 /* msgpack.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 695C0ABC242E274800266D89 /* msgpack.cpp */; };
@@ -32,6 +35,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		6904995D24377F2B002C7B95 /* neovim_controller.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = neovim_controller.mm; sourceTree = "<group>"; };
+		6904995E24377F2B002C7B95 /* neovim_controller.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = neovim_controller.hpp; sourceTree = "<group>"; };
 		69240E16242B9854004E0DE0 /* Neovim.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Neovim.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		69240E19242B9854004E0DE0 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		69240E1A242B9854004E0DE0 /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
@@ -48,6 +53,10 @@
 		693550E7242CBFE500FB0A94 /* circular_buffer.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = circular_buffer.cpp; sourceTree = "<group>"; };
 		693550E8242CBFE500FB0A94 /* circular_buffer.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = circular_buffer.hpp; sourceTree = "<group>"; };
 		693550EA242CBFFD00FB0A94 /* CircularBuffer.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = CircularBuffer.mm; sourceTree = "<group>"; };
+		6945A1532434E593005D68ED /* neovim.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = neovim.cpp; sourceTree = "<group>"; };
+		6945A1542434E593005D68ED /* neovim.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = neovim.hpp; sourceTree = "<group>"; };
+		6955FE6424363AD400008191 /* NVWindowController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NVWindowController.h; sourceTree = "<group>"; };
+		6955FE6524363AD400008191 /* NVWindowController.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = NVWindowController.mm; sourceTree = "<group>"; };
 		695BBE9324349ED1007CF9F5 /* spawn.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = spawn.cpp; sourceTree = "<group>"; };
 		695BBE9424349ED1007CF9F5 /* spawn.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = spawn.hpp; sourceTree = "<group>"; };
 		695BBE962434BA76007CF9F5 /* Spawn.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = Spawn.mm; sourceTree = "<group>"; };
@@ -96,6 +105,7 @@
 		69240E18242B9854004E0DE0 /* src */ = {
 			isa = PBXGroup;
 			children = (
+				69240E22242B9855004E0DE0 /* main.m */,
 				69240E19242B9854004E0DE0 /* AppDelegate.h */,
 				69240E1A242B9854004E0DE0 /* AppDelegate.m */,
 				69240E39242BA280004E0DE0 /* bump_allocator.hpp */,
@@ -103,9 +113,14 @@
 				693550E7242CBFE500FB0A94 /* circular_buffer.cpp */,
 				695C0ABB242E274800266D89 /* msgpack.hpp */,
 				695C0ABC242E274800266D89 /* msgpack.cpp */,
-				69240E22242B9855004E0DE0 /* main.m */,
 				695BBE9424349ED1007CF9F5 /* spawn.hpp */,
 				695BBE9324349ED1007CF9F5 /* spawn.cpp */,
+				6945A1542434E593005D68ED /* neovim.hpp */,
+				6945A1532434E593005D68ED /* neovim.cpp */,
+				6904995E24377F2B002C7B95 /* neovim_controller.hpp */,
+				6904995D24377F2B002C7B95 /* neovim_controller.mm */,
+				6955FE6424363AD400008191 /* NVWindowController.h */,
+				6955FE6524363AD400008191 /* NVWindowController.mm */,
 			);
 			path = src;
 			sourceTree = SOURCE_ROOT;
@@ -236,8 +251,11 @@
 				69240E23242B9855004E0DE0 /* main.m in Sources */,
 				693550E9242CBFE500FB0A94 /* circular_buffer.cpp in Sources */,
 				695BBE9524349ED1007CF9F5 /* spawn.cpp in Sources */,
+				6955FE6624363AD400008191 /* NVWindowController.mm in Sources */,
+				6945A1552434E593005D68ED /* neovim.cpp in Sources */,
 				695C0ABD242E274800266D89 /* msgpack.cpp in Sources */,
 				69240E1B242B9854004E0DE0 /* AppDelegate.m in Sources */,
+				6904995F24377F2B002C7B95 /* neovim_controller.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

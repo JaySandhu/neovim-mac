@@ -8,22 +8,18 @@
 //
 
 #import "AppDelegate.h"
-
-@interface AppDelegate ()
-
-@property (weak) IBOutlet NSWindow *window;
-@end
+#import "NVWindowController.h"
 
 @implementation AppDelegate
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
-    // Insert code here to initialize your application
+    signal(SIGPIPE, SIG_IGN);
+    
+    NVWindowController *controller = [[NVWindowController alloc] init];
+    [controller connect:@"/users/jay/pipe"];
 }
-
 
 - (void)applicationWillTerminate:(NSNotification *)aNotification {
-    // Insert code here to tear down your application
 }
-
 
 @end
