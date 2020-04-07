@@ -53,18 +53,22 @@ public:
         return fd != -1;
     }
 
+    int release() {
+        int ret = fd;
+        fd = -1;
+        return ret;
+    }
+
     int get() const {
         return fd;
     }
 };
 
 /// A Unix pipe, as created by pipe().
-class unnamed_pipe {
-private:
-    file_descriptor read;
-    file_descriptor write;
+struct unnamed_pipe {
+    file_descriptor read_end;
+    file_descriptor write_end;
 
-public:
     /// Opens a new pipe. The close-on-exec flag is set on both the read
     /// and write file descriptors.
     ///
@@ -80,30 +84,10 @@ public:
         fcntl(fds[0], F_SETFD, FD_CLOEXEC);
         fcntl(fds[1], F_SETFD, FD_CLOEXEC);
 
-        read = file_descriptor(fds[0]);
-        write = file_descriptor(fds[1]);
+        read_end = file_descriptor(fds[0]);
+        write_end = file_descriptor(fds[1]);
 
         return 0;
-    }
-
-    /// Returns the pipes read end file descriptor
-    int read_end() const {
-        return read.get();
-    }
-
-    /// Returns the pipes write end file descriptor
-    int write_end() const {
-        return write.get();
-    }
-
-    /// Take ownership of the pipes read end file descriptor
-    file_descriptor take_read_end() {
-        return std::move(read);
-    }
-
-    /// Take ownership of the pipes write end file descriptor
-    file_descriptor take_write_end() {
-        return std::move(write);
     }
 };
 
