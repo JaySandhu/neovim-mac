@@ -181,8 +181,8 @@ static inline bool all_a(const char *begin, const char *end) {
     msg::object uniques[] = {
         msg::make_object<msg::boolean>(true),
         msg::make_object<msg::boolean>(false),
-        msg::make_object<msg::uint64>(128),
-        msg::make_object<msg::int64>(128),
+        msg::make_object<msg::integer>(128),
+        msg::make_object<msg::integer>(256),
         msg::make_object<msg::string>("string"),
         msg::make_object<msg::null>(),
         msg::make_object<msg::array>()
@@ -203,19 +203,19 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testObjectComparisons {
     msg::object sorted[] = {
-        msg::make_object<msg::uint64>(1),
-        msg::make_object<msg::uint64>(1),
-        msg::make_object<msg::uint64>(2),
-        msg::make_object<msg::uint64>(3),
-        msg::make_object<msg::uint64>(4),
+        msg::make_object<msg::integer>(1),
+        msg::make_object<msg::integer>(1),
+        msg::make_object<msg::integer>(2),
+        msg::make_object<msg::integer>(3),
+        msg::make_object<msg::integer>(4),
     };
     
     msg::object unsorted[] = {
-        msg::make_object<msg::uint64>(1),
-        msg::make_object<msg::uint64>(3),
-        msg::make_object<msg::uint64>(4),
-        msg::make_object<msg::uint64>(1),
-        msg::make_object<msg::uint64>(2),
+        msg::make_object<msg::integer>(1),
+        msg::make_object<msg::integer>(3),
+        msg::make_object<msg::integer>(4),
+        msg::make_object<msg::integer>(1),
+        msg::make_object<msg::integer>(2),
     };
     
     auto begin = std::begin(sorted);
@@ -225,7 +225,7 @@ static inline bool all_a(const char *begin, const char *end) {
     std::sort(std::begin(unsorted), std::end(unsorted));
     XCTAssertTrue(std::equal(std::begin(unsorted), std::end(unsorted), sorted));
     
-    sorted[3] = msg::make_object<msg::uint64>(0);
+    sorted[3] = msg::make_object<msg::integer>(0);
     XCTAssertFalse(std::is_sorted(begin, end));
 }
 
@@ -325,7 +325,7 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackUnsignedIntegerFixedMin {
     auto packed = packed_data("\x00");
-    auto value = msg::make_object<msg::uint64>(0);
+    auto value = msg::make_object<msg::integer>(0);
 
     msg::unpacker unpacker;
     unpacker.feed(packed.data(), packed.size());
@@ -338,7 +338,7 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackUnsignedIntegerFixedMax {
     auto packed = packed_data("\x7f");
-    auto value = msg::make_object<msg::uint64>(127);
+    auto value = msg::make_object<msg::integer>(127);
 
     msg::unpacker unpacker;
     unpacker.feed(packed.data(), packed.size());
@@ -351,7 +351,7 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackUnsignedInteger8bit {
     auto packed = packed_data("\xcc\x80");
-    auto value = msg::make_object<msg::uint64>(128);
+    auto value = msg::make_object<msg::integer>(128);
 
     msg::unpacker unpacker;
     unpacker.feed(packed.data(), packed.size());
@@ -375,7 +375,7 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackUnsignedInteger16bit {
     auto packed = packed_data("\xcd\x01\x00");
-    auto value = msg::make_object<msg::uint64>(256);
+    auto value = msg::make_object<msg::integer>(256);
 
     msg::unpacker unpacker;
     unpacker.feed(packed.data(), packed.size());
@@ -399,7 +399,7 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackUnsignedInteger32bit {
     auto packed = packed_data("\xce\x00\x01\x00\x00");
-    auto value = msg::make_object<msg::uint64>(65536);
+    auto value = msg::make_object<msg::integer>(65536);
 
     msg::unpacker unpacker;
     unpacker.feed(packed.data(), packed.size());
@@ -423,7 +423,7 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackUnsignedInteger64bit {
     auto packed = packed_data("\xcf\x00\x00\x00\x01\x00\x00\x00\x00");
-    auto value = msg::make_object<msg::uint64>(4294967296);
+    auto value = msg::make_object<msg::integer>(4294967296);
 
     msg::unpacker unpacker;
     unpacker.feed(packed.data(), packed.size());
@@ -447,7 +447,7 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackNegativeIntegerFixedMin {
     auto packed = packed_data("\xff");
-    auto value = msg::make_object<msg::int64>(-1);
+    auto value = msg::make_object<msg::integer>(-1);
 
     msg::unpacker unpacker;
     unpacker.feed(packed.data(), packed.size());
@@ -460,7 +460,7 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackNegativeIntegerFixedMax {
     auto packed = packed_data("\xe0");
-    auto value = msg::make_object<msg::int64>(-32);
+    auto value = msg::make_object<msg::integer>(-32);
 
     msg::unpacker unpacker;
     unpacker.feed(packed.data(), packed.size());
@@ -473,7 +473,7 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackNegativeInteger8bit {
     auto packed = packed_data("\xd0\x80");
-    auto value = msg::make_object<msg::int64>(-128);
+    auto value = msg::make_object<msg::integer>(-128);
 
     msg::unpacker unpacker;
     unpacker.feed(packed.data(), packed.size());
@@ -497,7 +497,7 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackNegativeInteger16bit {
     auto packed = packed_data("\xd1\x80\x00");
-    auto value = msg::make_object<msg::int64>(-32768);
+    auto value = msg::make_object<msg::integer>(-32768);
 
     msg::unpacker unpacker;
     unpacker.feed(packed.data(), packed.size());
@@ -521,7 +521,7 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackNegativeInteger32bit {
     auto packed = packed_data("\xd2\x80\x00\x00\x00");
-    auto value = msg::make_object<msg::int64>(-2147483648);
+    auto value = msg::make_object<msg::integer>(-2147483648);
 
     msg::unpacker unpacker;
     unpacker.feed(packed.data(), packed.size());
@@ -545,7 +545,7 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackNegativeInteger64bit {
     auto packed = packed_data("\xd3\xff\xff\xff\xff\x00\x00\x00\x00");
-    auto value = msg::make_object<msg::int64>(-4294967296);
+    auto value = msg::make_object<msg::integer>(-4294967296);
 
     msg::unpacker unpacker;
     unpacker.feed(packed.data(), packed.size());
@@ -815,7 +815,7 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackArrayFixedMin {
     std::array<msg::object, 1> array = {
-        msg::uint64(0)
+        msg::integer(0)
     };
 
     auto packed = packed_data("\x91\x00");
@@ -843,21 +843,21 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackArrayFixedMax {
     std::array<msg::object, 15> array = {
-        msg::uint64(0),
-        msg::uint64(1),
-        msg::uint64(2),
-        msg::uint64(3),
-        msg::uint64(4),
-        msg::uint64(5),
-        msg::uint64(6),
-        msg::uint64(7),
-        msg::uint64(8),
-        msg::uint64(9),
-        msg::uint64(10),
-        msg::uint64(11),
-        msg::uint64(12),
-        msg::uint64(13),
-        msg::uint64(14)
+        msg::integer(0),
+        msg::integer(1),
+        msg::integer(2),
+        msg::integer(3),
+        msg::integer(4),
+        msg::integer(5),
+        msg::integer(6),
+        msg::integer(7),
+        msg::integer(8),
+        msg::integer(9),
+        msg::integer(10),
+        msg::integer(11),
+        msg::integer(12),
+        msg::integer(13),
+        msg::integer(14)
     };
 
     auto packed = packed_data("\x9f\x00\x01\x02\x03\x04\x05\x06\x07\x08"
@@ -886,10 +886,10 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackArray16bitLength {
     std::array<msg::object, 4> array = {
-        msg::uint64(0),
-        msg::uint64(1),
-        msg::uint64(2),
-        msg::uint64(3)
+        msg::integer(0),
+        msg::integer(1),
+        msg::integer(2),
+        msg::integer(3)
     };
 
     auto packed = packed_data("\xdc\x00\x04\x00\x01\x02\x03");
@@ -917,10 +917,10 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackArray32bitLength {
     std::array<msg::object, 4> array = {
-        msg::uint64(0),
-        msg::uint64(1),
-        msg::uint64(2),
-        msg::uint64(3)
+        msg::integer(0),
+        msg::integer(1),
+        msg::integer(2),
+        msg::integer(3)
     };
 
     auto packed = packed_data("\xdd\x00\x00\x00\x04\x00\x01\x02\x03");
@@ -988,7 +988,7 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackArrayHeterogeneous {
     std::array<msg::object, 3> array{{
-        msg::make_object<msg::uint64>(123),
+        msg::make_object<msg::integer>(123),
         msg::make_object<msg::string>("test"),
         msg::make_object<msg::boolean>(true)
     }};
@@ -1031,7 +1031,7 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackMapFixedMin {
     std::array<msg::pair, 1> map = {{
-        {msg::string("0"), msg::uint64(0)}
+        {msg::string("0"), msg::integer(0)}
     }};
 
     auto packed = packed_data("\x81\xa1\x30\x00");
@@ -1059,21 +1059,21 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackMapFixedMax {
     std::array<msg::pair, 15> map = {{
-        {msg::string("0"), msg::uint64(0)},
-        {msg::string("1"), msg::uint64(1)},
-        {msg::string("2"), msg::uint64(2)},
-        {msg::string("3"), msg::uint64(3)},
-        {msg::string("4"), msg::uint64(4)},
-        {msg::string("5"), msg::uint64(5)},
-        {msg::string("6"), msg::uint64(6)},
-        {msg::string("7"), msg::uint64(7)},
-        {msg::string("8"), msg::uint64(8)},
-        {msg::string("9"), msg::uint64(9)},
-        {msg::string("10"), msg::uint64(10)},
-        {msg::string("11"), msg::uint64(11)},
-        {msg::string("12"), msg::uint64(12)},
-        {msg::string("13"), msg::uint64(13)},
-        {msg::string("14"), msg::uint64(14)}
+        {msg::string("0"), msg::integer(0)},
+        {msg::string("1"), msg::integer(1)},
+        {msg::string("2"), msg::integer(2)},
+        {msg::string("3"), msg::integer(3)},
+        {msg::string("4"), msg::integer(4)},
+        {msg::string("5"), msg::integer(5)},
+        {msg::string("6"), msg::integer(6)},
+        {msg::string("7"), msg::integer(7)},
+        {msg::string("8"), msg::integer(8)},
+        {msg::string("9"), msg::integer(9)},
+        {msg::string("10"), msg::integer(10)},
+        {msg::string("11"), msg::integer(11)},
+        {msg::string("12"), msg::integer(12)},
+        {msg::string("13"), msg::integer(13)},
+        {msg::string("14"), msg::integer(14)}
     }};
 
     auto packed = packed_data("\x8f\xa1\x30\x00\xa1\x31\x01\xa1\x32\x02"
@@ -1106,9 +1106,9 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackMap16bitLength {
     std::array<msg::pair, 3> map = {{
-        {msg::string("0"), msg::uint64(0)},
-        {msg::string("1"), msg::uint64(1)},
-        {msg::string("2"), msg::uint64(2)}
+        {msg::string("0"), msg::integer(0)},
+        {msg::string("1"), msg::integer(1)},
+        {msg::string("2"), msg::integer(2)}
     }};
 
     auto packed = packed_data("\xde\x00\x03\xa1\x30\x00\xa1\x31\x01\xa1"
@@ -1137,9 +1137,9 @@ static inline bool all_a(const char *begin, const char *end) {
 
 - (void)testUnpackMap32bitLength {
     std::array<msg::pair, 3> map = {{
-        {msg::string("0"), msg::uint64(0)},
-        {msg::string("1"), msg::uint64(1)},
-        {msg::string("2"), msg::uint64(2)}
+        {msg::string("0"), msg::integer(0)},
+        {msg::string("1"), msg::integer(1)},
+        {msg::string("2"), msg::integer(2)}
     }};
 
     auto packed = packed_data("\xdf\x00\x00\x00\x03\xa1\x30\x00\xa1\x31"
@@ -1510,7 +1510,7 @@ static inline bool all_a(const char *begin, const char *end) {
 - (void)testPackArrayEmpty {
     auto packed = packed_data("\x90");
     msg::packer packer;
-    packer.pack_array(std::vector<msg::uint64>());
+    packer.pack_array(std::vector<uint64_t>());
 
     XCTAssertEqual(msg::string(packer.data(), packer.size()), packed);
 }

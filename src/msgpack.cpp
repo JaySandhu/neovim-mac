@@ -317,7 +317,7 @@ unpack_object: // Label avoids excess indentation
 
     switch (byte) {
         case 0x00 ... 0x7f:
-            obj->emplace<uint64>(byte);
+            obj->emplace<integer>(byte);
             break;
 
         case 0x80 ... 0x8f:
@@ -381,35 +381,35 @@ unpack_object: // Label avoids excess indentation
             break;
 
         case 0xcc:
-            obj->emplace<uint64>(co_await promise.read_numeric<uint8_t>());
+            obj->emplace<integer>(co_await promise.read_numeric<uint8_t>());
             break;
 
         case 0xcd:
-            obj->emplace<uint64>(co_await promise.read_numeric<uint16_t>());
+            obj->emplace<integer>(co_await promise.read_numeric<uint16_t>());
             break;
 
         case 0xce:
-            obj->emplace<uint64>(co_await promise.read_numeric<uint32_t>());
+            obj->emplace<integer>(co_await promise.read_numeric<uint32_t>());
             break;
 
         case 0xcf:
-            obj->emplace<uint64>(co_await promise.read_numeric<uint64_t>());
+            obj->emplace<integer>(co_await promise.read_numeric<uint64_t>());
             break;
 
         case 0xd0:
-            obj->emplace<int64>(co_await promise.read_numeric<int8_t>());
+            obj->emplace<integer>(co_await promise.read_numeric<int8_t>());
             break;
 
         case 0xd1:
-            obj->emplace<int64>(co_await promise.read_numeric<int16_t>());
+            obj->emplace<integer>(co_await promise.read_numeric<int16_t>());
             break;
 
         case 0xd2:
-            obj->emplace<int64>(co_await promise.read_numeric<int32_t>());
+            obj->emplace<integer>(co_await promise.read_numeric<int32_t>());
             break;
 
         case 0xd3:
-            obj->emplace<int64>(co_await promise.read_numeric<int64_t>());
+            obj->emplace<integer>(co_await promise.read_numeric<int64_t>());
             break;
 
         case 0xd4:
@@ -461,7 +461,7 @@ unpack_object: // Label avoids excess indentation
             goto unpack_map;
 
         case 0xe0 ... 0xff:
-            obj->emplace<int64>(-256 | byte);
+            obj->emplace<integer>(-256 | byte);
             break;
 
         unpack_binary: {

@@ -174,6 +174,60 @@ bool operator<(const map_view<Key, Value> &left,
 
 struct object;
 
+/// Represents a msgpack integer.
+///
+/// Note: Sign information is lost when unpacking. We could add a boolean to
+/// preserve signedness, but it seems pointless. We usually know if we require
+/// a signed or unsigned representation at the point of use.
+class integer {
+private:
+    char storage[8];
+
+public:
+    template<typename Int, std::enable_if_t<std::is_integral_v<Int>, int> = 0>
+    integer(Int val) {
+        if constexpr (std::is_signed_v<Int>) {
+            int64_t val64 = val;
+            memcpy(storage, &val64, 8);
+        } else {
+            uint64_t val64 = val;
+            memcpy(storage, &val64, 8);
+        }
+    }
+
+    /// Get the value of integer as a signed 64bit integer.
+    int64_t signed_value() const {
+        int64_t ret;
+        memcpy(&ret, storage, 8);
+        return ret;
+    }
+
+    /// Get the value of integer as a unsigned 64bit integer.
+    uint64_t unsigned_value() const {
+        uint64_t ret;
+        memcpy(&ret, storage, 8);
+        return ret;
+    }
+
+    /// Get the value of integer as a T.
+    template<typename T>
+    T as() const {
+        static_assert(std::is_integral_v<T>, "Integral types only!");
+
+        if constexpr (std::is_signed_v<T>) {
+            return static_cast<T>(signed_value());
+        } else {
+            return static_cast<T>(unsigned_value());
+        }
+    }
+
+    /// Implicitly convert to an unsigned 64bit integer.
+    /// Note: Equality and comparisons is done in terms of unsigned values.
+    operator uint64_t() const {
+        return unsigned_value();
+    }
+};
+
 struct extension : msg::array_view<char> {
     using array_view::array_view;
 };
@@ -183,8 +237,6 @@ struct null    : std::monostate {};
 
 using boolean = bool;
 using float64 = double;
-using int64   = int64_t;
-using uint64  = uint64_t;
 using string  = std::string_view;
 using binary  = msg::array_view<unsigned char>;
 using array   = msg::array_view<object>;
@@ -199,8 +251,7 @@ using pair    = std::pair<object, object>;
 /// | ---------------- | ---------------- |
 /// | Nil              | msg::null        |
 /// | Boolean          | msg::boolean     |
-/// | Integer          | msg::uint64,     |
-/// |                  | msg::int64       |
+/// | Integer          | msg::integer,    |
 /// | Float            | msg::float64     |
 /// | String           | msg::string      |
 /// | Binary           | msg::binary      |
@@ -212,8 +263,7 @@ using pair    = std::pair<object, object>;
 /// any underlying memory. Inherits from std::variant, and can be used as such.
 struct object : std::variant<msg::invalid,
                              msg::null,
-                             msg::int64,
-                             msg::uint64,
+                             msg::integer,
                              msg::float64,
                              msg::boolean,
                              msg::string,
@@ -571,7 +621,7 @@ public:
         pack_numeric_impl<PackType, first_byte<PackType>()>(val);
     }
 
-    void pack_uint64(uint64 val) {
+    void pack_uint64(uint64_t val) {
         if (val < 128) {
             buffer.push_back(val);
         } else if (val <= std::numeric_limits<uint8_t>::max()) {
@@ -585,7 +635,7 @@ public:
         }
     }
 
-    void pack_int64(int64 val) {
+    void pack_int64(int64_t val) {
         if (val >= 0) {
             pack_uint64(val);
         } else if (val >= -32) {
