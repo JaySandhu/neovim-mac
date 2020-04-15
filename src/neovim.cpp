@@ -12,21 +12,52 @@
 #include <sys/un.h>
 #include <limits>
 
+#include "log.h"
 #include "spawn.hpp"
 #include "neovim.hpp"
 
-#include <CoreFoundation/CoreFoundation.h>
-#include <iostream>
-
 static constexpr uint32_t null_msgid = std::numeric_limits<uint32_t>::max();
 
-neovim::neovim(): response_handlers(32) {
+inline bool neovim::response_handler_table::has_handler(size_t id) const {
+    return id < handlers.size() && handlers[id];
+}
+
+inline response_handler& neovim::response_handler_table::get(size_t id) {
+    return handlers[id];
+}
+
+inline size_t neovim::response_handler_table::find_empty() const {
+    const size_t size = handlers.size();
+    
+    for (size_t i=last_index + 1; i<size; ++i) {
+        if (!handlers[i]) return i;
+    }
+    
+    for (size_t i=0; i<=last_index; ++i) {
+        if (!handlers[i]) return i;
+    }
+    
+    return size;
+}
+
+uint32_t neovim::response_handler_table::store(response_handler &handler) {
+    const size_t index = find_empty();
+    
+    if (index == handlers.size()) {
+        handlers.resize(handlers.size() * 2);
+    }
+    
+    handlers[index] = std::move(handler);
+    last_index = index;
+    return static_cast<uint32_t>(index);
+}
+
+neovim::neovim() {
     queue = nullptr;
     read_source = nullptr;
     write_source = nullptr;
     read_fd = -1;
     write_fd = -1;
-    handler_last_index = 0;
 }
 
 neovim::~neovim() {
@@ -125,7 +156,7 @@ int neovim::create_sources() {
     
     dispatch_source_set_cancel_handler_f(read_source, [](void *context) {
         neovim *ptr = static_cast<neovim*>(context);
-        ptr->controller.shutdown();
+        ptr->ui.window.shutdown();
     });
     
     dispatch_source_set_cancel_handler_f(write_source, [](void *context) {
@@ -145,7 +176,7 @@ void neovim::io_can_read() {
             return io_error();
         }
         
-        controller.close();
+        ui.window.close();
         return io_cancel();
     }
     
@@ -182,97 +213,64 @@ void neovim::io_cancel() {
     }
 }
 
+static inline bool is_notification(const msg::array &array) {
+    return array.size() == 3 &&
+           array[0].is<msg::integer>() &&
+           array[1].is<msg::string>() &&
+           array[2].is<msg::array>() &&
+           array[0].get<msg::integer>() == 2;
+}
+
+static inline bool is_response(const msg::array &array) {
+    return array.size() == 4 &&
+           array[0].is<msg::integer>() &&
+           array[1].is<msg::integer>() &&
+           array[0].get<msg::integer>() == 1;
+}
+
 void neovim::on_rpc_message(const msg::object &obj) {
-    if (!obj.is<msg::array>()) {
-        return on_rpc_error(obj);
+    if (obj.is<msg::array>()) {
+        msg::array array = obj.get<msg::array>();
+        
+        if (is_notification(array)) {
+            return on_rpc_notification(array);
+        } else if (is_response(array)) {
+            return on_rpc_response(array);
+        }
     }
     
-    msg::array array = obj.get<msg::array>();
-    msg::object *front = array.data();
-    
-    if (!array.size() || !front->is<msg::uint64>()) {
-        return on_rpc_error(obj);
-    }
-    
-    msg::uint64 type = front->get<msg::uint64>();
-    
-    if (type == 1) {
-        on_rpc_response(array);
-    } else if (type == 2) {
-        on_rpc_notification(array);
-    } else {
-        on_rpc_error(obj);
-    }
+    os_log_error(rpc, "Message type error - Type=%s, Value=%s",
+                 msg::type_string(obj).c_str(), msg::to_string(obj).c_str());
 }
 
 void neovim::on_rpc_response(msg::array array) {
-    if (array.size() != 4) {
-        return on_rpc_error(array);
-    }
-    
-    if (!array[1].is<msg::uint64>()) {
-        return on_rpc_error(array);
-    }
-    
-    msg::uint64 msgid = array[1].get<msg::uint64>();
+    size_t msgid = array[1].get<msg::integer>();
     
     if (msgid == null_msgid) {
-        std::cout << "Ignoring response\n";
         return;
     }
     
-    if (msgid >= response_handlers.size()) {
-        return on_rpc_error(array);
+    if (!handler_table.has_handler(msgid)) {
+        return os_log_error(rpc, "No response handler - ID=%zu, Response=%s",
+                            msgid, msg::to_string(array).c_str());
     }
     
-    response_handler &handler = response_handlers[msgid];
+    response_handler &handler = handler_table.get(msgid);
     handler(array[2], array[3]);
     handler = response_handler();
-    
-    std::cout << "RPC Response: " << msg::to_string(array) << '\n';
 }
 
 void neovim::on_rpc_notification(msg::array array) {
-    if (array.size() != 3) {
-        return on_rpc_error(array);
+    msg::string name = array[1].get<msg::string>();
+    msg::array args = array[2].get<msg::array>();
+    
+    if (name == "redraw") {
+        return ui.redraw(args);
     }
     
-    if (!array[1].is<msg::string>() || !array[2].is<msg::array>()) {
-        return on_rpc_error(array);
-    }
-    
-    std::cout << "RPC Notification: " << msg::to_string(array) << '\n';
-}
-
-void neovim::on_rpc_error(const msg::object &object) {
-    std::cout << "RPC Error: " << msg::to_string(object) << '\n';
-}
-
-static inline size_t
-find_empty(const std::vector<response_handler> &handlers, size_t start_at) {
-    size_t size = handlers.size();
-    
-    for (size_t i=start_at + 1; i<size; ++i) {
-        if (!handlers[i]) return i;
-    }
-    
-    for (size_t i=0; i<=start_at; ++i) {
-        if (!handlers[i]) return i;
-    }
-    
-    return size;
-}
-
-uint32_t neovim::push_handler(response_handler &handler) {
-    size_t index = find_empty(response_handlers, handler_last_index);
-    
-    if (index == response_handlers.size()) {
-        response_handlers.resize(response_handlers.size() * 2);
-    }
-    
-    response_handlers[index] = std::move(handler);
-    handler_last_index = index;
-    return static_cast<uint32_t>(index);
+    os_log_info(rpc, "Unhanled notification - Name=%.*s, Args=%s",
+                (int)std::min(name.size(), 128ul), name.data(),
+                msg::to_string(args).c_str());
 }
 
 template<typename ...Args>
@@ -293,12 +291,12 @@ void neovim::rpc_request(uint32_t msgid,
     }
 }
 
-void neovim::set_controller(neovim_controller new_controller) {
-    controller = new_controller;
+void neovim::set_controller(window_controller window) {
+    ui.window = window;
 }
 
 void neovim::get_api_info(response_handler handler) {
-    rpc_request(push_handler(handler), "nvim_get_api_info");
+    rpc_request(handler_table.store(handler), "nvim_get_api_info");
 }
 
 void neovim::quit(bool confirm) {
