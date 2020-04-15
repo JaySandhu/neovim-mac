@@ -58,7 +58,7 @@ static int exitcode(int pid) {
     
     subprocess process = process_spawnp({"printf"},
                                         {"printf", "test"}, {},
-                                        {.output = pipe.write_end()});
+                                        {.output = pipe.write_end.get()});
 
     XCTAssertFalse(process.error, "Spawn failed: %s", strerror(process.error));
     
@@ -66,7 +66,7 @@ static int exitcode(int pid) {
     XCTAssertFalse(code, "Non zero exitcode: %i", code);
     
     char buffer[256];
-    ssize_t read_bytes = read(pipe.read_end(), buffer, sizeof(buffer));
+    ssize_t read_bytes = read(pipe.read_end.get(), buffer, sizeof(buffer));
     XCTAssertNotEqual(read_bytes, -1, "Read failed: %s", strerror(errno));
     
     XCTAssertEqual(std::string_view(buffer, read_bytes), "test");
@@ -80,7 +80,7 @@ static int exitcode(int pid) {
     subprocess process = process_spawnp({"zsh"},
                                         {"zsh", "-c", "printf $HOME"},
                                         {"ENVTEST=test"},
-                                        {.output = pipe.write_end()});
+                                        {.output = pipe.write_end.get()});
     
     XCTAssertFalse(process.error, "Spawn failed: %s", strerror(process.error));
     
@@ -88,7 +88,7 @@ static int exitcode(int pid) {
     XCTAssertFalse(code, "Non zero exitcode: %i", code);
     
     char buffer[256];
-    ssize_t read_bytes = read(pipe.read_end(), buffer, sizeof(buffer));
+    ssize_t read_bytes = read(pipe.read_end.get(), buffer, sizeof(buffer));
     XCTAssertNotEqual(read_bytes, -1, "Read failed: %s", strerror(errno));
     
     XCTAssertEqual(std::string_view(buffer, read_bytes), getenv("HOME"));
@@ -102,7 +102,7 @@ static int exitcode(int pid) {
     subprocess process = process_spawnp({"zsh"},
                                         {"zsh", "-c", "printf $ENVTEST"},
                                         {"ENVTEST=test"},
-                                        {.output = pipe.write_end()});
+                                        {.output = pipe.write_end.get()});
     
     XCTAssertFalse(process.error, "Spawn failed: %s", strerror(process.error));
     
@@ -110,7 +110,7 @@ static int exitcode(int pid) {
     XCTAssertFalse(code, "Non zero exitcode: %i", code);
     
     char buffer[256];
-    ssize_t read_bytes = read(pipe.read_end(), buffer, sizeof(buffer));
+    ssize_t read_bytes = read(pipe.read_end.get(), buffer, sizeof(buffer));
     XCTAssertNotEqual(read_bytes, -1, "Read failed: %s", strerror(errno));
     
     XCTAssertEqual(std::string_view(buffer, read_bytes), "test");
