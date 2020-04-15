@@ -267,7 +267,7 @@ using pair    = std::pair<object, object>;
 /// | ---------------- | ---------------- |
 /// | Nil              | msg::null        |
 /// | Boolean          | msg::boolean     |
-/// | Integer          | msg::integer,    |
+/// | Integer          | msg::integer     |
 /// | Float            | msg::float64     |
 /// | String           | msg::string      |
 /// | Binary           | msg::binary      |

@@ -145,22 +145,6 @@ struct type_string_visitor : base_visitor {
     }
 };
 
-} // internal
-
-std::string to_string(const object &obj) {
-    to_string_visitor visitor;
-    std::visit(visitor, obj);
-    return visitor.buffer;
-}
-
-std::string type_string(const object &obj) {
-    type_string_visitor visitor;
-    std::visit(visitor, obj);
-    return visitor.buffer;
-}
-
-namespace {
-
 // Returns a reference to the promise_type of the current coroutine.
 template<typename Promise>
 auto get_current_promise() {
@@ -257,7 +241,19 @@ public:
     }
 };
 
-} // internal
+} // namespace
+
+std::string to_string(const object &obj) {
+    to_string_visitor visitor;
+    std::visit(visitor, obj);
+    return visitor.buffer;
+}
+
+std::string type_string(const object &obj) {
+    type_string_visitor visitor;
+    std::visit(visitor, obj);
+    return visitor.buffer;
+}
 
 // Returns an Awaitable that reads size bytes into dest from the input buffer
 auto unpacker::promise_type::read_bytes(void *dest, size_t size) {
