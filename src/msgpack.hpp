@@ -71,6 +71,14 @@ public:
     size_t size() const {
         return length;
     }
+    
+    T& at(size_t index) {
+        return ptr[index];
+    }
+
+    const T& at(size_t index) const {
+        return ptr[index];
+    }
 
     T& operator[](size_t index) {
         return ptr[index];
@@ -78,6 +86,14 @@ public:
 
     const T& operator[](size_t index) const {
         return ptr[index];
+    }
+    
+    array_view subarray(size_t start) const {
+        return array_view(ptr + start, length - start);
+    }
+    
+    array_view subarray(size_t start, size_t size) const {
+        return array_view(ptr + start, size);
     }
 };
 
