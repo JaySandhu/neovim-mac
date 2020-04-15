@@ -329,6 +329,9 @@ object make_object(const Args& ...args) {
 /// Convert an object to a string representation.
 std::string to_string(const msg::object &obj);
 
+/// @returns A string representation of the objects type.
+std::string type_string(const msg::object &obj);
+
 /// Deserializes a stream of MessagePack encoded bytes into C++ objects.
 ///
 /// The unpacker interface is split into two parts, feeding and unpacking.

@@ -17,19 +17,37 @@ using detail::byteswap;
 
 namespace {
 
-struct to_string_visitor {
+struct base_visitor {
     std::string buffer;
+    
+    template<typename Container, typename Callable>
+    void append_container(const Container &container, char begin,
+                          char end, Callable callback) {
+        auto size = container.size();
+        auto *ptr = container.begin();
 
+        buffer.push_back(begin);
+        
+        if (size) {
+            callback(ptr[0]);
+            
+            for (int i=1; i<size; ++i) {
+                buffer.append(", ");
+                callback(ptr[i]);
+            }
+        }
+            
+        buffer.push_back(end);
+    }
+};
+
+struct to_string_visitor : base_visitor {
     void operator()(msg::null val) {
         buffer.append("null");
     }
 
-    void operator()(msg::int64 val) {
-        buffer.append(std::to_string(val));
-    }
-
-    void operator()(msg::uint64 val) {
-        buffer.append(std::to_string(val));
+    void operator()(msg::integer val) {
+        buffer.append(std::to_string((uint64_t)val));
     }
 
     void operator()(msg::float64 val) {
@@ -46,57 +64,18 @@ struct to_string_visitor {
         buffer.push_back('"');
     }
 
-    void append_hex_byte(unsigned char byte) {
-        static constexpr char digits[] = "0123456789abcdef";
-        buffer.push_back(digits[byte >> 4]);
-        buffer.push_back(digits[byte & 15]);
-    }
-
     void operator()(msg::binary val) {
-        auto size = val.size();
-
-        if (!size) {
-            buffer.append("b''");
-            return;
-        };
-
         buffer.push_back('b');
-        buffer.push_back('\'');
-        append_hex_byte(val[0]);
-
-        for (int i=1; i<size; ++i) {
-            buffer.push_back(' ');
-            append_hex_byte(val[i]);
-        }
-
-        buffer.push_back('\'');
+        
+        append_container(val, '\'', '\'', [this](unsigned char byte) {
+            static constexpr char digits[] = "0123456789abcdef";
+            buffer.push_back(digits[byte >> 4]);
+            buffer.push_back(digits[byte & 15]);
+        });
     }
 
     void operator()(msg::extension val) {
         buffer.append("(extension)");
-    }
-
-    template<typename Container, typename Callable>
-    void append_container(const Container &container, char begin,
-                          char end, Callable callback) {
-        auto size = container.size();
-        auto *ptr = container.begin();
-
-        if (!size) {
-            buffer.push_back(begin);
-            buffer.push_back(end);
-            return;
-        };
-
-        buffer.push_back(begin);
-        callback(ptr[0]);
-
-        for (int i=1; i<size; ++i) {
-            buffer.append(", ");
-            callback(ptr[i]);
-        }
-
-        buffer.push_back(end);
     }
 
     void operator()(msg::array val) {
@@ -118,10 +97,64 @@ struct to_string_visitor {
     }
 };
 
+struct type_string_visitor : base_visitor {
+    void operator()(const msg::invalid&) {
+        buffer.append("invalid");
+    }
+    
+    void operator()(const msg::null&) {
+        buffer.append("null");
+    }
+
+    void operator()(const msg::integer&) {
+        buffer.append("integer");
+    }
+    
+    void operator()(const msg::float64&) {
+        buffer.append("float64");
+    }
+
+    void operator()(const msg::boolean&) {
+        buffer.append("boolean");
+    }
+
+    void operator()(const msg::string&) {
+        buffer.append("string");
+    }
+
+    void operator()(const msg::binary&) {
+        buffer.append("binary");
+    }
+
+    void operator()(const msg::extension&) {
+        buffer.append("extension");
+    }
+
+    void operator()(const msg::array &array) {
+        append_container(array, '[', ']', [this](const msg::object &obj) {
+            std::visit(*this, obj);
+        });
+    }
+
+    void operator()(const msg::map &map) {
+        append_container(map, '{', '}', [this](const msg::pair &pair) {
+            std::visit(*this, pair.first);
+            buffer.append(" : ");
+            std::visit(*this, pair.second);
+        });
+    }
+};
+
 } // internal
 
 std::string to_string(const object &obj) {
     to_string_visitor visitor;
+    std::visit(visitor, obj);
+    return visitor.buffer;
+}
+
+std::string type_string(const object &obj) {
+    type_string_visitor visitor;
     std::visit(visitor, obj);
     return visitor.buffer;
 }
