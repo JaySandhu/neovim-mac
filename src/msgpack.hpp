@@ -288,7 +288,8 @@ struct object : std::variant<msg::invalid,
                              msg::array,
                              msg::map> {
     using variant::variant;
-
+    using variant_type = variant;
+                                 
     /// Test if the currently held object is of type T.
     /// @returns True if object currently holds a T else false.
     template<typename T>
@@ -306,6 +307,16 @@ struct object : std::variant<msg::invalid,
     template<typename T>
     T& get() {
         return std::get<T>(*this);
+    }
+                                 
+    template<typename T>
+    T* get_if() {
+        return std::get_if<T>(this);
+    }
+                                 
+    template<typename T>
+    const T* get_if() const {
+        return std::get_if<T>(this);
     }
 };
 
