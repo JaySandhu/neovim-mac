@@ -10,10 +10,10 @@
 #ifndef GLYPH_HPP
 #define GLYPH_HPP
 
-#include <CoreFoundation/CoreFoundation.h>
-#include <vector>
+#import <Foundation/Foundation.h>
+#import <Metal/Metal.h>
 #include <memory>
-#include <string>
+#include <string_view>
 
 template<typename T>
 class arc_ptr {
@@ -70,6 +70,7 @@ public:
 
 struct glyph_metrics {
     unsigned char *buffer;
+    size_t stride;
     int16_t ascent;
     int16_t descent;
     int16_t left_bearing;
@@ -101,6 +102,34 @@ struct glyph_rasterizer {
     CTFontRef get_font() const {
         return font.get();
     }
+};
+
+struct glyph_texture_position {
+    uint16_t x;
+    uint16_t y;
+};
+
+inline bool operator==(glyph_texture_position left, glyph_texture_position right) {
+    return memcmp(&left, &right, sizeof(glyph_texture_position)) == 0;
+}
+
+inline bool operator!=(glyph_texture_position left, glyph_texture_position right) {
+    return memcmp(&left, &right, sizeof(glyph_texture_position)) != 0;
+}
+
+struct glyph_texture_cache {
+    id<MTLTexture> texture;
+    size_t x_size;
+    size_t y_size;
+    size_t x_used;
+    size_t y_used;
+    size_t row_height;
+    
+    static constexpr glyph_texture_position not_added = {UINT16_MAX, UINT16_MAX};
+    
+    void create(id<MTLDevice> device, MTLPixelFormat format, size_t width, size_t height);
+    
+    glyph_texture_position add(glyph_metrics *glyph);
 };
 
 #endif // GLYPH_HPP
