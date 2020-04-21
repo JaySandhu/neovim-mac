@@ -10,6 +10,7 @@
 #ifndef UI_HPP
 #define UI_HPP
 
+#include <atomic>
 #include "msgpack.hpp"
 #include "window_controller.hpp"
 
@@ -31,7 +32,24 @@ struct grid {
 
 struct ui_state {
     window_controller window;
-    grid global_grid;
+
+    grid triple_buffered[3];
+    std::atomic<grid*> complete;
+    grid *writing;
+    grid *drawing;
+
+    ui_state() {
+        complete = &triple_buffered[0];
+        writing  = &triple_buffered[1];
+        drawing  = &triple_buffered[2];
+    }
+    
+    grid* get_grid(size_t index);
+    
+    grid* get_global_grid() {
+        drawing = complete.exchange(drawing);
+        return drawing;
+    }
     
     void redraw(msg::array events);
     

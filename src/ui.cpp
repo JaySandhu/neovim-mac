@@ -18,7 +18,7 @@
 
 namespace {
 
-NOINLINE void log_row_overrun(const grid &grid, size_t row) {
+NOINLINE void log_row_overrun(const grid *grid, size_t row) {
     os_log_error(rpc, "Redraw error: Row overflow - Row=%zu", row);
 }
 
@@ -27,11 +27,11 @@ NOINLINE void log_cell_type_error(const msg::object &object) {
                  msg::type_string(object).c_str());
 }
 
-NOINLINE void log_grid_out_of_bounds(const grid &grid, const char *event,
+NOINLINE void log_grid_out_of_bounds(const grid *grid, const char *event,
                                      size_t row, size_t col) {
     os_log_error(rpc, "Redraw error: Grid index out of bounds - "
                       "Event=%s, Grid=%zux%zu, Index=[row=%zu, col=%zu]",
-                      event, grid.width, grid.height, row, col);
+                      event, grid->width, grid->height, row, col);
 }
 
 template<typename T>
@@ -135,6 +135,14 @@ inline bool is_repeated_cell(const msg::array &array, msg::string &text,
 
 } // namespace
 
+grid* ui_state::get_grid(size_t index) {
+    if (index != 1) {
+        std::abort();
+    }
+    
+    return writing;
+}
+
 void ui_state::redraw_event(const msg::object &event_object) {
     const msg::array *event = event_object.get_if<msg::array>();
     
@@ -154,6 +162,8 @@ void ui_state::redraw_event(const msg::object &event_object) {
         return apply(this, &ui_state::grid_scroll, name, args);
     } else if (name == "flush") {
         return apply(this, &ui_state::flush, name, args);
+    } else if (name == "grid_clear") {
+        return apply(this, &ui_state::flush, name, args);
     }
     
     os_log_info(rpc, "Redraw info: Unhandled event - Event=%.*s",
@@ -166,8 +176,9 @@ void ui_state::redraw(msg::array events) {
     }
 }
 
-void ui_state::grid_resize(size_t grid, size_t width, size_t height) {
-    global_grid.resize(width, height);
+void ui_state::grid_resize(size_t grid_id, size_t width, size_t height) {
+    grid *grid = get_grid(grid_id);
+    grid->resize(width, height);
 }
 
 inline grid::cell* grid::get(size_t row, size_t col) {
@@ -175,19 +186,20 @@ inline grid::cell* grid::get(size_t row, size_t col) {
 }
 
 inline void grid::cell::set(const msg::string &text) {
-    const size_t copy = std::min(text.size(), sizeof(buffer));
+    size = std::min(text.size(), sizeof(buffer));
     memcpy(buffer, text.data(), size);
-    size = copy;
 }
 
-void ui_state::grid_line(size_t grid, size_t row,
+void ui_state::grid_line(size_t grid_id, size_t row,
                          size_t col, msg::array cells) {
-    if (row >= global_grid.height || col >= global_grid.width) {
-        return log_grid_out_of_bounds(global_grid, "grid_line", row, col);
+    grid *grid = get_grid(grid_id);
+    
+    if (row >= grid->height || col >= grid->width) {
+        return log_grid_out_of_bounds(grid, "grid_line", row, col);
     }
     
-    grid::cell *cell = global_grid.get(row, col);
-    size_t remaining = global_grid.width - col;
+    grid::cell *cell = grid->get(row, col);
+    size_t remaining = grid->width - col;
     
     msg::string text;
     size_t highlight_id = 0;
@@ -202,7 +214,7 @@ void ui_state::grid_line(size_t grid, size_t row,
         
         if (is_single_cell(args, text, highlight_id)) {
             if (!remaining) {
-                return log_row_overrun(global_grid, row);
+                return log_row_overrun(grid, row);
             }
             
             update_cells(cell, text, highlight_id);
@@ -213,7 +225,7 @@ void ui_state::grid_line(size_t grid, size_t row,
         
         if (is_repeated_cell(args, text, highlight_id, repeat)) {
             if (repeat > remaining) {
-                return log_row_overrun(global_grid, row);
+                return log_row_overrun(grid, row);
             }
         
             update_cells(cell, text, highlight_id, repeat);
@@ -226,7 +238,17 @@ void ui_state::grid_line(size_t grid, size_t row,
     }
 }
 
-void ui_state::grid_scroll(size_t grid, size_t top, size_t bottom,
+void ui_state::grid_clear(size_t grid_id) {
+    grid *grid = get_grid(grid_id);
+    grid::cell blank_cell;
+    blank_cell.set(" ");
+    
+    for (grid::cell &cell : grid->cells) {
+        cell = blank_cell;
+    }
+}
+
+void ui_state::grid_scroll(size_t grid_id, size_t top, size_t bottom,
                            size_t left, size_t right, long rows) {
     if (bottom < top || right < left) {
         return os_log_error(rpc,
@@ -236,11 +258,12 @@ void ui_state::grid_scroll(size_t grid, size_t top, size_t bottom,
                             top, bottom, left, right);
     }
     
+    grid *grid = get_grid(grid_id);
     size_t height = bottom - top;
     size_t width = right - left;
     
-    if (bottom > global_grid.height || right > global_grid.width) {
-        return log_grid_out_of_bounds(global_grid, "grid_scroll", bottom, right);
+    if (bottom > grid->height || right > grid->width) {
+        return log_grid_out_of_bounds(grid, "grid_scroll", bottom, right);
     }
     
     long count;
@@ -248,16 +271,16 @@ void ui_state::grid_scroll(size_t grid, size_t top, size_t bottom,
     grid::cell *dest;
     
     if (rows >= 0) {
-        dest = global_grid.get(top, left);
-        row_width = global_grid.width;
+        dest = grid->get(top, left);
+        row_width = grid->width;
         count = height - rows;
     } else {
-        dest = global_grid.get(bottom - 1, left);
-        row_width = -global_grid.width;
+        dest = grid->get(bottom - 1, left);
+        row_width = -grid->width;
         count = height + rows;
     }
 
-    grid::cell *src = dest + ((long)global_grid.width * rows);
+    grid::cell *src = dest + ((long)grid->width * rows);
     size_t copy_size = sizeof(grid::cell) * width;
     
     for (long i=0; i<count; ++i) {
@@ -274,13 +297,8 @@ void grid::resize(size_t new_width, size_t new_heigth) {
 }
 
 void ui_state::flush() {
-    for (size_t i=0; i<global_grid.height; ++i) {
-        grid::cell *row = global_grid.get(i, 0);
-
-        for (size_t i=0; i<global_grid.width; ++i) {
-            std::cout.write(row[i].buffer, row[i].size);
-        }
-
-        std::cout << '\n';
-    }
+    grid *completed = writing;
+    writing = complete.exchange(completed);
+    *writing = *completed;
+    window.redraw();
 }
