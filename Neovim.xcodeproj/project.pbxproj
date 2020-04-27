@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		6904995F24377F2B002C7B95 /* window_controller.mm in Sources */ = {isa = PBXBuildFile; fileRef = 6904995D24377F2B002C7B95 /* window_controller.mm */; };
+		69208E2B2457142600DBB860 /* NVGridView.mm in Sources */ = {isa = PBXBuildFile; fileRef = 69208E2A2457142600DBB860 /* NVGridView.mm */; };
 		69240E1B242B9854004E0DE0 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 69240E1A242B9854004E0DE0 /* AppDelegate.m */; };
 		69240E1D242B9855004E0DE0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 69240E1C242B9855004E0DE0 /* Assets.xcassets */; };
 		69240E20242B9855004E0DE0 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 69240E1E242B9855004E0DE0 /* MainMenu.xib */; };
@@ -24,6 +25,8 @@
 		695C0ABD242E274800266D89 /* msgpack.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 695C0ABC242E274800266D89 /* msgpack.cpp */; };
 		695C0AC0242E27CC00266D89 /* Msgpack.mm in Sources */ = {isa = PBXBuildFile; fileRef = 695C0ABE242E277700266D89 /* Msgpack.mm */; };
 		695F29C324475B7E0020B613 /* glyph.mm in Sources */ = {isa = PBXBuildFile; fileRef = 695F29C124475B7E0020B613 /* glyph.mm */; };
+		69E15155244DFE3400F8AEC7 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 69E15154244DFE3400F8AEC7 /* MetalKit.framework */; };
+		69E15157244E023900F8AEC7 /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 69E15156244E023900F8AEC7 /* Shaders.metal */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -39,6 +42,8 @@
 /* Begin PBXFileReference section */
 		6904995D24377F2B002C7B95 /* window_controller.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = window_controller.mm; sourceTree = "<group>"; };
 		6904995E24377F2B002C7B95 /* window_controller.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = window_controller.hpp; sourceTree = "<group>"; };
+		69208E292457142600DBB860 /* NVGridView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NVGridView.h; sourceTree = "<group>"; };
+		69208E2A2457142600DBB860 /* NVGridView.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = NVGridView.mm; sourceTree = "<group>"; };
 		69240E16242B9854004E0DE0 /* Neovim.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Neovim.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		69240E19242B9854004E0DE0 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		69240E1A242B9854004E0DE0 /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
@@ -59,6 +64,7 @@
 		69431233243E098B0015C0EA /* ui.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = ui.hpp; sourceTree = "<group>"; };
 		6945A1532434E593005D68ED /* neovim.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = neovim.cpp; sourceTree = "<group>"; };
 		6945A1542434E593005D68ED /* neovim.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = neovim.hpp; sourceTree = "<group>"; };
+		6945BBDE2457282C009ADB03 /* ShaderTypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ShaderTypes.h; sourceTree = "<group>"; };
 		6955FE6424363AD400008191 /* NVWindowController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NVWindowController.h; sourceTree = "<group>"; };
 		6955FE6524363AD400008191 /* NVWindowController.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = NVWindowController.mm; sourceTree = "<group>"; };
 		695BBE9324349ED1007CF9F5 /* spawn.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = spawn.cpp; sourceTree = "<group>"; };
@@ -70,6 +76,8 @@
 		695F29C124475B7E0020B613 /* glyph.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = glyph.mm; sourceTree = "<group>"; };
 		695F29C224475B7E0020B613 /* glyph.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = glyph.hpp; sourceTree = "<group>"; };
 		69D42C4B244611AA0006FEF3 /* log.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = log.h; sourceTree = "<group>"; };
+		69E15154244DFE3400F8AEC7 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
+		69E15156244E023900F8AEC7 /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -77,6 +85,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				69E15155244DFE3400F8AEC7 /* MetalKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -97,6 +106,7 @@
 				69240E38242B9FF1004E0DE0 /* Resources */,
 				69240E2C242B9855004E0DE0 /* test */,
 				69240E17242B9854004E0DE0 /* Products */,
+				69E15153244DFE3400F8AEC7 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -133,6 +143,10 @@
 				6904995D24377F2B002C7B95 /* window_controller.mm */,
 				6955FE6424363AD400008191 /* NVWindowController.h */,
 				6955FE6524363AD400008191 /* NVWindowController.mm */,
+				69208E292457142600DBB860 /* NVGridView.h */,
+				69208E2A2457142600DBB860 /* NVGridView.mm */,
+				6945BBDE2457282C009ADB03 /* ShaderTypes.h */,
+				69E15156244E023900F8AEC7 /* Shaders.metal */,
 			);
 			path = src;
 			sourceTree = SOURCE_ROOT;
@@ -160,6 +174,14 @@
 			);
 			path = Resources;
 			sourceTree = SOURCE_ROOT;
+		};
+		69E15153244DFE3400F8AEC7 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				69E15154244DFE3400F8AEC7 /* MetalKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
@@ -261,6 +283,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				69240E23242B9855004E0DE0 /* main.m in Sources */,
+				69208E2B2457142600DBB860 /* NVGridView.mm in Sources */,
 				693550E9242CBFE500FB0A94 /* circular_buffer.cpp in Sources */,
 				695F29C324475B7E0020B613 /* glyph.mm in Sources */,
 				695BBE9524349ED1007CF9F5 /* spawn.cpp in Sources */,
@@ -268,6 +291,7 @@
 				69431234243E098B0015C0EA /* ui.cpp in Sources */,
 				6945A1552434E593005D68ED /* neovim.cpp in Sources */,
 				695C0ABD242E274800266D89 /* msgpack.cpp in Sources */,
+				69E15157244E023900F8AEC7 /* Shaders.metal in Sources */,
 				69240E1B242B9854004E0DE0 /* AppDelegate.m in Sources */,
 				6904995F24377F2B002C7B95 /* window_controller.mm in Sources */,
 			);

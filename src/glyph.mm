@@ -63,7 +63,7 @@ static inline CGFloat clamp_abs(CGFloat value, CGFloat limit) {
     }
 }
 
-glyph_metrics glyph_rasterizer::rasterize(std::string_view text) {
+glyph_bitmap glyph_rasterizer::rasterize(std::string_view text) {
     // TODO: We can optimize this memset
     memset(buffer.get(), 0, buffer_size);
     CGContextSetTextPosition(context.get(), midx, midy);
@@ -81,19 +81,21 @@ glyph_metrics glyph_rasterizer::rasterize(std::string_view text) {
     CGFloat ascent  = bounds.size.height + bounds.origin.y + 2;
     CGFloat leftx   = bounds.origin.x - 2;
     CGFloat width   = bounds.size.width + 5;
-
+        
     glyph_metrics metrics;
     metrics.left_bearing = clamp_abs(leftx, midx);
-    metrics.width = clamp_abs(width, midx - metrics.left_bearing);
     metrics.ascent = clamp_abs(ascent, midy);
-    metrics.descent = clamp_abs(descent, midy);
-    metrics.stride = midx * 2;
+    metrics.width = clamp_abs(width, midx - metrics.left_bearing);
+    metrics.height = metrics.ascent - clamp_abs(descent, midy);
 
-    size_t col = (midy - metrics.ascent) * metrics.stride;
+    size_t col = (midy - metrics.ascent) * midx * 2;
     size_t row = midx + metrics.left_bearing;
-    metrics.buffer = buffer.get() + ((col + row) * pixel_size);
-
-    return metrics;
+    
+    glyph_bitmap bitmap;
+    bitmap.stride = stride();
+    bitmap.buffer = buffer.get() + ((col + row) * pixel_size);
+    bitmap.metrics = metrics;
+    return bitmap;
 }
 
 void glyph_texture_cache::create(id<MTLDevice> device, MTLPixelFormat format,
@@ -103,19 +105,17 @@ void glyph_texture_cache::create(id<MTLDevice> device, MTLPixelFormat format,
     x_used = 0;
     y_used = 0;
     row_height = 0;
-
-    auto *desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format
-                                                                    width:width
-                                                                   height:height
-                                                                mipmapped:NO];
-
-    [desc setUsage:MTLTextureUsageShaderRead];
+    
+    auto desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format
+                                                                   width:width
+                                                                  height:height
+                                                               mipmapped:NO];
     texture = [device newTextureWithDescriptor:desc];
 }
 
-glyph_texture_position glyph_texture_cache::add(glyph_metrics *glyph) {
-    size_t glyph_height = glyph->height();
-    size_t glyph_width  = glyph->width;
+glyph_texture_cache::point glyph_texture_cache::add(const glyph_bitmap &bitmap) {
+    size_t glyph_height = bitmap.metrics.height;
+    size_t glyph_width  = bitmap.metrics.width;
 
     row_height = std::max(glyph_height, row_height);
 
@@ -126,15 +126,15 @@ glyph_texture_position glyph_texture_cache::add(glyph_metrics *glyph) {
         if (newx <= x_size && newy <= y_size) {
             [texture replaceRegion:MTLRegionMake2D(x_used, y_used, glyph_width, glyph_height)
                        mipmapLevel:0
-                         withBytes:glyph->buffer
-                       bytesPerRow:glyph->stride];
+                         withBytes:bitmap.buffer
+                       bytesPerRow:bitmap.stride];
 
-            glyph_texture_position position;
-            position.x = x_used;
-            position.y = y_used;
-            
+            point origin;
+            origin.x = x_used;
+            origin.y = y_used;
+        
             x_used = newx + 1;
-            return position;
+            return origin;
         }
 
         y_used = y_used + row_height + 1;
@@ -142,7 +142,7 @@ glyph_texture_position glyph_texture_cache::add(glyph_metrics *glyph) {
         row_height = glyph_height;
 
         if (glyph_width > x_size || glyph_height + y_used > y_size) {
-            return not_added;
+            return point{-1, -1};
         }
     }
 }

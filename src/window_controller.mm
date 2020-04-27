@@ -25,3 +25,9 @@ void window_controller::shutdown() {
         [(__bridge NVWindowController*)context shutdown];
     });
 }
+
+void window_controller::redraw() {
+    dispatch_async_f(dispatch_get_main_queue(), controller, [](void *context) {
+        [(__bridge NVWindowController*)context redraw];
+    });
+}

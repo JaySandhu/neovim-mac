@@ -37,7 +37,7 @@ private:
         response_handler& get(size_t index);
     };
 
-    ui_state ui;
+    ui::ui_state ui;
     dispatch_queue_t queue;
     dispatch_source_t read_source;
     dispatch_source_t write_source;
@@ -68,6 +68,10 @@ public:
     neovim(const neovim&) = delete;
     neovim& operator=(const neovim&) = delete;
     ~neovim();
+    
+    ui::ui_state* ui_state() {
+        return &ui;
+    }
     
     void set_controller(window_controller controller);
     

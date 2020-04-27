@@ -1,6 +1,6 @@
 //
 //  Neovim Mac
-//  NVWindowController.h
+//  NVGridView.h
 //
 //  Copyright © 2020 Jay Sandhu. All rights reserved.
 //  This file is distributed under the MIT License.
@@ -11,11 +11,13 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface NVWindowController : NSWindowController<NSWindowDelegate>
+namespace ui {
+struct grid;
+}
 
-- (void)shutdown;
-- (void)connect:(NSString *)addr;
-- (void)redraw;
+@interface NVGridView : NSView<CALayerDelegate>
+
+- (void)setGrid:(ui::grid*)grid;
 
 @end
 

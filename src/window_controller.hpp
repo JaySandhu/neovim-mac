@@ -26,6 +26,7 @@ public:
     
     void close();
     void shutdown();
+    void redraw();
 };
 
 #endif // NEOVIM_CONTROLLER_HPP

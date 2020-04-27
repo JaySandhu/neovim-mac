@@ -16,6 +16,7 @@
 
 #define NOINLINE [[gnu::noinline]]
 
+namespace ui {
 namespace {
 
 NOINLINE void log_row_overrun(const grid *grid, size_t row) {
@@ -96,9 +97,29 @@ bool type_check(const msg::array &array) {
     return array.size() == sizeof...(Ts) && (array[index++].is<Ts>() && ...);
 }
 
-inline void update_cells(grid::cell *cells, msg::string text,
+inline cell make_cell(const msg::string &text) {
+    if (text.size() == 1 && *text.data() == ' ') {
+        return cell{};
+    }
+    
+    size_t limit = std::min(text.size(), cell::max_text_size);
+    
+    cell ret = {};
+    ret.hash = 5381;
+    ret.size = limit;
+    
+    // TODO: Should we validate UTF-8 here?
+    for (size_t i=0; i<limit; ++i) {
+        ret.text[i] = text[i];
+        ret.hash = (ret.hash * 33) + text[i];
+    }
+    
+    return ret;
+}
+
+inline void update_cells(cell *cells, msg::string text,
                          size_t hlid, size_t repeat=1) {
-    cells->set(text);
+    *cells = make_cell(text);
     
     for (int i=1; i<repeat; ++i) {
         cells[i] = *cells;
@@ -181,15 +202,6 @@ void ui_state::grid_resize(size_t grid_id, size_t width, size_t height) {
     grid->resize(width, height);
 }
 
-inline grid::cell* grid::get(size_t row, size_t col) {
-    return cells.data() + (row * width) + col;
-}
-
-inline void grid::cell::set(const msg::string &text) {
-    size = std::min(text.size(), sizeof(buffer));
-    memcpy(buffer, text.data(), size);
-}
-
 void ui_state::grid_line(size_t grid_id, size_t row,
                          size_t col, msg::array cells) {
     grid *grid = get_grid(grid_id);
@@ -198,7 +210,7 @@ void ui_state::grid_line(size_t grid_id, size_t row,
         return log_grid_out_of_bounds(grid, "grid_line", row, col);
     }
     
-    grid::cell *cell = grid->get(row, col);
+    cell *cell = grid->get(row, col);
     size_t remaining = grid->width - col;
     
     msg::string text;
@@ -240,12 +252,7 @@ void ui_state::grid_line(size_t grid_id, size_t row,
 
 void ui_state::grid_clear(size_t grid_id) {
     grid *grid = get_grid(grid_id);
-    grid::cell blank_cell;
-    blank_cell.set(" ");
-    
-    for (grid::cell &cell : grid->cells) {
-        cell = blank_cell;
-    }
+    memset(grid->cells.data(), 0, grid->cells.size() * sizeof(cell));
 }
 
 void ui_state::grid_scroll(size_t grid_id, size_t top, size_t bottom,
@@ -268,7 +275,7 @@ void ui_state::grid_scroll(size_t grid_id, size_t top, size_t bottom,
     
     long count;
     long row_width;
-    grid::cell *dest;
+    cell *dest;
     
     if (rows >= 0) {
         dest = grid->get(top, left);
@@ -280,8 +287,8 @@ void ui_state::grid_scroll(size_t grid_id, size_t top, size_t bottom,
         count = height + rows;
     }
 
-    grid::cell *src = dest + ((long)grid->width * rows);
-    size_t copy_size = sizeof(grid::cell) * width;
+    cell *src = dest + ((long)grid->width * rows);
+    size_t copy_size = sizeof(cell) * width;
     
     for (long i=0; i<count; ++i) {
         memcpy(dest, src, copy_size);
@@ -298,7 +305,11 @@ void grid::resize(size_t new_width, size_t new_heigth) {
 
 void ui_state::flush() {
     grid *completed = writing;
+    completed->draw_tick += 1;
+    
     writing = complete.exchange(completed);
     *writing = *completed;
     window.redraw();
 }
+
+} // namespace ui

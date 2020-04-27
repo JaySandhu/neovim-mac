@@ -10,10 +10,9 @@
 #ifndef GLYPH_HPP
 #define GLYPH_HPP
 
-#import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
 #include <memory>
-#include <string_view>
+#include <string>
 
 template<typename T>
 class arc_ptr {
@@ -69,16 +68,20 @@ public:
 };
 
 struct glyph_metrics {
+    int16_t left_bearing;
+    int16_t ascent;
+    int16_t width;
+    int16_t height;
+    
+    int16_t descent() const {
+        return ascent - height;
+    }
+};
+
+struct glyph_bitmap {
     unsigned char *buffer;
     size_t stride;
-    int16_t ascent;
-    int16_t descent;
-    int16_t left_bearing;
-    int16_t width;
-    
-    int16_t height() const {
-        return ascent - descent;
-    }
+    glyph_metrics metrics;
 };
 
 struct glyph_rasterizer {
@@ -93,7 +96,7 @@ struct glyph_rasterizer {
 
     void set_canvas(size_t width, size_t height, CGImageAlphaInfo format);
     void set_font(CFStringRef name, CGFloat size);
-    glyph_metrics rasterize(std::string_view text);
+    glyph_bitmap rasterize(std::string_view text);
     
     size_t stride() const {
         return midx * 2 * pixel_size;
@@ -104,19 +107,6 @@ struct glyph_rasterizer {
     }
 };
 
-struct glyph_texture_position {
-    uint16_t x;
-    uint16_t y;
-};
-
-inline bool operator==(glyph_texture_position left, glyph_texture_position right) {
-    return memcmp(&left, &right, sizeof(glyph_texture_position)) == 0;
-}
-
-inline bool operator!=(glyph_texture_position left, glyph_texture_position right) {
-    return memcmp(&left, &right, sizeof(glyph_texture_position)) != 0;
-}
-
 struct glyph_texture_cache {
     id<MTLTexture> texture;
     size_t x_size;
@@ -125,11 +115,17 @@ struct glyph_texture_cache {
     size_t y_used;
     size_t row_height;
     
-    static constexpr glyph_texture_position not_added = {UINT16_MAX, UINT16_MAX};
+    struct point {
+        int16_t x;
+        int16_t y;
+                
+        explicit operator bool() const {
+            return x != -1;
+        }
+    };
     
     void create(id<MTLDevice> device, MTLPixelFormat format, size_t width, size_t height);
-    
-    glyph_texture_position add(glyph_metrics *glyph);
+    point add(const glyph_bitmap &bitmap);
 };
 
 #endif // GLYPH_HPP
