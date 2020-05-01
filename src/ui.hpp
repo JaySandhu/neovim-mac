@@ -17,10 +17,46 @@
 namespace ui {
 
 struct rgb_color {
-    uint8_t red;
-    uint8_t green;
-    uint8_t blue;
-    bool is_default;
+    uint32_t value;
+    
+    struct default_tag_type {};
+    static constexpr default_tag_type default_tag;
+    static constexpr uint32_t is_default_bit = (1 << 31);
+    
+    rgb_color() {
+        value = 0;
+    }
+    
+    explicit rgb_color(uint32_t rgb) {
+        // TODO: Should we be doing this on the gpu?
+        value = __builtin_bswap32(rgb << 8);
+    }
+    
+    explicit rgb_color(uint32_t rgb, default_tag_type) : rgb_color(rgb) {
+        value |= is_default_bit;
+    };
+    
+    bool is_default() const {
+        return value & is_default_bit;
+    }
+};
+
+enum class cursor_shape {
+    gui_default,
+    block,
+    horizontal,
+    vertical
+};
+
+struct cursor_attributes {
+    rgb_color foreground;
+    rgb_color background;
+    uint16_t percentage;
+    uint16_t blinkwait;
+    uint16_t blinkon;
+    uint16_t blinkoff;
+    cursor_shape shape;
+    std::string mode_name;
 };
 
 struct attributes {
@@ -28,6 +64,7 @@ struct attributes {
     bool undercurl : 1;
     bool strikethrough : 1;
     bool doublewidth   : 1;
+    bool reverse : 1;
 
     bool has_attributes() const {
         return underline ||
@@ -55,16 +92,40 @@ struct font_attributes {
     }
 };
 
-struct cell {
-    static constexpr size_t max_text_size = 24;
-    
-    char text[max_text_size];
-    uint16_t size;
+struct highlight_attributes {
+    rgb_color background;
+    rgb_color foreground;
+    rgb_color special;
     font_attributes fontattrs;
     attributes attrs;
-    rgb_color foreground;
-    rgb_color background;
-    rgb_color special;
+};
+
+struct highlight_table {
+    std::vector<highlight_attributes> table;
+    
+    highlight_table(): table(1) {}
+        
+    highlight_attributes* get_default() {
+        return table.data();
+    }
+    
+    const highlight_attributes* get_entry(size_t hlid) const {
+        if (hlid >= table.size()) {
+            return nullptr;
+        }
+        
+        return table.data() + hlid;
+    }
+    
+    highlight_attributes* new_entry(size_t hlid);
+};
+
+struct cell {
+    static constexpr size_t max_text_size = 24;
+
+    char text[max_text_size];
+    uint16_t size;
+    highlight_attributes hl_attrs;
     uint64_t hash;
     
     std::string_view text_view() const {
@@ -91,7 +152,10 @@ struct grid {
 
 struct ui_state {
     window_controller window;
-
+    highlight_table hltable;
+    std::vector<cursor_attributes> cursor_table;
+    size_t current_mode;
+    
     grid triple_buffered[3];
     std::atomic<grid*> complete;
     grid *writing;
@@ -106,11 +170,15 @@ struct ui_state {
     grid* get_grid(size_t index);
     
     grid* get_global_grid() {
-        if (drawing->draw_tick < complete.load()->draw_tick) {
-            drawing = complete.exchange(drawing);
-        }
+        uint64_t tick = drawing->draw_tick;
         
-        return drawing;
+        for (;;) {
+            drawing = complete.exchange(drawing);
+         
+            if (drawing->draw_tick >= tick) {
+                return drawing;
+            }
+        }
     }
     
     void redraw(msg::array events);
@@ -124,6 +192,13 @@ struct ui_state {
     
     void grid_scroll(size_t grid, size_t top, size_t bottom,
                      size_t left, size_t right, long rows);
+    
+    void hl_attr_define(size_t id, msg::map attrs);
+    
+    void mode_info_set(bool enabled, msg::array property_maps);
+    void mode_change(msg::string name, size_t index);
+    
+    void default_colors_set(uint32_t fg, uint32_t bg, uint32_t sp);
 };
 
 } // namespace ui
