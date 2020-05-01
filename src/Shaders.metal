@@ -12,9 +12,15 @@
 
 using namespace metal;
 
-struct RasterizerData {
+struct grid_rasterizer_data {
     float4 position [[position]];
-    float2 textureCoords;
+    float4 color;
+};
+
+struct glyph_rasterizer_data {
+    float4 position [[position]];
+    float4 color;
+    float2 texture_position;
 };
 
 constant float2 transforms[4] = {
@@ -24,41 +30,61 @@ constant float2 transforms[4] = {
     {1, 1},
 };
 
-constant short2 ushort_transforms[4] = {
-    {0, 0},
-    {0, 1},
-    {1, 0},
-    {1, 1},
-};
-
-vertex extern RasterizerData vertexShader(uint vertexID [[vertex_id]],
-                                          uint instanceID [[instance_id]],
-                                          constant uniform_data &uniforms [[buffer(0)]],
-                                          constant glyph_data *glyphs [[buffer(1)]]) {
-    uint32_t row = glyphs[instanceID].grid_position.x;
-    uint32_t col = glyphs[instanceID].grid_position.y;
+vertex extern grid_rasterizer_data grid_vertex(uint vertex_id [[vertex_id]],
+                                               uint instance_id [[instance_id]],
+                                               constant uniform_data &uniforms [[buffer(0)]],
+                                               constant uint32_t *cell_colors [[buffer(1)]]) {
+    uint32_t row = instance_id / uniforms.grid_width;
+    uint32_t col = instance_id % uniforms.grid_width;
     
-    float2 glyph_position = float2(glyphs[instanceID].glyph_position.xy) * uniforms.pixel;
-    float2 glyph_size = float2(glyphs[instanceID].size.xy) * uniforms.pixel;
+    float2 cell_vertex = float2(col, row) + transforms[vertex_id];
+    float2 position = float2(-1, 1) + (uniforms.cell_size * cell_vertex);
     
-    float2 cell_offset = uniforms.cell * float2(col, row);
-    float2 vertex_offset = glyph_size * transforms[vertexID];
-    float2 position = float2(-1, 1) + cell_offset + vertex_offset + uniforms.baseline + glyph_position;
-    
-    RasterizerData data;
+    grid_rasterizer_data data;
     data.position = float4(position.xy, 0.0, 1.0);
-    short2 val = glyphs[instanceID].texture_position + (glyphs[instanceID].size * ushort_transforms[vertexID]);
-    data.textureCoords = float2(val.xy);
+    data.color = unpack_unorm4x8_srgb_to_float(cell_colors[instance_id]);
+    return data;
+}
+
+fragment float4 grid_fragment(grid_rasterizer_data in [[stage_in]]) {
+    return in.color;
+}
+
+vertex extern glyph_rasterizer_data glyph_vertex(uint vertex_id [[vertex_id]],
+                                                 uint instance_id [[instance_id]],
+                                                 constant uniform_data &uniforms [[buffer(0)]],
+                                                 constant glyph_data *glyphs [[buffer(1)]]) {
+    uint32_t row = glyphs[instance_id].grid_position.x;
+    uint32_t col = glyphs[instance_id].grid_position.y;
+    
+    float2 glyph_position = float2(glyphs[instance_id].glyph_position.xy);
+    float2 glyph_size = float2(glyphs[instance_id].glyph_size.xy);
+    
+    float2 cell_offset = uniforms.cell_pixel_size * float2(col, row);
+    float2 vertex_offset = glyph_size * transforms[vertex_id];
+    
+    float2 pixel_position = cell_offset +
+                            uniforms.baseline +
+                            vertex_offset +
+                            glyph_position;
+    
+    float2 position = float2(-1, 1) + (pixel_position * uniforms.pixel_size);
+    
+    glyph_rasterizer_data data;
+    data.position = float4(position.xy, 0.0, 1.0);
+    data.texture_position = float2(glyphs[instance_id].texture_position.xy) + vertex_offset;
+    data.color = unpack_unorm4x8_srgb_to_float(glyphs[instance_id].color);
     
     return data;
 }
 
-fragment float4 fragmentShader(RasterizerData in [[stage_in]],
+fragment float4 glyph_fragment(glyph_rasterizer_data in [[stage_in]],
                                texture2d<float> texture [[texture(0)]]) {
-    constexpr sampler textureSampler(mag_filter::nearest,
-                                     min_filter::nearest,
-                                     address::clamp_to_zero,
-                                     coord::pixel);
+    constexpr sampler texture_sampler(mag_filter::nearest,
+                                      min_filter::nearest,
+                                      address::clamp_to_zero,
+                                      coord::pixel);
     
-    return float4(0.0, 0.0, 0.0, texture.sample(textureSampler, in.textureCoords).a);
+    float4 sampled = texture.sample(texture_sampler, in.texture_position);
+    return float4(in.color.rgb, sampled.a);
 }
