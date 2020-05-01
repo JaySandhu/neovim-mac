@@ -24,7 +24,7 @@
 		695BBE982434BAAC007CF9F5 /* Spawn.mm in Sources */ = {isa = PBXBuildFile; fileRef = 695BBE962434BA76007CF9F5 /* Spawn.mm */; };
 		695C0ABD242E274800266D89 /* msgpack.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 695C0ABC242E274800266D89 /* msgpack.cpp */; };
 		695C0AC0242E27CC00266D89 /* Msgpack.mm in Sources */ = {isa = PBXBuildFile; fileRef = 695C0ABE242E277700266D89 /* Msgpack.mm */; };
-		695F29C324475B7E0020B613 /* glyph.mm in Sources */ = {isa = PBXBuildFile; fileRef = 695F29C124475B7E0020B613 /* glyph.mm */; };
+		695F29C324475B7E0020B613 /* font.mm in Sources */ = {isa = PBXBuildFile; fileRef = 695F29C124475B7E0020B613 /* font.mm */; };
 		69E15155244DFE3400F8AEC7 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 69E15154244DFE3400F8AEC7 /* MetalKit.framework */; };
 		69E15157244E023900F8AEC7 /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 69E15156244E023900F8AEC7 /* Shaders.metal */; };
 /* End PBXBuildFile section */
@@ -73,8 +73,8 @@
 		695C0ABB242E274800266D89 /* msgpack.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = msgpack.hpp; sourceTree = "<group>"; };
 		695C0ABC242E274800266D89 /* msgpack.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = msgpack.cpp; sourceTree = "<group>"; };
 		695C0ABE242E277700266D89 /* Msgpack.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = Msgpack.mm; sourceTree = "<group>"; };
-		695F29C124475B7E0020B613 /* glyph.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = glyph.mm; sourceTree = "<group>"; };
-		695F29C224475B7E0020B613 /* glyph.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = glyph.hpp; sourceTree = "<group>"; };
+		695F29C124475B7E0020B613 /* font.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = font.mm; sourceTree = "<group>"; };
+		695F29C224475B7E0020B613 /* font.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = font.hpp; sourceTree = "<group>"; };
 		69D42C4B244611AA0006FEF3 /* log.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = log.h; sourceTree = "<group>"; };
 		69E15154244DFE3400F8AEC7 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 		69E15156244E023900F8AEC7 /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
@@ -132,8 +132,8 @@
 				695C0ABC242E274800266D89 /* msgpack.cpp */,
 				695BBE9424349ED1007CF9F5 /* spawn.hpp */,
 				695BBE9324349ED1007CF9F5 /* spawn.cpp */,
-				695F29C224475B7E0020B613 /* glyph.hpp */,
-				695F29C124475B7E0020B613 /* glyph.mm */,
+				695F29C224475B7E0020B613 /* font.hpp */,
+				695F29C124475B7E0020B613 /* font.mm */,
 				69431233243E098B0015C0EA /* ui.hpp */,
 				69431232243E098B0015C0EA /* ui.cpp */,
 				69D42C4B244611AA0006FEF3 /* log.h */,
@@ -285,7 +285,7 @@
 				69240E23242B9855004E0DE0 /* main.m in Sources */,
 				69208E2B2457142600DBB860 /* NVGridView.mm in Sources */,
 				693550E9242CBFE500FB0A94 /* circular_buffer.cpp in Sources */,
-				695F29C324475B7E0020B613 /* glyph.mm in Sources */,
+				695F29C324475B7E0020B613 /* font.mm in Sources */,
 				695BBE9524349ED1007CF9F5 /* spawn.cpp in Sources */,
 				6955FE6624363AD400008191 /* NVWindowController.mm in Sources */,
 				69431234243E098B0015C0EA /* ui.cpp in Sources */,

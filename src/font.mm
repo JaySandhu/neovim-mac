@@ -1,6 +1,6 @@
 //
 //  Neovim Mac
-//  glyph.hpp
+//  Font.mm
 //
 //  Copyright © 2020 Jay Sandhu. All rights reserved.
 //  This file is distributed under the MIT License.
@@ -8,18 +8,44 @@
 //
 
 #include <CoreText/CoreText.h>
-#include "glyph.hpp"
+#include "font.hpp"
 
-void glyph_rasterizer::set_font(CFStringRef name, CGFloat size) {
-    extern CFStringRef NSFontAttributeName;
-    font = CTFontCreateWithName(name, size, nullptr);
+font_family::font_family(std::string_view name, CGFloat size) {
+    const CTFontSymbolicTraits mask = kCTFontBoldTrait | kCTFontItalicTrait;
+    
+    arc_ptr cfname = CFStringCreateWithBytes(nullptr, (UInt8*)name.data(),
+                                             name.size(), kCFStringEncodingUTF8, false);
+    
+    regular_ = CTFontCreateWithName(cfname.get(), size, nullptr);
+    italic_ = CTFontCreateCopyWithSymbolicTraits(regular(), size, nullptr, kCTFontItalicTrait, mask);
+    bold_ = CTFontCreateCopyWithSymbolicTraits(regular(), size, nullptr, kCTFontBoldTrait, mask);
+    bold_italic_ = CTFontCreateCopyWithSymbolicTraits(regular(), size, nullptr, mask, mask);
+}
 
-    const void *keys[] = {NSFontAttributeName};
-    const void *values[] = {font.get()};
+CGFloat font_family::width() const {
+    unichar mchar = 'M';
+    CGGlyph mglyph;
+    CTFontGetGlyphsForCharacters(regular(), &mchar, &mglyph, 1);
+    
+    if (!mglyph) {
+        CGRect rect = CTFontGetBoundingBox(regular());
+        return rect.size.width;
+    }
+    
+    CGSize advance;
+    CTFontGetAdvancesForGlyphs(regular(), kCTFontOrientationHorizontal, &mglyph, &advance, 1);
+    return advance.width;
+}
 
-    attributes = CFDictionaryCreate(nullptr, keys, values, 1,
-                                    &kCFTypeDictionaryKeyCallBacks,
-                                    &kCFTypeDictionaryValueCallBacks);
+font_family font_manager::get(std::string_view name, CGFloat size) {
+    for (const font_entry &entry : used_fonts) {
+        if (entry.name == name && entry.size == size) {
+            return entry.font;
+        }
+    }
+    
+    font_entry &back = used_fonts.emplace_back(name, size);
+    return back.font;
 }
 
 void glyph_rasterizer::set_canvas(size_t width, size_t height, CGImageAlphaInfo format) {
@@ -50,7 +76,18 @@ void glyph_rasterizer::set_canvas(size_t width, size_t height, CGImageAlphaInfo 
 
     context = CGBitmapContextCreate(buffer.get(), width, height, 8,
                                     width * pixel_size,
-                                    color_space.get(), format);
+                                    color_space.get(), kCGImageAlphaOnly);
+    
+    CGContextSetAllowsFontSmoothing(context.get(), true);
+    CGContextSetShouldSmoothFonts(context.get(), true);
+    
+    attributes = CFDictionaryCreateMutable(nullptr, 7,
+                                           &kCFTypeDictionaryKeyCallBacks,
+                                           &kCFTypeDictionaryValueCallBacks);
+
+    CFDictionarySetValue(attributes.get(),
+                         kCTForegroundColorFromContextAttributeName,
+                         kCFBooleanTrue);
 }
 
 static inline CGFloat clamp_abs(CGFloat value, CGFloat limit) {
@@ -63,11 +100,17 @@ static inline CGFloat clamp_abs(CGFloat value, CGFloat limit) {
     }
 }
 
-glyph_bitmap glyph_rasterizer::rasterize(std::string_view text) {
+glyph_bitmap glyph_rasterizer::rasterize(CTFontRef font, std::string_view text) {
+    // TODO: How much are we save by reusing this dictionary?
+    extern CFStringRef NSFontAttributeName;
+    CFDictionarySetValue(attributes.get(), NSFontAttributeName, font);
+    
     // TODO: We can optimize this memset
     memset(buffer.get(), 0, buffer_size);
+    
     CGContextSetTextPosition(context.get(), midx, midy);
-
+    CGContextSetRGBFillColor(context.get(), 1, 1, 1, 1);
+    
     arc_ptr text_str = CFStringCreateWithBytes(nullptr, (UInt8*)text.data(),
                                                text.size(), kCFStringEncodingUTF8, 0);
 

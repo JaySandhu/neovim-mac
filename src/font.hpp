@@ -1,6 +1,6 @@
 //
 //  Neovim Mac
-//  glyph.cpp
+//  Font.hpp
 //
 //  Copyright © 2020 Jay Sandhu. All rights reserved.
 //  This file is distributed under the MIT License.
@@ -12,6 +12,7 @@
 
 #import <Metal/Metal.h>
 #include <memory>
+#include <vector>
 #include <string>
 
 template<typename T>
@@ -67,6 +68,69 @@ public:
     }
 };
 
+class font_family {
+private:
+    arc_ptr<CTFontRef> regular_;
+    arc_ptr<CTFontRef> bold_;
+    arc_ptr<CTFontRef> italic_;
+    arc_ptr<CTFontRef> bold_italic_;
+    
+public:
+    font_family() = default;
+    font_family(std::string_view name, CGFloat size);
+    
+    CTFontRef regular() const {
+        return regular_.get();
+    }
+    
+    CTFontRef bold() const {
+        return bold_.get();
+    }
+    
+    CTFontRef italic() const {
+        return italic_.get();
+    }
+    
+    CTFontRef bold_italic() const {
+        return bold_italic_.get();
+    }
+    
+    CGFloat size() const {
+        return CTFontGetSize(regular());
+    }
+    
+    CGFloat leading() const {
+        return CTFontGetLeading(regular());
+    }
+    
+    CGFloat ascent() const {
+        return CTFontGetAscent(regular());
+    }
+    
+    CGFloat descent() const {
+        return CTFontGetDescent(regular());
+    }
+
+    CGFloat width() const;
+};
+
+class font_manager {
+private:
+    struct font_entry {
+        std::string name;
+        CGFloat size;
+        font_family font;
+        
+        explicit font_entry(std::string_view name, CGFloat size):
+            name(name), size(size), font(name, size) {}
+    };
+    
+    std::vector<font_entry> used_fonts;
+
+public:
+    font_family get(std::string_view name, CGFloat size);
+};
+
 struct glyph_metrics {
     int16_t left_bearing;
     int16_t ascent;
@@ -86,8 +150,7 @@ struct glyph_bitmap {
 
 struct glyph_rasterizer {
     arc_ptr<CGContextRef> context;
-    arc_ptr<CTFontRef> font;
-    arc_ptr<CFDictionaryRef> attributes;
+    arc_ptr<CFMutableDictionaryRef> attributes;
     std::unique_ptr<unsigned char[]> buffer;
     size_t buffer_size;
     size_t pixel_size;
@@ -95,15 +158,11 @@ struct glyph_rasterizer {
     size_t midy;
 
     void set_canvas(size_t width, size_t height, CGImageAlphaInfo format);
-    void set_font(CFStringRef name, CGFloat size);
-    glyph_bitmap rasterize(std::string_view text);
+    
+    glyph_bitmap rasterize(CTFontRef font, std::string_view text);
     
     size_t stride() const {
         return midx * 2 * pixel_size;
-    }
-    
-    CTFontRef get_font() const {
-        return font.get();
     }
 };
 

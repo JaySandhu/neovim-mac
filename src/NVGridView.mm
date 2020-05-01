@@ -14,7 +14,7 @@
 
 #include <vector>
 #include <unordered_map>
-#include "glyph.hpp"
+#include "font.hpp"
 #include "ui.hpp"
 
 struct cell_hasher {
@@ -171,6 +171,7 @@ static id<MTLRenderPipelineState> createGlyphPipeline(id<MTLDevice> device, id<M
     id<MTLCommandQueue> commandQueue;
     id<MTLRenderPipelineState> gridPipeline;
     id<MTLRenderPipelineState> glyphPipeline;
+    font_family font;
     mtlbuffer buffer;
     ui::grid *grid;
     glyph_rasterizer rasterizer;
@@ -195,25 +196,16 @@ static id<MTLRenderPipelineState> createGlyphPipeline(id<MTLDevice> device, id<M
     gridPipeline = createGridPipeline(device, lib);
     glyphPipeline = createGlyphPipeline(device, lib);
     
-    rasterizer.set_font((CFStringRef)@"SF Mono Regular", 15);
+    font = font_family("SF Mono Regular", 15);
     rasterizer.set_canvas(128, 128, kCGImageAlphaOnly);
     texture_cache.create(device, MTLPixelFormatA8Unorm, 512, 512);
     
-    CTFontRef font = rasterizer.get_font();
-    CGFloat leading = floor(CTFontGetLeading(font) + 0.5);
-    CGFloat descent = floor(CTFontGetDescent(font) + 0.5);
-    CGFloat ascent = floor(CTFontGetAscent(font) + 0.5);
-    
-    UniChar character = 'a';
-    CGGlyph glyph;
-    CGSize advance;
-    bool val = CTFontGetGlyphsForCharacters(font, &character, &glyph, 1);
-    assert(val);
+    CGFloat leading = floor(font.leading() + 0.5);
+    CGFloat descent = floor(font.descent() + 0.5);
+    CGFloat ascent = floor(font.ascent() + 0.5);
 
-    CTFontGetAdvancesForGlyphs(font, kCTFontOrientationHorizontal, &glyph, &advance, 1);
-    
     CGFloat cellHeight = leading + descent + ascent;
-    CGFloat cellWidth = floor(advance.width + 0.5);
+    CGFloat cellWidth = floor(font.width() + 0.5);
     
     cellSize.x = cellWidth;
     cellSize.y = cellHeight;
@@ -302,7 +294,7 @@ static id<MTLRenderPipelineState> createGlyphPipeline(id<MTLDevice> device, id<M
             
             if (iter == glyph_cache.end()) {
                 std::string_view text = cell->text_view();
-                glyph_bitmap glyph = rasterizer.rasterize(text);
+                glyph_bitmap glyph = rasterizer.rasterize(font.regular(), text);
                 auto texpoint = texture_cache.add(glyph);
                 
                 if (!texpoint) {

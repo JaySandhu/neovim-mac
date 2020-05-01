@@ -13,7 +13,7 @@
 #include <unordered_map>
 #include <simd/simd.h>
 #include "neovim.hpp"
-#include "glyph.hpp"
+#include "font.hpp"
 #include "ui.hpp"
 
 @implementation NVWindowController {
