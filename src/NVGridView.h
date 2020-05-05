@@ -8,16 +8,18 @@
 //
 
 #import <Cocoa/Cocoa.h>
+#import "NVWindowController.h"
+#include "ui.hpp"
+#include "font.hpp"
 
 NS_ASSUME_NONNULL_BEGIN
 
-namespace ui {
-struct grid;
-}
-
 @interface NVGridView : NSView<CALayerDelegate>
 
+- (instancetype)initWithFrame:(NSRect)frame renderContext:(NVRenderContext *)renderContext;
+
 - (void)setGrid:(ui::grid*)grid;
+- (void)setFont:(font_family)font;
 
 @end
 

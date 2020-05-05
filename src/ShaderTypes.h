@@ -17,6 +17,8 @@ struct uniform_data {
     simd_float2 cell_pixel_size;
     simd_float2 cell_size;
     simd_float2 baseline;
+    simd_short2 cursor_position;
+    uint32_t cursor_color;
     uint32_t grid_width;
 };
 
@@ -26,6 +28,14 @@ struct glyph_data {
     simd_short2 glyph_position;
     simd_short2 glyph_size;
     uint32_t color;
+};
+
+struct line_data {
+    simd_short2 grid_position;
+    uint32_t color;
+    uint16_t ytranslate;
+    uint16_t period;
+    uint16_t thickness;
 };
 
 #endif // SHADER_TYPES_H

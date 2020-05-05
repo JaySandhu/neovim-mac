@@ -8,18 +8,27 @@
 //
 
 #import "AppDelegate.h"
-#import "NVWindowController.h"
 #import "log.h"
+
+#include "NVWindowController.h"
 
 os_log_t rpc;
 
-@implementation AppDelegate
+@implementation AppDelegate {
+    NVRenderContext sharedRenderContext;
+}
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
     rpc = os_log_create("io.github.jaysandhu.neovim-mac", "RPC");
     signal(SIGPIPE, SIG_IGN);
     
-    NVWindowController *controller = [[NVWindowController alloc] init];
+    NSError *error = sharedRenderContext.init();
+    
+    if (error) {
+        return;
+    }
+    
+    NVWindowController *controller = [[NVWindowController alloc] initWithRenderContext:&sharedRenderContext];
     [controller connect:@"/users/jay/pipe"];
 }
 

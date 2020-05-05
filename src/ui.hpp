@@ -56,7 +56,17 @@ struct cursor_attributes {
     uint16_t blinkon;
     uint16_t blinkoff;
     cursor_shape shape;
+};
+
+struct mode_info {
+    cursor_attributes cursor_attrs;
     std::string mode_name;
+};
+
+struct cursor {
+    cursor_attributes attrs;
+    size_t row;
+    size_t col;
 };
 
 struct attributes {
@@ -141,6 +151,7 @@ struct grid {
     std::vector<cell> cells;
     size_t width = 0;
     size_t height = 0;
+    cursor cursor;
     uint64_t draw_tick = 0;
     
     void resize(size_t width, size_t heigth);
@@ -153,7 +164,7 @@ struct grid {
 struct ui_state {
     window_controller window;
     highlight_table hltable;
-    std::vector<cursor_attributes> cursor_table;
+    std::vector<mode_info> mode_info_table;
     size_t current_mode;
     
     grid triple_buffered[3];
@@ -189,6 +200,7 @@ struct ui_state {
     void grid_resize(size_t grid, size_t width, size_t height);
     void grid_clear(size_t grid);
     void grid_line(size_t grid, size_t row, size_t col, msg::array cells);
+    void grid_cursor_goto(size_t grid, size_t row, size_t col);
     
     void grid_scroll(size_t grid, size_t top, size_t bottom,
                      size_t left, size_t right, long rows);

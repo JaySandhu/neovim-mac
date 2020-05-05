@@ -8,10 +8,27 @@
 //
 
 #import <Cocoa/Cocoa.h>
+#import <Metal/Metal.h>
+#include "font.hpp"
 
 NS_ASSUME_NONNULL_BEGIN
 
+struct NVRenderContext {
+    id<MTLDevice> device;
+    id<MTLRenderPipelineState> gridRenderPipeline;
+    id<MTLRenderPipelineState> glyphRenderPipeline;
+    id<MTLRenderPipelineState> cursorRenderPipeline;
+    id<MTLRenderPipelineState> lineRenderPipeline;
+    glyph_rasterizer rasterizer;
+    glyph_texture_cache texture_cache;
+    font_manager font_manager;
+    
+    NSError* init();
+};
+
 @interface NVWindowController : NSWindowController<NSWindowDelegate>
+
+- (instancetype)initWithRenderContext:(NVRenderContext *)renderState;
 
 - (void)shutdown;
 - (void)connect:(NSString *)addr;

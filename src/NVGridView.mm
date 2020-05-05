@@ -68,16 +68,37 @@ public:
         last_offset = 0;
     }
     
-    void clear() {
+    mtlbuffer(id<MTLDevice> device, size_t init_capacity) {
+        buffer = [device newBufferWithLength:init_capacity
+                                     options:MTLResourceStorageModeManaged |
+                                             MTLResourceCPUCacheModeWriteCombined];
+        
+        ptr = static_cast<char*>([buffer contents]);
         length = 0;
+        capacity = init_capacity;
         last_offset = 0;
     }
     
-    void set_buffer(id<MTLBuffer> new_buffer) {
-        buffer = new_buffer;
-        ptr = static_cast<char*>([buffer contents]);
+    mtlbuffer(const mtlbuffer &&other) {
+        buffer = other.buffer;
+        ptr = other.ptr;
+        length = other.length;
+        capacity = other.capacity;
+        last_offset = other.last_offset;
+    }
+    
+    mtlbuffer& operator=(const mtlbuffer &&other) {
+        buffer = other.buffer;
+        ptr = other.ptr;
+        length = other.length;
+        capacity = other.capacity;
+        last_offset = other.last_offset;
+        return *this;
+    }
+    
+    void clear() {
         length = 0;
-        capacity = [buffer length];
+        last_offset = 0;
     }
     
     void reserve(size_t size) {
@@ -105,6 +126,14 @@ public:
         assert(length <= capacity);
     }
     
+    template<typename T, typename ...Args>
+    T& emplace_back_unchecked(Args &&...args) {
+        T *ret = new (ptr + length) T(std::forward<Args>(args)...);
+        length += sizeof(T);
+        assert(length <= capacity);
+        return *ret;
+    }
+    
     id<MTLBuffer> get() const {
         return buffer;
     }
@@ -129,100 +158,38 @@ public:
     }
 };
 
-static id<MTLRenderPipelineState> createGridPipeline(id<MTLDevice> device, id<MTLLibrary> library) {
-    id<MTLFunction> vertexFunc = [library newFunctionWithName:@"grid_vertex"];
-    id<MTLFunction> fragmentFunc = [library newFunctionWithName:@"grid_fragment"];
-    
-    MTLRenderPipelineDescriptor *desc = [[MTLRenderPipelineDescriptor alloc] init];
-    desc.label = @"Grid Pipeline";
-    desc.vertexFunction = vertexFunc;
-    desc.fragmentFunction = fragmentFunc;
-    desc.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm_sRGB;
-    desc.vertexBuffers[0].mutability = MTLMutabilityImmutable;
-    desc.fragmentBuffers[0].mutability = MTLMutabilityImmutable;
-    
-    return [device newRenderPipelineStateWithDescriptor:desc error:nil];
-}
-
-static id<MTLRenderPipelineState> createGlyphPipeline(id<MTLDevice> device, id<MTLLibrary> library) {
-    id<MTLFunction> vertexFunc = [library newFunctionWithName:@"glyph_vertex"];
-    id<MTLFunction> fragmentFunc = [library newFunctionWithName:@"glyph_fragment"];
-    
-    MTLRenderPipelineDescriptor *desc = [[MTLRenderPipelineDescriptor alloc] init];
-    desc.label = @"Glyph Pipeline";
-    desc.vertexFunction = vertexFunc;
-    desc.fragmentFunction = fragmentFunc;
-    desc.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm_sRGB;
-    desc.colorAttachments[0].blendingEnabled = YES;
-    desc.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
-    desc.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
-    desc.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
-    desc.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorSourceAlpha;
-    desc.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-    desc.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-    desc.vertexBuffers[0].mutability = MTLMutabilityImmutable;
-    desc.fragmentBuffers[0].mutability = MTLMutabilityImmutable;
-    
-    return [device newRenderPipelineStateWithDescriptor:desc error:nil];
-}
-
 @implementation NVGridView {
-    id<MTLDevice> device;
+    NVRenderContext *renderContext;
     id<MTLCommandQueue> commandQueue;
-    id<MTLRenderPipelineState> gridPipeline;
-    id<MTLRenderPipelineState> glyphPipeline;
-    font_family font;
+    CAMetalLayer *metalLayer;
     mtlbuffer buffer;
     ui::grid *grid;
-    glyph_rasterizer rasterizer;
-    glyph_texture_cache texture_cache;
     std::unordered_map<ui::cell, cached_glyph, cell_hasher, cell_equal> glyph_cache;
-    CAMetalLayer *metalLayer;
+    font_family font;
     simd_float2 cellSize;
     simd_float2 baselineTranslation;
+    int32_t lineThickness;
+    int32_t underlineTranslate;
+    int32_t strikethroughTranslate;
 }
 
-- (id)initWithFrame:(NSRect)frame {
-    device = MTLCreateSystemDefaultDevice();
-    commandQueue = [device newCommandQueue];
-    
+- (id)initWithFrame:(NSRect)frame renderContext:(NVRenderContext *)renderContext {
     self = [super initWithFrame:frame];
+    
+    self->renderContext = renderContext;
+    self->commandQueue = [renderContext->device newCommandQueue];
     
     self.wantsLayer = YES;
     self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawDuringViewResize;
     self.layerContentsPlacement = NSViewLayerContentsPlacementTopLeft;
     
-    id<MTLLibrary> lib = [device newDefaultLibrary];
-    gridPipeline = createGridPipeline(device, lib);
-    glyphPipeline = createGlyphPipeline(device, lib);
-    
-    font = font_family("SF Mono Regular", 15);
-    rasterizer.set_canvas(128, 128, kCGImageAlphaOnly);
-    texture_cache.create(device, MTLPixelFormatA8Unorm, 512, 512);
-    
-    CGFloat leading = floor(font.leading() + 0.5);
-    CGFloat descent = floor(font.descent() + 0.5);
-    CGFloat ascent = floor(font.ascent() + 0.5);
-
-    CGFloat cellHeight = leading + descent + ascent;
-    CGFloat cellWidth = floor(font.width() + 0.5);
-    
-    cellSize.x = cellWidth;
-    cellSize.y = cellHeight;
-    
-    baselineTranslation.x = 0;
-    baselineTranslation.y = ascent;
-    
-    buffer.set_buffer([device newBufferWithLength:4194304
-                                          options:MTLResourceStorageModeManaged |
-                                                  MTLResourceCPUCacheModeWriteCombined]);
-    
+    buffer = mtlbuffer(renderContext->device, 4194304);
     return self;
 }
 
 - (CALayer*)makeBackingLayer {
     metalLayer = [CAMetalLayer layer];
-    metalLayer.device = device;
+    metalLayer.device = renderContext->device;
     metalLayer.delegate = self;
     metalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm_sRGB;
     metalLayer.allowsNextDrawableTimeout = NO;
@@ -245,32 +212,61 @@ static id<MTLRenderPipelineState> createGlyphPipeline(id<MTLDevice> device, id<M
     grid = newGrid;
 }
 
+- (void)setFont:(font_family)font {
+    self->font = font;
+    
+    CGFloat leading = floor(font.leading() + 0.5);
+    CGFloat descent = floor(font.descent() + 0.5);
+    CGFloat ascent = floor(font.ascent() + 0.5);
+
+    CGFloat cellHeight = leading + descent + ascent;
+    CGFloat cellWidth = floor(font.width() + 0.5);
+
+    cellSize.x = cellWidth;
+    cellSize.y = cellHeight;
+
+    baselineTranslation.x = 0;
+    baselineTranslation.y = ascent;
+    
+    CGFloat underlinePos = font.underline_position();
+    
+    if (underlinePos >= 0) {
+        underlineTranslate = floor(underlinePos + 0.5);
+    } else {
+        underlineTranslate = floor(underlinePos - 0.5);
+    }
+    
+    lineThickness = floor(font.underline_thickness() + 0.5);
+}
+
 - (void)displayLayer:(CALayer*)layer {
     size_t grid_width = grid->width;
     size_t grid_height = grid->height;
     
     CGSize size = [metalLayer drawableSize];
     
+    if (!buffer.aquire()) {
+        [self setNeedsDisplay:YES];
+        return;
+    }
+    
     simd_float2 pixel_size = simd_float2{2.0, -2.0} / simd_float2{(float)size.width, (float)size.height};
     
     size_t max_buffer_size = grid->cells.size() * sizeof(uint32_t) * sizeof(glyph_data) + 1024;
-
+    buffer.clear();
+    buffer.reserve(max_buffer_size);
+    
     uniform_data data;
     data.pixel_size = pixel_size;
     data.cell_pixel_size = cellSize;
     data.cell_size = cellSize * pixel_size;
     data.baseline = baselineTranslation;
     data.grid_width = (uint32_t)grid_width;
+    data.cursor_position.x = grid->cursor.col;
+    data.cursor_position.y = grid->cursor.row;
+    data.cursor_color = grid->cursor.attrs.background.value;
     
-    if (!buffer.aquire()) {
-        puts("dropped frame!");
-        [self setNeedsDisplay:YES];
-        return;
-    }
-    
-    buffer.clear();
-    buffer.reserve(max_buffer_size);
-    buffer.push_back_unchecked(data);
+    buffer.push_back(data);
     buffer.offset();
     
     for (ui::cell &cell : grid->cells) {
@@ -294,8 +290,8 @@ static id<MTLRenderPipelineState> createGlyphPipeline(id<MTLDevice> device, id<M
             
             if (iter == glyph_cache.end()) {
                 std::string_view text = cell->text_view();
-                glyph_bitmap glyph = rasterizer.rasterize(font.regular(), text);
-                auto texpoint = texture_cache.add(glyph);
+                glyph_bitmap glyph = renderContext->rasterizer.rasterize(font.regular(), text);
+                auto texpoint = renderContext->texture_cache.add(glyph);
                 
                 if (!texpoint) {
                     std::abort();
@@ -326,7 +322,34 @@ static id<MTLRenderPipelineState> createGlyphPipeline(id<MTLDevice> device, id<M
         }
     }
     
+    ui::cell *cursor_cell = grid->get(grid->cursor.row, grid->cursor.col);
+    
+    if (!cursor_cell->empty()) {
+        auto iter = glyph_cache.find(*cursor_cell);
+        cached_glyph cached = iter->second;
+
+        glyph_data gdata;
+        gdata.grid_position = simd_short2{(int16_t)grid->cursor.row, (int16_t)grid->cursor.col};
+        gdata.texture_position = cached.texture_position;
+        gdata.glyph_position = cached.glyph_position;
+        gdata.glyph_size = cached.size;
+        gdata.color = grid->cursor.attrs.foreground.value;
+        buffer.push_back_unchecked(gdata);
+    }
+    
     size_t glyph_offset = buffer.offset();
+    
+    for (int i=0; i<10; ++i) {
+        line_data line;
+        line.grid_position = simd_short2{0, (short)(5 + i)};
+        line.ytranslate = baselineTranslation.y;
+        line.thickness = 2;
+        line.period = 2;
+        buffer.push_back(line);
+    }
+    
+    size_t line_offset = buffer.offset();
+    
     buffer.update();
     
     id<CAMetalDrawable> drawable = [metalLayer nextDrawable];
@@ -339,19 +362,19 @@ static id<MTLRenderPipelineState> createGlyphPipeline(id<MTLDevice> device, id<M
     id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
     id<MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:desc];
     
-    [commandEncoder setRenderPipelineState:gridPipeline];
+    [commandEncoder setRenderPipelineState:renderContext->gridRenderPipeline];
     [commandEncoder setVertexBuffer:buffer.get() offset:0 atIndex:0];
     [commandEncoder setVertexBuffer:buffer.get() offset:grid_offset atIndex:1];
-    
+
     [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                        vertexStart:0
                        vertexCount:4
                      instanceCount:grid->cells.size()];
-    
+
     if (glyph_count) {
-        [commandEncoder setRenderPipelineState:glyphPipeline];
+        [commandEncoder setRenderPipelineState:renderContext->glyphRenderPipeline];
         [commandEncoder setVertexBufferOffset:glyph_offset atIndex:1];
-        [commandEncoder setFragmentTexture:texture_cache.texture atIndex:0];
+        [commandEncoder setFragmentTexture:renderContext->texture_cache.texture atIndex:0];
 
         [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                            vertexStart:0
@@ -359,6 +382,50 @@ static id<MTLRenderPipelineState> createGlyphPipeline(id<MTLDevice> device, id<M
                          instanceCount:glyph_count];
     }
     
+    [commandEncoder setRenderPipelineState:renderContext->lineRenderPipeline];
+    [commandEncoder setVertexBufferOffset:line_offset atIndex:1];
+
+    [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                       vertexStart:0
+                       vertexCount:4
+                     instanceCount:10];
+
+    simd_float2 position{(float)grid->cursor.col, (float)grid->cursor.row};
+    simd_float2 origin = cellSize * position;
+
+    MTLScissorRect scissor;
+    scissor.x = origin.x;
+    scissor.y = origin.y;
+    scissor.width = cellSize.x;
+    scissor.height = cellSize.y;
+
+    if (scissor.x + scissor.width > size.width) {
+        scissor.x = 0;
+        scissor.width = size.width;
+    }
+
+    if (scissor.y + scissor.height > size.height) {
+        scissor.y = 0;
+        scissor.height = size.height;
+    }
+
+    [commandEncoder setScissorRect:scissor];
+    
+    [commandEncoder setRenderPipelineState:renderContext->cursorRenderPipeline];
+    [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                       vertexStart:0
+                       vertexCount:4];
+    
+    if (!cursor_cell->empty()) {
+        [commandEncoder setRenderPipelineState:renderContext->glyphRenderPipeline];
+        [commandEncoder setVertexBufferOffset:glyph_offset atIndex:1];
+        [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                           vertexStart:0
+                           vertexCount:4
+                         instanceCount:1
+                          baseInstance:glyph_count];
+    }
+
     [commandEncoder endEncoding];
     
     [commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> commandBuffer) {

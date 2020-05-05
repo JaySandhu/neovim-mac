@@ -110,6 +110,14 @@ public:
     CGFloat descent() const {
         return CTFontGetDescent(regular());
     }
+    
+    CGFloat underline_position() const {
+        return CTFontGetUnderlinePosition(regular());
+    }
+    
+    CGFloat underline_thickness() const {
+        return CTFontGetUnderlineThickness(regular());
+    }
 
     CGFloat width() const;
 };

@@ -142,6 +142,8 @@ void ui_state::redraw_event(const msg::object &event_object) {
         return apply(this, &ui_state::mode_info_set, name, args);
     } else if (name == "mode_change") {
         return apply(this, &ui_state::mode_change, name, args);
+    } else if (name == "grid_cursor_goto") {
+        return apply(this, &ui_state::grid_cursor_goto, name, args);
     }
     
     os_log_info(rpc, "Redraw info: Unhandled event - Name=%.*s Args=%s",
@@ -252,6 +254,12 @@ void ui_state::grid_clear(size_t grid_id) {
     for (cell &cell : grid->cells) {
         cell = empty;
     }
+}
+
+void ui_state::grid_cursor_goto(size_t grid_id, size_t row, size_t col) {
+    grid *grid = get_grid(grid_id);
+    grid->cursor.row = row;
+    grid->cursor.col = col;
 }
 
 void ui_state::grid_scroll(size_t grid_id, size_t top, size_t bottom,
@@ -445,8 +453,14 @@ static inline void set_color_attrs(cursor_attributes *attrs,
     
     const size_t hlid = object.get<msg::integer>();
     const highlight_attributes *hl_attrs = hl_table.get_entry(hlid);
-    attrs->foreground = hl_attrs->foreground;
-    attrs->background = hl_attrs->background;
+    
+    if (hlid != 0) {
+        attrs->foreground = hl_attrs->foreground;
+        attrs->background = hl_attrs->background;
+    } else {
+        attrs->foreground = hl_attrs->background;
+        attrs->background = hl_attrs->foreground;
+    }
 }
 
 template<typename T>
@@ -458,9 +472,9 @@ static inline T to(const msg::object &object) {
     return {};
 }
 
-static cursor_attributes to_cursor_attributes(const highlight_table &hl_table,
-                                              const msg::map &map) {
-    cursor_attributes attrs;
+static mode_info to_mode_info(const highlight_table &hl_table,
+                              const msg::map &map) {
+    mode_info info;
     
     for (const msg::pair &pair : map) {
         if (!pair.first.is<msg::string>()) {
@@ -473,28 +487,28 @@ static cursor_attributes to_cursor_attributes(const highlight_table &hl_table,
         msg::string name = pair.first.get<msg::string>();
         
         if (name == "cursor_shape") {
-            attrs.shape = to_cursor_shape(pair.second);
+            info.cursor_attrs.shape = to_cursor_shape(pair.second);
         } else if (name == "cell_percentage") {
-            attrs.percentage = to<uint16_t>(pair.second);
+            info.cursor_attrs.percentage = to<uint16_t>(pair.second);
         } else if (name == "blinkwait") {
-            attrs.blinkwait = to<uint16_t>(pair.second);
+            info.cursor_attrs.blinkwait = to<uint16_t>(pair.second);
         } else if (name == "blinkon") {
-            attrs.blinkon = to<uint16_t>(pair.second);
+            info.cursor_attrs.blinkon = to<uint16_t>(pair.second);
         } else if (name == "blinkoff") {
-            attrs.blinkoff = to<uint16_t>(pair.second);
+            info.cursor_attrs.blinkoff = to<uint16_t>(pair.second);
         } else if (name == "name") {
-            attrs.mode_name = to<msg::string>(pair.second);
+            info.mode_name = to<msg::string>(pair.second);
         } else if (name == "attr_id") {
-            set_color_attrs(&attrs, hl_table, pair.second);
+            set_color_attrs(&info.cursor_attrs, hl_table, pair.second);
         }
     }
     
-    return attrs;
+    return info;
 }
 
 void ui_state::mode_info_set(bool enabled, msg::array property_maps) {
-    cursor_table.clear();
-    cursor_table.reserve(property_maps.size());
+    mode_info_table.clear();
+    mode_info_table.reserve(property_maps.size());
     current_mode = 0;
     
     for (const msg::object &object : property_maps) {
@@ -506,18 +520,18 @@ void ui_state::mode_info_set(bool enabled, msg::array property_maps) {
         }
         
         msg::map map = object.get<msg::map>();
-        cursor_table.push_back(to_cursor_attributes(hltable, map));
+        mode_info_table.push_back(to_mode_info(hltable, map));
     }
 }
 
 void ui_state::mode_change(msg::string name, size_t index) {
-    if (index >= cursor_table.size()) {
+    if (index >= mode_info_table.size()) {
         return os_log_error(rpc, "Redraw error: Mode index out of bounds - "
                                  "Event=mode_change, TableSize=%zu, Index=%zu",
-                                 cursor_table.size(), index);
+                                 mode_info_table.size(), index);
     }
     
-    current_mode = index;
+    writing->cursor.attrs = mode_info_table[index].cursor_attrs;
 }
 
 } // namespace ui
