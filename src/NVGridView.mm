@@ -12,29 +12,6 @@
 #import "NVGridView.h"
 #import "ShaderTypes.h"
 
-#include <vector>
-#include <unordered_map>
-#include "font.hpp"
-#include "ui.hpp"
-
-struct cell_hasher {
-    size_t operator()(const ui::cell &cell) const {
-        return cell.hash;
-    }
-};
-
-struct cell_equal {
-    bool operator()(const ui::cell &left, const ui::cell &right) const {
-        return memcmp(&left, &right, sizeof(ui::cell)) == 0;
-    }
-};
-
-struct cached_glyph {
-    simd_short2 texture_position;
-    simd_short2 glyph_position;
-    simd_short2 size;
-};
-
 class mtlbuffer {
 private:
     id<MTLBuffer> buffer;
@@ -164,7 +141,6 @@ public:
     CAMetalLayer *metalLayer;
     mtlbuffer buffer;
     ui::grid *grid;
-    std::unordered_map<ui::cell, cached_glyph, cell_hasher, cell_equal> glyph_cache;
     font_family font;
     simd_float2 cellSize;
     simd_float2 baselineTranslation;
@@ -275,6 +251,7 @@ public:
     
     size_t grid_offset = buffer.offset();
     size_t glyph_count = 0;
+    glyph_cache_map &glyph_cache = renderContext->glyph_cache;
     
     for (size_t row=0; row<grid_height; ++row) {
         ui::cell *cellrow = grid->get(row, 0);
@@ -285,8 +262,9 @@ public:
             if (cell->empty()) {
                 continue;
             }
-                                
-            auto iter = glyph_cache.find(*cell);
+                               
+            glyph_key key(font.regular(), *cell);
+            auto iter = glyph_cache.find(key);
             
             if (iter == glyph_cache.end()) {
                 std::string_view text = cell->text_view();
@@ -297,7 +275,7 @@ public:
                     std::abort();
                 }
                 
-                cached_glyph cached;
+                glyph_cached cached;
                 cached.glyph_position.x = glyph.metrics.left_bearing;
                 cached.glyph_position.y = -glyph.metrics.ascent;
                 cached.texture_position.x = texpoint.x;
@@ -305,11 +283,11 @@ public:
                 cached.size.x = glyph.metrics.width;
                 cached.size.y = glyph.metrics.height;
                 
-                auto emplaced = glyph_cache.emplace(*cell, cached);
+                auto emplaced = glyph_cache.emplace(key, cached);
                 iter = emplaced.first;
             }
 
-            cached_glyph cached = iter->second;
+            glyph_cached cached = iter->second;
             
             glyph_data gdata;
             gdata.grid_position = simd_short2{(int16_t)row, (int16_t)col};
@@ -325,8 +303,9 @@ public:
     ui::cell *cursor_cell = grid->get(grid->cursor.row, grid->cursor.col);
     
     if (!cursor_cell->empty()) {
-        auto iter = glyph_cache.find(*cursor_cell);
-        cached_glyph cached = iter->second;
+        glyph_key key(font.regular(), *cursor_cell);
+        auto iter = glyph_cache.find(key);
+        glyph_cached cached = iter->second;
 
         glyph_data gdata;
         gdata.grid_position = simd_short2{(int16_t)grid->cursor.row, (int16_t)grid->cursor.col};

@@ -10,10 +10,13 @@
 #ifndef GLYPH_HPP
 #define GLYPH_HPP
 
-#import <Metal/Metal.h>
+#include <simd/simd.h>
+#include <Metal/Metal.h>
+#include <unordered_map>
 #include <memory>
 #include <vector>
 #include <string>
+#include "ui.hpp"
 
 template<typename T>
 class arc_ptr {
@@ -194,5 +197,40 @@ struct glyph_texture_cache {
     void create(id<MTLDevice> device, MTLPixelFormat format, size_t width, size_t height);
     point add(const glyph_bitmap &bitmap);
 };
+    
+struct glyph_key {
+    size_t hash;
+    char text[24];
+    CTFontRef font;
+    
+    glyph_key(CTFontRef font, const ui::cell &cell): font(font) {
+        memcpy(text, cell.text, ui::cell::max_text_size);
+        hash = cell.hash ^ ((uintptr_t)font >> 3);
+    }
+    
+    struct key_hash {
+        size_t operator()(const glyph_key &key) const {
+            return key.hash;
+        }
+    };
+    
+    struct key_equal {
+        bool operator()(const glyph_key &left, const glyph_key &right) const {
+            return memcmp(&left, &right, sizeof(glyph_key)) == 0;
+        }
+    };
+};
+
+struct glyph_cached {
+    simd_short2 texture_position;
+    simd_short2 glyph_position;
+    simd_short2 size;
+};
+
+using glyph_cache_map = std::unordered_map<glyph_key,
+                                           glyph_cached,
+                                           glyph_key::key_hash,
+                                           glyph_key::key_equal>;
+
 
 #endif // GLYPH_HPP

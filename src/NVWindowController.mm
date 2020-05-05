@@ -10,11 +10,7 @@
 #import "NVWindowController.h"
 #import "NVGridView.h"
 
-#include <unordered_map>
-#include <simd/simd.h>
 #include "neovim.hpp"
-#include "font.hpp"
-#include "ui.hpp"
 
 static inline MTLRenderPipelineDescriptor* defaultPipelineDescriptor() {
     MTLRenderPipelineDescriptor *desc = [[MTLRenderPipelineDescriptor alloc] init];

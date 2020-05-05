@@ -9,6 +9,9 @@
 
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
+
+#include <simd/simd.h>
+#include <unordered_map>
 #include "font.hpp"
 
 NS_ASSUME_NONNULL_BEGIN
@@ -21,6 +24,7 @@ struct NVRenderContext {
     id<MTLRenderPipelineState> lineRenderPipeline;
     glyph_rasterizer rasterizer;
     glyph_texture_cache texture_cache;
+    glyph_cache_map glyph_cache;
     font_manager font_manager;
     
     NSError* init();
