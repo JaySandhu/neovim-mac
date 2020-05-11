@@ -16,10 +16,17 @@ font_family::font_family(std::string_view name, CGFloat size) {
     arc_ptr cfname = CFStringCreateWithBytes(nullptr, (UInt8*)name.data(),
                                              name.size(), kCFStringEncodingUTF8, false);
     
-    regular_ = CTFontCreateWithName(cfname.get(), size, nullptr);
-    italic_ = CTFontCreateCopyWithSymbolicTraits(regular(), size, nullptr, kCTFontItalicTrait, mask);
-    bold_ = CTFontCreateCopyWithSymbolicTraits(regular(), size, nullptr, kCTFontBoldTrait, mask);
-    bold_italic_ = CTFontCreateCopyWithSymbolicTraits(regular(), size, nullptr, mask, mask);
+    fonts[(size_t)ui::font_attributes::none] =
+        CTFontCreateWithName(cfname.get(), size, nullptr);
+    
+    fonts[(size_t)ui::font_attributes::italic] =
+        CTFontCreateCopyWithSymbolicTraits(regular(), size, nullptr, kCTFontItalicTrait, mask);
+    
+    fonts[(size_t)ui::font_attributes::bold] =
+        CTFontCreateCopyWithSymbolicTraits(regular(), size, nullptr, kCTFontBoldTrait, mask);
+    
+    fonts[(size_t)ui::font_attributes::bold_italic] =
+        CTFontCreateCopyWithSymbolicTraits(regular(), size, nullptr, mask, mask);
 }
 
 CGFloat font_family::width() const {
@@ -80,14 +87,6 @@ void glyph_rasterizer::set_canvas(size_t width, size_t height, CGImageAlphaInfo 
     
     CGContextSetAllowsFontSmoothing(context.get(), true);
     CGContextSetShouldSmoothFonts(context.get(), true);
-    
-    attributes = CFDictionaryCreateMutable(nullptr, 7,
-                                           &kCFTypeDictionaryKeyCallBacks,
-                                           &kCFTypeDictionaryValueCallBacks);
-
-    CFDictionarySetValue(attributes.get(),
-                         kCTForegroundColorFromContextAttributeName,
-                         kCFBooleanTrue);
 }
 
 static inline CGFloat clamp_abs(CGFloat value, CGFloat limit) {
@@ -141,22 +140,76 @@ glyph_bitmap glyph_rasterizer::rasterize(CTFontRef font, std::string_view text) 
     return bitmap;
 }
 
-void glyph_texture_cache::create(id<MTLDevice> device, MTLPixelFormat format,
-                                 size_t width, size_t height) {
-    x_size = width;
-    y_size = height;
+glyph_texture_cache::glyph_texture_cache(id<MTLCommandQueue> queue,
+                                         MTLPixelFormat format,
+                                         size_t width, size_t height): queue(queue) {
+    device = [queue device];
+    
     x_used = 0;
     y_used = 0;
     row_height = 0;
+    page_index = 0;
+    page_count = 1;
+    x_size = width;
+    y_size = height;
     
-    auto desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format
-                                                                   width:width
-                                                                  height:height
-                                                               mipmapped:NO];
+    MTLTextureDescriptor *desc = [[MTLTextureDescriptor alloc] init];
+    desc.textureType = MTLTextureType2DArray;
+    desc.arrayLength = 1;
+    desc.pixelFormat = format;
+    desc.width = width;
+    desc.height = height;
+    desc.mipmapLevelCount = 1;
+    
     texture = [device newTextureWithDescriptor:desc];
 }
 
-glyph_texture_cache::point glyph_texture_cache::add(const glyph_bitmap &bitmap) {
+simd_short3 glyph_texture_cache::add_new_page(const glyph_bitmap &bitmap) {
+    const size_t new_page_count = page_count + 1;
+    
+    MTLTextureDescriptor *desc = [[MTLTextureDescriptor alloc] init];
+    desc.textureType = MTLTextureType2DArray;
+    desc.arrayLength = new_page_count;
+    desc.pixelFormat = pixel_format();
+    desc.width = x_size;
+    desc.height = y_size;
+    desc.mipmapLevelCount = 1;
+    
+    id<MTLTexture> old_texture = texture;
+    texture = [device newTextureWithDescriptor:desc];
+    
+    id<MTLCommandBuffer> commandBuffer = [queue commandBuffer];
+    id<MTLBlitCommandEncoder> blitEncoder = [commandBuffer blitCommandEncoder];
+
+    [blitEncoder copyFromTexture:old_texture
+                     sourceSlice:0
+                     sourceLevel:0
+                       toTexture:texture
+                destinationSlice:0
+                destinationLevel:0
+                      sliceCount:page_count
+                      levelCount:1];
+    
+    [blitEncoder endEncoding];
+    [commandBuffer commit];
+    
+    x_used = std::min((size_t)bitmap.metrics.width + 1, x_size);
+    y_used = std::min((size_t)bitmap.metrics.height, y_size);
+    row_height = y_used;
+    page_count = new_page_count;
+    page_index += 1;
+    
+    [texture replaceRegion:MTLRegionMake2D(0, 0, x_used, y_used)
+               mipmapLevel:0
+                     slice:page_index
+                 withBytes:bitmap.buffer
+               bytesPerRow:bitmap.stride
+             bytesPerImage:0];
+    
+    return simd_short3{0, 0, (int16_t)page_index};
+}
+
+simd_short3 glyph_texture_cache::add(const glyph_bitmap &bitmap) {
     size_t glyph_height = bitmap.metrics.height;
     size_t glyph_width  = bitmap.metrics.width;
 
@@ -169,12 +222,15 @@ glyph_texture_cache::point glyph_texture_cache::add(const glyph_bitmap &bitmap) 
         if (newx <= x_size && newy <= y_size) {
             [texture replaceRegion:MTLRegionMake2D(x_used, y_used, glyph_width, glyph_height)
                        mipmapLevel:0
+                             slice:page_index
                          withBytes:bitmap.buffer
-                       bytesPerRow:bitmap.stride];
+                       bytesPerRow:bitmap.stride
+                     bytesPerImage:0];
 
-            point origin;
+            simd_short3 origin;
             origin.x = x_used;
             origin.y = y_used;
+            origin.z = page_index;
         
             x_used = newx + 1;
             return origin;
@@ -185,7 +241,7 @@ glyph_texture_cache::point glyph_texture_cache::add(const glyph_bitmap &bitmap) 
         row_height = glyph_height;
 
         if (glyph_width > x_size || glyph_height + y_used > y_size) {
-            return point{-1, -1};
+            return add_new_page(bitmap);
         }
     }
 }

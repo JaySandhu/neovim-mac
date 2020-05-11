@@ -103,6 +103,36 @@ public:
         assert(length <= capacity);
     }
     
+    void insert(const void *source, size_t size) {
+        const size_t new_length = length + size;
+            
+        if (new_length > capacity) {
+            expand(new_length * 2);
+        }
+    
+        memcpy(ptr + length, source, size);
+        length = new_length;
+    }
+    
+    void insert_unchecked(const void *source, size_t size) {
+        memcpy(ptr + length, source, size);
+        length += size;
+        assert(length <= capacity);
+    }
+    
+    template<typename T, typename ...Args>
+    T& emplace_back(Args &&...args) {
+        const size_t new_length = length + sizeof(T);
+            
+        if (new_length > capacity) {
+            expand(new_length * 2);
+        }
+    
+        T *ret = new (ptr + length) T(std::forward<Args>()...);
+        length = new_length;
+        return *ret;
+    }
+    
     template<typename T, typename ...Args>
     T& emplace_back_unchecked(Args &&...args) {
         T *ret = new (ptr + length) T(std::forward<Args>(args)...);
@@ -139,27 +169,32 @@ public:
     NVRenderContext *renderContext;
     id<MTLCommandQueue> commandQueue;
     CAMetalLayer *metalLayer;
-    mtlbuffer buffer;
+    mtlbuffer buffers[3];
     ui::grid *grid;
-    font_family font;
+    font_family font_family;
     simd_float2 cellSize;
     simd_float2 baselineTranslation;
     int32_t lineThickness;
     int32_t underlineTranslate;
     int32_t strikethroughTranslate;
+    uint64_t frame;
 }
 
 - (id)initWithFrame:(NSRect)frame renderContext:(NVRenderContext *)renderContext {
     self = [super initWithFrame:frame];
     
     self->renderContext = renderContext;
-    self->commandQueue = [renderContext->device newCommandQueue];
+    self->commandQueue = renderContext->commandQueue;
+    self->frame = 0;
     
     self.wantsLayer = YES;
     self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawDuringViewResize;
     self.layerContentsPlacement = NSViewLayerContentsPlacementTopLeft;
     
-    buffer = mtlbuffer(renderContext->device, 4194304);
+    buffers[0] = mtlbuffer(renderContext->device, 524288);
+    buffers[1] = mtlbuffer(renderContext->device, 524288);
+    buffers[2] = mtlbuffer(renderContext->device, 524288);
+
     return self;
 }
 
@@ -189,7 +224,7 @@ public:
 }
 
 - (void)setFont:(font_family)font {
-    self->font = font;
+    self->font_family = font;
     
     CGFloat leading = floor(font.leading() + 0.5);
     CGFloat descent = floor(font.descent() + 0.5);
@@ -212,27 +247,78 @@ public:
         underlineTranslate = floor(underlinePos - 0.5);
     }
     
+    strikethroughTranslate = ascent / 3;
     lineThickness = floor(font.underline_thickness() + 0.5);
 }
 
-- (void)displayLayer:(CALayer*)layer {
-    size_t grid_width = grid->width;
-    size_t grid_height = grid->height;
+static inline glyph_data make_glyph_data(size_t row, size_t col,
+                                         cached_glyph glyph, uint32_t color) {
+    glyph_data data;
+    data.grid_position = simd_short2{(int16_t)row, (int16_t)col};
+    data.texture_position = glyph.texture_position;
+    data.glyph_position = glyph.glyph_position;
+    data.glyph_size = glyph.glyph_size;
+    data.texture_index = glyph.texture_index;
+    data.color = color;
+    return data;
+}
+
+static inline void append_line_data(std::vector<line_data> &lines,
+                                    size_t row, size_t col, NVGridView *view,
+                                    ui::line_emphasis line_type, uint32_t color) {
+    if ((size_t)line_type & (size_t)ui::line_emphasis::undercurl) {
+        line_data data;
+        data.grid_position = simd_make_short2(row, col);
+        data.color = color;
+        data.period = 2;
+        data.thickness = 2;
+        data.ytranslate = view->underlineTranslate;
+        lines.push_back(data);
+    } else if ((size_t)line_type & (size_t)ui::line_emphasis::underline) {
+        line_data data;
+        data.grid_position = simd_make_short2(row, col);
+        data.color = color;
+        data.period = UINT16_MAX;
+        data.thickness = view->lineThickness;
+        data.ytranslate = view->underlineTranslate;
+        lines.push_back(data);
+    }
     
-    CGSize size = [metalLayer drawableSize];
+    if ((size_t)line_type & (size_t)ui::line_emphasis::strikethrough) {
+        line_data data;
+        data.grid_position = simd_make_short2(row, col);
+        data.color = color;
+        data.period = UINT16_MAX;
+        data.thickness = view->lineThickness;
+        data.ytranslate = view->strikethroughTranslate;
+        lines.push_back(data);
+    }
+}
+
+- (void)displayLayer:(CALayer*)layer {
+    const size_t grid_width = grid->width;
+    const size_t grid_height = grid->height;
+    const size_t grid_size = grid->cells.size();
+    
+    const CGSize drawable_size = [metalLayer drawableSize];
+    const uint64_t index = frame % 3;
+    mtlbuffer &buffer = buffers[index];
     
     if (!buffer.aquire()) {
         [self setNeedsDisplay:YES];
         return;
     }
+        
+    const simd_float2 pixel_size = simd_float2{2.0, -2.0} /
+                                   simd_float2{(float)drawable_size.width,
+                                               (float)drawable_size.height};
     
-    simd_float2 pixel_size = simd_float2{2.0, -2.0} / simd_float2{(float)size.width, (float)size.height};
+    const size_t reserve_size = grid_size * (sizeof(uint32_t) + sizeof(glyph_data)) + 1024;
     
-    size_t max_buffer_size = grid->cells.size() * sizeof(uint32_t) * sizeof(glyph_data) + 1024;
     buffer.clear();
-    buffer.reserve(max_buffer_size);
+    buffer.reserve(reserve_size);
     
-    uniform_data data;
+    uniform_data &data = buffer.emplace_back_unchecked<uniform_data>();
     data.pixel_size = pixel_size;
     data.cell_pixel_size = cellSize;
     data.cell_size = cellSize * pixel_size;
@@ -241,95 +327,43 @@ public:
     data.cursor_position.x = grid->cursor.col;
     data.cursor_position.y = grid->cursor.row;
     data.cursor_color = grid->cursor.attrs.background.value;
+    data.cursor_width = 1;
     
-    buffer.push_back(data);
-    buffer.offset();
-    
+    const size_t uniform_offset = buffer.offset();
+        
     for (ui::cell &cell : grid->cells) {
-        buffer.push_back_unchecked(cell.hl_attrs.background.value);
+        buffer.push_back_unchecked(cell.background());
     }
     
-    size_t grid_offset = buffer.offset();
+    const size_t grid_offset = buffer.offset();
+    
+    glyph_manager &glyph_manager = renderContext->glyph_manager;
+    std::vector<line_data> lines;
     size_t glyph_count = 0;
-    glyph_cache_map &glyph_cache = renderContext->glyph_cache;
     
     for (size_t row=0; row<grid_height; ++row) {
         ui::cell *cellrow = grid->get(row, 0);
         
         for (size_t col=0; col<grid_width; ++col) {
             ui::cell *cell = cellrow + col;
+            ui::line_emphasis line_emphasis = cell->line_emphasis();
             
-            if (cell->empty()) {
-                continue;
+            if (line_emphasis != ui::line_emphasis::none) {
+                append_line_data(lines, row, col, self, line_emphasis, cell->special());
             }
-                               
-            glyph_key key(font.regular(), *cell);
-            auto iter = glyph_cache.find(key);
             
-            if (iter == glyph_cache.end()) {
-                std::string_view text = cell->text_view();
-                glyph_bitmap glyph = renderContext->rasterizer.rasterize(font.regular(), text);
-                auto texpoint = renderContext->texture_cache.add(glyph);
-                
-                if (!texpoint) {
-                    std::abort();
-                }
-                
-                glyph_cached cached;
-                cached.glyph_position.x = glyph.metrics.left_bearing;
-                cached.glyph_position.y = -glyph.metrics.ascent;
-                cached.texture_position.x = texpoint.x;
-                cached.texture_position.y = texpoint.y;
-                cached.size.x = glyph.metrics.width;
-                cached.size.y = glyph.metrics.height;
-                
-                auto emplaced = glyph_cache.emplace(key, cached);
-                iter = emplaced.first;
+            if (!cell->empty()) {
+                cached_glyph glyph = glyph_manager.get(font_family, *cell);
+                glyph_data data = make_glyph_data(row, col, glyph, cell->foreground());
+                buffer.push_back_unchecked(data);
+                glyph_count += 1;
             }
-
-            glyph_cached cached = iter->second;
-            
-            glyph_data gdata;
-            gdata.grid_position = simd_short2{(int16_t)row, (int16_t)col};
-            gdata.texture_position = cached.texture_position;
-            gdata.glyph_position = cached.glyph_position;
-            gdata.glyph_size = cached.size;
-            gdata.color = cell->hl_attrs.foreground.value;
-            buffer.push_back_unchecked(gdata);
-            glyph_count += 1;
         }
     }
-    
-    ui::cell *cursor_cell = grid->get(grid->cursor.row, grid->cursor.col);
-    
-    if (!cursor_cell->empty()) {
-        glyph_key key(font.regular(), *cursor_cell);
-        auto iter = glyph_cache.find(key);
-        glyph_cached cached = iter->second;
 
-        glyph_data gdata;
-        gdata.grid_position = simd_short2{(int16_t)grid->cursor.row, (int16_t)grid->cursor.col};
-        gdata.texture_position = cached.texture_position;
-        gdata.glyph_position = cached.glyph_position;
-        gdata.glyph_size = cached.size;
-        gdata.color = grid->cursor.attrs.foreground.value;
-        buffer.push_back_unchecked(gdata);
-    }
-    
-    size_t glyph_offset = buffer.offset();
-    
-    for (int i=0; i<10; ++i) {
-        line_data line;
-        line.grid_position = simd_short2{0, (short)(5 + i)};
-        line.ytranslate = baselineTranslation.y;
-        line.thickness = 2;
-        line.period = 2;
-        buffer.push_back(line);
-    }
-    
-    size_t line_offset = buffer.offset();
-    
-    buffer.update();
+    ui::cell *cursor_cell = grid->get(grid->cursor.row, grid->cursor.col);
+    glyph_data *cursor_glyph = &buffer.emplace_back_unchecked<glyph_data>();
+    const size_t glyph_offset = buffer.offset();
     
     id<CAMetalDrawable> drawable = [metalLayer nextDrawable];
     MTLRenderPassDescriptor *desc = [MTLRenderPassDescriptor renderPassDescriptor];
@@ -342,18 +376,18 @@ public:
     id<MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:desc];
     
     [commandEncoder setRenderPipelineState:renderContext->gridRenderPipeline];
-    [commandEncoder setVertexBuffer:buffer.get() offset:0 atIndex:0];
+    [commandEncoder setVertexBuffer:buffer.get() offset:uniform_offset atIndex:0];
     [commandEncoder setVertexBuffer:buffer.get() offset:grid_offset atIndex:1];
 
     [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                        vertexStart:0
                        vertexCount:4
-                     instanceCount:grid->cells.size()];
+                     instanceCount:grid_size];
 
     if (glyph_count) {
         [commandEncoder setRenderPipelineState:renderContext->glyphRenderPipeline];
         [commandEncoder setVertexBufferOffset:glyph_offset atIndex:1];
-        [commandEncoder setFragmentTexture:renderContext->texture_cache.texture atIndex:0];
+        [commandEncoder setFragmentTexture:glyph_manager.texture() atIndex:0];
 
         [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                            vertexStart:0
@@ -361,59 +395,100 @@ public:
                          instanceCount:glyph_count];
     }
     
-    [commandEncoder setRenderPipelineState:renderContext->lineRenderPipeline];
-    [commandEncoder setVertexBufferOffset:line_offset atIndex:1];
-
-    [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                       vertexStart:0
-                       vertexCount:4
-                     instanceCount:10];
-
-    simd_float2 position{(float)grid->cursor.col, (float)grid->cursor.row};
-    simd_float2 origin = cellSize * position;
-
-    MTLScissorRect scissor;
-    scissor.x = origin.x;
-    scissor.y = origin.y;
-    scissor.width = cellSize.x;
-    scissor.height = cellSize.y;
-
-    if (scissor.x + scissor.width > size.width) {
-        scissor.x = 0;
-        scissor.width = size.width;
-    }
-
-    if (scissor.y + scissor.height > size.height) {
-        scissor.y = 0;
-        scissor.height = size.height;
-    }
-
-    [commandEncoder setScissorRect:scissor];
+    size_t lines_size = lines.size();
+    size_t line_offset = 0;
     
-    [commandEncoder setRenderPipelineState:renderContext->cursorRenderPipeline];
-    [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                       vertexStart:0
-                       vertexCount:4];
-    
-    if (!cursor_cell->empty()) {
-        [commandEncoder setRenderPipelineState:renderContext->glyphRenderPipeline];
-        [commandEncoder setVertexBufferOffset:glyph_offset atIndex:1];
+    if (lines_size) {
+        if (auto emphasis = cursor_cell->line_emphasis(); emphasis != ui::line_emphasis::none) {
+            append_line_data(lines, grid->cursor.row, grid->cursor.col,
+                             self, emphasis, grid->cursor.attrs.special.value);
+        }
+        
+        buffer.insert(lines.data(), lines.size() * sizeof(line_data));
+        line_offset = buffer.offset();
+        
+        [commandEncoder setRenderPipelineState:renderContext->lineRenderPipeline];
+        [commandEncoder setVertexBufferOffset:line_offset atIndex:1];
+        
         [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                            vertexStart:0
                            vertexCount:4
-                         instanceCount:1
-                          baseInstance:glyph_count];
+                         instanceCount:lines_size];
     }
+    
+    [commandEncoder setRenderPipelineState:renderContext->cursorRenderPipeline];
 
+    switch (grid->cursor.attrs.shape) {
+        case ui::cursor_shape::vertical:
+            [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                               vertexStart:0
+                               vertexCount:4
+                             instanceCount:1
+                              baseInstance:0];
+            break;
+            
+        case ui::cursor_shape::horizontal:
+            [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                               vertexStart:0
+                               vertexCount:4
+                             instanceCount:1
+                              baseInstance:1];
+            break;
+            
+        case ui::cursor_shape::block_outline:
+            [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                               vertexStart:0
+                               vertexCount:4
+                             instanceCount:4
+                              baseInstance:0];
+            break;
+            
+        case ui::cursor_shape::block:
+            [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                               vertexStart:0
+                               vertexCount:4
+                             instanceCount:1
+                              baseInstance:4];
+            
+            if (!cursor_cell->empty()) {
+                cached_glyph glyph = glyph_manager.get(font_family, *cursor_cell);
+                *cursor_glyph = make_glyph_data(grid->cursor.row, grid->cursor.col,
+                                                glyph, grid->cursor.attrs.foreground.value);
+                
+                [commandEncoder setRenderPipelineState:renderContext->glyphRenderPipeline];
+                [commandEncoder setVertexBufferOffset:glyph_offset atIndex:1];
+
+                [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                                   vertexStart:0
+                                   vertexCount:4
+                                 instanceCount:1
+                                  baseInstance:glyph_count];
+            }
+            
+            if (lines.size() != lines_size) {
+                [commandEncoder setRenderPipelineState:renderContext->lineRenderPipeline];
+                [commandEncoder setVertexBufferOffset:line_offset atIndex:1];
+                
+                [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                                   vertexStart:0
+                                   vertexCount:4
+                                 instanceCount:lines.size() - lines_size
+                                  baseInstance:lines_size];
+            }
+    }
+    
     [commandEncoder endEncoding];
     
     [commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> commandBuffer) {
-        self->buffer.release();
+        self->buffers[index].release();
     }];
     
+    buffer.update();
     [commandBuffer commit];
     [commandBuffer waitUntilScheduled];
     [drawable present];
+    
+    frame += 1;
 }
 
 @end

@@ -19,6 +19,7 @@ struct uniform_data {
     simd_float2 baseline;
     simd_short2 cursor_position;
     uint32_t cursor_color;
+    uint32_t cursor_width;
     uint32_t grid_width;
 };
 
@@ -27,13 +28,14 @@ struct glyph_data {
     simd_short2 texture_position;
     simd_short2 glyph_position;
     simd_short2 glyph_size;
+    uint32_t texture_index;
     uint32_t color;
 };
 
 struct line_data {
     simd_short2 grid_position;
     uint32_t color;
-    uint16_t ytranslate;
+    int16_t ytranslate;
     uint16_t period;
     uint16_t thickness;
 };

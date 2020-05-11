@@ -18,14 +18,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 struct NVRenderContext {
     id<MTLDevice> device;
+    id<MTLCommandQueue> commandQueue;
     id<MTLRenderPipelineState> gridRenderPipeline;
     id<MTLRenderPipelineState> glyphRenderPipeline;
     id<MTLRenderPipelineState> cursorRenderPipeline;
     id<MTLRenderPipelineState> lineRenderPipeline;
-    glyph_rasterizer rasterizer;
-    glyph_texture_cache texture_cache;
-    glyph_cache_map glyph_cache;
     font_manager font_manager;
+    glyph_manager glyph_manager;
     
     NSError* init();
 };

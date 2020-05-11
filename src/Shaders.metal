@@ -27,6 +27,7 @@ struct glyph_rasterizer_data {
     float4 position [[position]];
     float4 color;
     float2 texture_position;
+    uint32_t texture_index;
 };
 
 constant float2 transforms[4] = {
@@ -52,11 +53,24 @@ vertex extern grid_rasterizer_data grid_background(uint vertex_id [[vertex_id]],
     return data;
 }
 
-vertex extern grid_rasterizer_data cursor_background(uint vertex_id [[vertex_id]],
-                                                     constant uniform_data &uniforms [[buffer(0)]]) {
-    float2 cell_vertex = float2(uniforms.cursor_position.xy) + transforms[vertex_id];
-    float2 position = float2(-1, 1) + (uniforms.cell_size * cell_vertex);
+vertex extern grid_rasterizer_data cursor_render(uint vertex_id [[vertex_id]],
+                                                 uint instance_id [[instance_id]],
+                                                 constant uniform_data &uniforms [[buffer(0)]]) {
+    constexpr float2 translations[5][4] = {
+        {{ 0,  0}, { 0,  0}, { 1,  0}, { 1,  0}},
+        {{ 0, -1}, { 0,  0}, { 0, -1}, { 0,  0}},
+        {{ 0,  0}, { 0,  1}, { 0,  0}, { 0,  1}},
+        {{-1,  0}, {-1,  0}, { 0,  0}, { 0,  0}},
+        {{ 0,  0}, { 0,  0}, { 0,  0}, { 0,  0}}
+    };
 
+    float2 base_translation = uniforms.cell_pixel_size - float2(uniforms.cursor_width);
+    float2 translate = base_translation * translations[instance_id][vertex_id];
+    
+    float2 cell_vertex = float2(uniforms.cursor_position.xy) + transforms[vertex_id];
+    float2 pixel_position = (uniforms.cell_pixel_size * cell_vertex) - translate;
+    float2 position = float2(-1, 1) + (pixel_position * uniforms.pixel_size);
+    
     grid_rasterizer_data data;
     data.position = float4(position.xy, 0.0, 1.0);
     data.color = unpack_unorm4x8_srgb_to_float(uniforms.cursor_color);
@@ -73,14 +87,14 @@ vertex extern line_rasterizer_data line_render(uint vertex_id [[vertex_id]],
     
     float2 line_size = float2(uniforms.cell_pixel_size.x, line.thickness);
     float2 cell_offset = uniforms.cell_pixel_size * float2(col, row);
-    cell_offset.y += line.ytranslate + line.thickness;
+    cell_offset.y += uniforms.baseline.y - line.ytranslate;
 
     float2 pixel_position = cell_offset + (line_size * transforms[vertex_id]);
     float2 position = float2(-1, 1) + (pixel_position * uniforms.pixel_size);
     
     line_rasterizer_data data;
     data.position = float4(position.xy, 0, 1);
-    data.color = float4(1, 0, 0, 1);
+    data.color = unpack_unorm4x8_srgb_to_float(line.color);
     data.period = pixel_position.x * 3.14159265359 / line.period;
     return data;
 }
@@ -113,6 +127,7 @@ vertex extern glyph_rasterizer_data glyph_render(uint vertex_id [[vertex_id]],
     data.position = float4(position.xy, 0, 1);
     data.texture_position = float2(glyphs[instance_id].texture_position.xy) + vertex_offset;
     data.color = unpack_unorm4x8_srgb_to_float(glyphs[instance_id].color);
+    data.texture_index = glyphs[instance_id].texture_index;
     return data;
 }
 
@@ -122,12 +137,12 @@ fragment float4 fill_line(line_rasterizer_data in [[stage_in]]) {
 }
 
 fragment float4 glyph_fill(glyph_rasterizer_data in [[stage_in]],
-                           texture2d<float> texture [[texture(0)]]) {
+                           texture2d_array<float> texture [[texture(0)]]) {
     constexpr sampler texture_sampler(mag_filter::nearest,
                                       min_filter::nearest,
                                       address::clamp_to_zero,
                                       coord::pixel);
     
-    float4 sampled = texture.sample(texture_sampler, in.texture_position);
+    float4 sampled = texture.sample(texture_sampler, in.texture_position, in.texture_index);
     return float4(in.color.rgb, sampled.a);
 }

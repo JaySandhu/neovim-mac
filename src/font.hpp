@@ -73,29 +73,30 @@ public:
 
 class font_family {
 private:
-    arc_ptr<CTFontRef> regular_;
-    arc_ptr<CTFontRef> bold_;
-    arc_ptr<CTFontRef> italic_;
-    arc_ptr<CTFontRef> bold_italic_;
+    arc_ptr<CTFontRef> fonts[(size_t)ui::font_attributes::bold_italic + 1];
     
 public:
     font_family() = default;
     font_family(std::string_view name, CGFloat size);
     
     CTFontRef regular() const {
-        return regular_.get();
+        return fonts[(size_t)ui::font_attributes::none].get();
     }
     
     CTFontRef bold() const {
-        return bold_.get();
+        return fonts[(size_t)ui::font_attributes::bold].get();
     }
     
     CTFontRef italic() const {
-        return italic_.get();
+        return fonts[(size_t)ui::font_attributes::italic].get();
     }
     
     CTFontRef bold_italic() const {
-        return bold_italic_.get();
+        return fonts[(size_t)ui::font_attributes::bold_italic].get();
+    }
+    
+    CTFontRef get(ui::font_attributes attrs) const {
+        return fonts[(size_t)attrs].get();
     }
     
     CGFloat size() const {
@@ -177,60 +178,109 @@ struct glyph_rasterizer {
     }
 };
 
+struct cached_glyph {
+    simd_short2 glyph_position;
+    simd_short2 glyph_size;
+    simd_short2 texture_position;
+    uint32_t texture_index;
+};
+
 struct glyph_texture_cache {
+    id<MTLDevice> device;
+    id<MTLCommandQueue> queue;
     id<MTLTexture> texture;
+    size_t page_count;
+    size_t page_index;
     size_t x_size;
     size_t y_size;
     size_t x_used;
     size_t y_used;
     size_t row_height;
     
-    struct point {
-        int16_t x;
-        int16_t y;
-                
-        explicit operator bool() const {
-            return x != -1;
+    size_t width() const {
+        return x_size;
+    }
+    
+    size_t height() const {
+        return y_size;
+    }
+    
+    MTLPixelFormat pixel_format() const {
+        return [texture pixelFormat];
+    }
+    
+    glyph_texture_cache() = default;
+    
+    glyph_texture_cache(id<MTLCommandQueue> queue, MTLPixelFormat format,
+                        size_t page_width, size_t page_height);
+    
+    void erase_front(size_t count);
+    
+    simd_short3 add_new_page(const glyph_bitmap &bitmap);
+    simd_short3 add(const glyph_bitmap &bitmap);
+};
+
+struct glyph_manager {
+    struct key_type {
+        size_t hash;
+        char text[24];
+        CTFontRef font;
+        
+        key_type(CTFontRef font, const ui::cell &cell): font(font) {
+            memcpy(text, cell.text, ui::cell::max_text_size);
+            hash = cell.hash ^ ((uintptr_t)font >> 3);
         }
     };
     
-    void create(id<MTLDevice> device, MTLPixelFormat format, size_t width, size_t height);
-    point add(const glyph_bitmap &bitmap);
-};
-    
-struct glyph_key {
-    size_t hash;
-    char text[24];
-    CTFontRef font;
-    
-    glyph_key(CTFontRef font, const ui::cell &cell): font(font) {
-        memcpy(text, cell.text, ui::cell::max_text_size);
-        hash = cell.hash ^ ((uintptr_t)font >> 3);
-    }
-    
     struct key_hash {
-        size_t operator()(const glyph_key &key) const {
+        size_t operator()(const key_type &key) const {
             return key.hash;
         }
     };
     
     struct key_equal {
-        bool operator()(const glyph_key &left, const glyph_key &right) const {
-            return memcmp(&left, &right, sizeof(glyph_key)) == 0;
+        bool operator()(const key_type &left, const key_type &right) const {
+            return memcmp(&left, &right, sizeof(key_type)) == 0;
         }
     };
+    
+    using glyph_map = std::unordered_map<key_type,
+                                         cached_glyph,
+                                         key_hash,
+                                         key_equal>;
+    
+    glyph_rasterizer rasterizer;
+    glyph_texture_cache texture_cache;
+    glyph_map map;
+    
+    cached_glyph get(const font_family &font_family, const ui::cell &cell) {
+        CTFontRef font = font_family.get(cell.font_attributes());
+        key_type key(font, cell);
+        
+        if (auto iter = map.find(key); iter != map.end()) {
+            return iter->second;
+        }
+         
+        glyph_bitmap glyph = rasterizer.rasterize(font, cell.text_view());
+        auto texture_position = texture_cache.add(glyph);
+        
+        cached_glyph cached;
+        cached.texture_position  = texture_position.xy;
+        cached.texture_index = texture_position.z;
+        cached.glyph_position.x = glyph.metrics.left_bearing;
+        cached.glyph_position.y = -glyph.metrics.ascent;
+        cached.glyph_size.x = glyph.metrics.width;
+        cached.glyph_size.y = glyph.metrics.height;
+
+        map.emplace(key, cached);
+        return cached;
+    }
+     
+    void evict();
+    
+    id<MTLTexture> texture() const {
+        return texture_cache.texture;
+    }
 };
-
-struct glyph_cached {
-    simd_short2 texture_position;
-    simd_short2 glyph_position;
-    simd_short2 size;
-};
-
-using glyph_cache_map = std::unordered_map<glyph_key,
-                                           glyph_cached,
-                                           glyph_key::key_hash,
-                                           glyph_key::key_equal>;
-
 
 #endif // GLYPH_HPP

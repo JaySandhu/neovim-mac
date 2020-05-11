@@ -42,20 +42,21 @@ struct rgb_color {
 };
 
 enum class cursor_shape {
-    gui_default,
     block,
     horizontal,
-    vertical
+    vertical,
+    block_outline
 };
 
 struct cursor_attributes {
     rgb_color foreground;
     rgb_color background;
+    rgb_color special;
+    cursor_shape shape;
     uint16_t percentage;
     uint16_t blinkwait;
     uint16_t blinkon;
     uint16_t blinkoff;
-    cursor_shape shape;
 };
 
 struct mode_info {
@@ -70,56 +71,33 @@ struct cursor {
 };
 
 struct attributes {
-    bool underline : 1;
-    bool undercurl : 1;
-    bool strikethrough : 1;
-    bool doublewidth   : 1;
-    bool reverse : 1;
-
-    bool has_attributes() const {
-        return underline ||
-               undercurl ||
-               strikethrough ||
-               doublewidth;
-    }
+    enum flag : uint16_t {
+        bold          = 1 << 0,
+        italic        = 1 << 1,
+        emoji         = 1 << 2,
+        underline     = 1 << 3,
+        undercurl     = 1 << 4,
+        strikethrough = 1 << 5,
+        doublewidth   = 1 << 6,
+        reverse       = 1 << 7
+    };
     
-    explicit operator bool() const {
-        return has_attributes();
-    }
-};
-
-struct font_attributes {
-    bool bold   : 1;
-    bool italic : 1;
-    bool emoji  : 1;
-    
-    bool has_attributes() const {
-        return bold || italic || emoji;
-    }
-    
-    explicit operator bool() const {
-        return has_attributes();
-    }
-};
-
-struct highlight_attributes {
     rgb_color background;
     rgb_color foreground;
     rgb_color special;
-    font_attributes fontattrs;
-    attributes attrs;
+    uint16_t flags;
 };
 
-struct highlight_table {
-    std::vector<highlight_attributes> table;
+struct attribute_table {
+    std::vector<attributes> table;
     
-    highlight_table(): table(1) {}
+    attribute_table(): table(1) {}
         
-    highlight_attributes* get_default() {
+    attributes* get_default() {
         return table.data();
     }
     
-    const highlight_attributes* get_entry(size_t hlid) const {
+    const attributes* get_entry(size_t hlid) const {
         if (hlid >= table.size()) {
             return nullptr;
         }
@@ -127,7 +105,21 @@ struct highlight_table {
         return table.data() + hlid;
     }
     
-    highlight_attributes* new_entry(size_t hlid);
+    attributes* new_entry(size_t hlid);
+};
+
+enum class font_attributes {
+    none,
+    bold        = attributes::bold,
+    italic      = attributes::italic,
+    bold_italic = attributes::bold | attributes::italic
+};
+
+enum class line_emphasis {
+    none,
+    underline     = attributes::underline,
+    undercurl     = attributes::undercurl,
+    strikethrough = attributes::strikethrough
 };
 
 struct cell {
@@ -135,7 +127,7 @@ struct cell {
 
     char text[max_text_size];
     uint16_t size;
-    highlight_attributes hl_attrs;
+    attributes attrs;
     uint64_t hash;
     
     std::string_view text_view() const {
@@ -144,6 +136,33 @@ struct cell {
     
     bool empty() const {
         return size == 0;
+    }
+    
+    uint32_t foreground() const {
+        return attrs.foreground.value;
+    }
+    
+    uint32_t background() const {
+        return attrs.background.value;
+    }
+    
+    uint32_t special() const {
+        return attrs.special.value;
+    }
+    
+    font_attributes font_attributes() const {
+        static constexpr uint16_t mask = attributes::bold |
+                                         attributes::italic;
+        
+        return static_cast<enum font_attributes>(attrs.flags & mask);
+    }
+    
+    line_emphasis line_emphasis() const {
+        static constexpr uint16_t mask = attributes::underline |
+                                         attributes::undercurl |
+                                         attributes::strikethrough;
+        
+        return static_cast<enum line_emphasis>(attrs.flags & mask);
     }
 };
 
@@ -163,7 +182,7 @@ struct grid {
 
 struct ui_state {
     window_controller window;
-    highlight_table hltable;
+    attribute_table hltable;
     std::vector<mode_info> mode_info_table;
     size_t current_mode;
     

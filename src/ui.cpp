@@ -81,10 +81,9 @@ void apply(ui_state *state,
     }
 }
 
-inline cell make_cell(const msg::string &text,
-                      const highlight_attributes *hl_attrs) {
+inline cell make_cell(const msg::string &text, const attributes *attrs) {
     cell ret = {};
-    ret.hl_attrs = *hl_attrs;
+    ret.attrs = *attrs;
     
     if (text.size() == 1 && *text.data() == ' ') {
         return ret;
@@ -144,6 +143,8 @@ void ui_state::redraw_event(const msg::object &event_object) {
         return apply(this, &ui_state::mode_change, name, args);
     } else if (name == "grid_cursor_goto") {
         return apply(this, &ui_state::grid_cursor_goto, name, args);
+    } else if (name == "mouse_on" || name == "mouse_off") {
+        return; // ignored
     }
     
     os_log_info(rpc, "Redraw info: Unhandled event - Name=%.*s Args=%s",
@@ -170,12 +171,12 @@ static bool type_check(const msg::array &array) {
 
 struct cell_update {
     msg::string text;
-    const highlight_attributes *hlattr;
+    const attributes *hlattr;
     size_t repeat;
     
     cell_update(): hlattr(nullptr), repeat(0) {}
     
-    bool set(const msg::object &object, const highlight_table &hl_table) {
+    bool set(const msg::object &object, const attribute_table &attr_table) {
         if (!object.is<msg::array>()) {
             return false;
         }
@@ -190,14 +191,14 @@ struct cell_update {
         
         if (type_check<msg::string, msg::integer>(array)) {
             text = array[0].get<msg::string>();
-            hlattr = hl_table.get_entry(array[1].get<msg::integer>());
+            hlattr = attr_table.get_entry(array[1].get<msg::integer>());
             repeat = 1;
             return true;
         }
             
         if (type_check<msg::string, msg::integer, msg::integer>(array)) {
             text = array[0].get<msg::string>();
-            hlattr = hl_table.get_entry(array[1].get<msg::integer>());
+            hlattr = attr_table.get_entry(array[1].get<msg::integer>());
             repeat = array[2].get<msg::integer>();
             return true;
         }
@@ -249,7 +250,7 @@ void ui_state::grid_line(size_t grid_id, size_t row,
 void ui_state::grid_clear(size_t grid_id) {
     grid *grid = get_grid(grid_id);
     cell empty = {};
-    empty.hl_attrs.background = hltable.get_default()->background;
+    empty.attrs.background = hltable.get_default()->background;
 
     for (cell &cell : grid->cells) {
         cell = empty;
@@ -319,7 +320,7 @@ void ui_state::flush() {
     window.redraw();
 }
 
-highlight_attributes* highlight_table::new_entry(size_t hlid) {
+attributes* attribute_table::new_entry(size_t hlid) {
     const size_t table_size = table.size();
     
     if (hlid == table_size) {
@@ -332,7 +333,7 @@ highlight_attributes* highlight_table::new_entry(size_t hlid) {
         return &table[hlid];
     }
         
-    highlight_attributes default_attrs = *get_default();
+    attributes default_attrs = *get_default();
     table.resize(hlid, default_attrs);
     return &table.back();
 }
@@ -342,25 +343,24 @@ void ui_state::default_colors_set(uint32_t fg, uint32_t bg, uint32_t sp) {
     rgb_color rgb_bg(bg, rgb_color::default_tag);
     rgb_color rgb_sp(sp, rgb_color::default_tag);
      
-    highlight_attributes *def = hltable.get_default();
+    attributes *def = hltable.get_default();
     def->foreground = rgb_fg;
     def->background = rgb_bg;
     def->special = rgb_sp;
-    def->fontattrs = {};
-    def->attrs = {};
+    def->flags = 0;
     
     // TODO: handle reversed cells
     for (cell &cell : writing->cells) {
-        if (cell.hl_attrs.foreground.is_default()) {
-            cell.hl_attrs.foreground = rgb_fg;
+        if (cell.attrs.foreground.is_default()) {
+            cell.attrs.foreground = rgb_fg;
         }
         
-        if (cell.hl_attrs.background.is_default()) {
-            cell.hl_attrs.background = rgb_bg;
+        if (cell.attrs.background.is_default()) {
+            cell.attrs.background = rgb_bg;
         }
         
-        if (cell.hl_attrs.special.is_default()) {
-            cell.hl_attrs.special = rgb_sp;
+        if (cell.attrs.special.is_default()) {
+            cell.attrs.special = rgb_sp;
         }
     }
 }
@@ -377,7 +377,7 @@ static inline void set_rgb_color(rgb_color &color, const msg::object &object) {
 }
 
 void ui_state::hl_attr_define(size_t hlid, msg::map definition) {
-    highlight_attributes *hlattrs = hltable.new_entry(hlid);
+    attributes *attrs = hltable.new_entry(hlid);
     bool reversed = false;
     
     for (const msg::pair &pair : definition) {
@@ -391,24 +391,24 @@ void ui_state::hl_attr_define(size_t hlid, msg::map definition) {
         msg::string name = pair.first.get<msg::string>();
 
         if (name == "foreground") {
-            set_rgb_color(hlattrs->foreground, pair.second);
+            set_rgb_color(attrs->foreground, pair.second);
         } else if (name == "background") {
-            set_rgb_color(hlattrs->background, pair.second);
+            set_rgb_color(attrs->background, pair.second);
         } else if (name == "underline") {
-            hlattrs->attrs.underline = true;
+             attrs->flags |= attributes::underline;
         } else if (name == "bold") {
-            hlattrs->fontattrs.bold = true;
+             attrs->flags |= attributes::bold;
         } else if (name == "italic") {
-            hlattrs->fontattrs.italic = true;
+             attrs->flags |= attributes::italic;
         } else if (name == "strikethrough") {
-            hlattrs->attrs.strikethrough = true;
+             attrs->flags |= attributes::strikethrough;
         } else if (name == "undercurl") {
-            hlattrs->attrs.undercurl = true;
+            attrs->flags |= attributes::undercurl;
         } else if (name == "special") {
-            set_rgb_color(hlattrs->special, pair.second);
+            set_rgb_color(attrs->special, pair.second);
         } else if (name == "reverse") {
             reversed = true;
-            hlattrs->attrs.reverse = true;
+             attrs->flags |= attributes::reverse;
         } else {
             os_log_info(rpc, "Redraw info: Ignoring highlight attribute - "
                              "Event=hl_attr_define, Name=%.*s",
@@ -417,7 +417,7 @@ void ui_state::hl_attr_define(size_t hlid, msg::map definition) {
     }
     
     if (reversed) {
-        std::swap(hlattrs->background, hlattrs->foreground);
+        std::swap(attrs->background, attrs->foreground);
     }
 }
 
@@ -438,11 +438,11 @@ static inline cursor_shape to_cursor_shape(const msg::object &object) {
                       "Event=mode_info_set CursorShape=%s",
                       msg::to_string(object).c_str());
 
-    return cursor_shape::gui_default;
+    return cursor_shape::block;
 };
 
 static inline void set_color_attrs(cursor_attributes *attrs,
-                                   const highlight_table &hl_table,
+                                   const attribute_table &attr_table,
                                    const msg::object &object) {
     if (!object.is<msg::integer>()) {
         os_log_error(rpc, "Redraw error: Highlight id type error - "
@@ -452,7 +452,8 @@ static inline void set_color_attrs(cursor_attributes *attrs,
     }
     
     const size_t hlid = object.get<msg::integer>();
-    const highlight_attributes *hl_attrs = hl_table.get_entry(hlid);
+    const attributes *hl_attrs = attr_table.get_entry(hlid);
+    attrs->special = hl_attrs->special;
     
     if (hlid != 0) {
         attrs->foreground = hl_attrs->foreground;
@@ -472,7 +473,7 @@ static inline T to(const msg::object &object) {
     return {};
 }
 
-static mode_info to_mode_info(const highlight_table &hl_table,
+static mode_info to_mode_info(const attribute_table &hl_table,
                               const msg::map &map) {
     mode_info info;
     

@@ -34,6 +34,8 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
 
 NSError* NVRenderContext::init() {
     device = MTLCreateSystemDefaultDevice();
+    commandQueue = [device newCommandQueue];
+    
     id<MTLLibrary> lib = [device newDefaultLibrary];
     NSError *error = nil;
     
@@ -58,8 +60,8 @@ NSError* NVRenderContext::init() {
     }
     
     MTLRenderPipelineDescriptor *cursorDesc = defaultPipelineDescriptor();
-    cursorDesc.label = @"Cursor background render pipeline";
-    cursorDesc.vertexFunction = [lib newFunctionWithName:@"cursor_background"];
+    cursorDesc.label = @"Cursor render pipeline";
+    cursorDesc.vertexFunction = [lib newFunctionWithName:@"cursor_render"];
     cursorDesc.fragmentFunction = [lib newFunctionWithName:@"fill_background"];
     cursorRenderPipeline = [device newRenderPipelineStateWithDescriptor:cursorDesc error:&error];
     
@@ -76,9 +78,10 @@ NSError* NVRenderContext::init() {
     if (error) {
         return error;
     }
+        
+    glyph_manager.rasterizer.set_canvas(256, 256, kCGImageAlphaOnly);
+    glyph_manager.texture_cache = glyph_texture_cache(commandQueue, MTLPixelFormatA8Unorm, 512, 512);
     
-    rasterizer.set_canvas(256, 256, kCGImageAlphaOnly);
-    texture_cache.create(device, MTLPixelFormatA8Unorm, 512, 512);
     return nil;
 }
 
