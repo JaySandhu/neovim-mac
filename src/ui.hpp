@@ -135,12 +135,16 @@ enum class font_attributes {
     bold_italic = attributes::bold | attributes::italic
 };
 
-enum class line_emphasis {
+enum class line_attributes {
     none,
     underline     = attributes::underline,
     undercurl     = attributes::undercurl,
     strikethrough = attributes::strikethrough
 };
+
+inline uint16_t operator&(line_attributes left, line_attributes right) {
+    return (uint16_t)left & (uint16_t)right;
+}
 
 struct cell {
     static constexpr size_t max_text_size = 24;
@@ -177,12 +181,12 @@ struct cell {
         return static_cast<enum font_attributes>(attrs.flags & mask);
     }
     
-    line_emphasis line_emphasis() const {
+    line_attributes line_attributes() const {
         static constexpr uint16_t mask = attributes::underline |
                                          attributes::undercurl |
                                          attributes::strikethrough;
         
-        return static_cast<enum line_emphasis>(attrs.flags & mask);
+        return static_cast<enum line_attributes>(attrs.flags & mask);
     }
 };
 

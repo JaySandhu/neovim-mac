@@ -145,6 +145,10 @@ public:
         return buffer;
     }
     
+    void* offset(size_t offset) {
+        return ptr + offset;
+    }
+    
     size_t offset() {
         size_t ret = last_offset;
         length = align_up(length, 256);
@@ -236,7 +240,7 @@ public:
 }
 
 - (void)setFont:(font_family)font {
-    self->font_family = font;
+    font_family = font;
     
     CGFloat leading = floor(font.leading() + 0.5);
     CGFloat descent = floor(font.descent() + 0.5);
@@ -263,10 +267,11 @@ public:
     lineThickness = floor(font.underline_thickness() + 0.5);
 }
 
-static inline glyph_data make_glyph_data(size_t row, size_t col,
-                                         cached_glyph glyph, uint32_t color) {
+static inline glyph_data make_glyph_data(simd_short2 grid_position,
+                                         cached_glyph glyph,
+                                         ui::rgb_color color) {
     glyph_data data;
-    data.grid_position = simd_short2{(int16_t)row, (int16_t)col};
+    data.grid_position = grid_position;
     data.texture_position = glyph.texture_position;
     data.glyph_position = glyph.glyph_position;
     data.glyph_size = glyph.glyph_size;
@@ -275,36 +280,41 @@ static inline glyph_data make_glyph_data(size_t row, size_t col,
     return data;
 }
 
-static inline void append_line_data(std::vector<line_data> &lines,
-                                    size_t row, size_t col, NVGridView *view,
-                                    ui::line_emphasis line_type, uint32_t color) {
-    if ((size_t)line_type & (size_t)ui::line_emphasis::undercurl) {
-        line_data data;
-        data.grid_position = simd_make_short2(row, col);
-        data.color = color;
-        data.period = 2;
-        data.thickness = 2;
-        data.ytranslate = view->underlineTranslate;
-        lines.push_back(data);
-    } else if ((size_t)line_type & (size_t)ui::line_emphasis::underline) {
-        line_data data;
-        data.grid_position = simd_make_short2(row, col);
-        data.color = color;
-        data.period = UINT16_MAX;
-        data.thickness = view->lineThickness;
-        data.ytranslate = view->underlineTranslate;
-        lines.push_back(data);
-    }
-    
-    if ((size_t)line_type & (size_t)ui::line_emphasis::strikethrough) {
-        line_data data;
-        data.grid_position = simd_make_short2(row, col);
-        data.color = color;
-        data.period = UINT16_MAX;
-        data.thickness = view->lineThickness;
-        data.ytranslate = view->strikethroughTranslate;
-        lines.push_back(data);
-    }
+static inline line_data make_underline_data(NVGridView *view,
+                                            simd_short2 grid_position,
+                                            ui::rgb_color color) {
+    line_data data;
+    data.grid_position = grid_position;
+    data.color = color;
+    data.period = UINT16_MAX;
+    data.thickness = view->lineThickness;
+    data.ytranslate = view->underlineTranslate;
+    return data;
+}
+
+static inline line_data make_undercurl_data(NVGridView *view,
+                                            simd_short2 grid_position,
+                                            ui::rgb_color color) {
+    line_data data;
+    data.grid_position = grid_position;
+    data.color = color;
+    // TODO: Fix hardcoded values.
+    data.period = 2;
+    data.thickness = 2;
+    data.ytranslate = view->underlineTranslate;
+    return data;
+}
+
+static inline line_data make_strikethrough_data(NVGridView *view,
+                                                simd_short2 grid_position,
+                                                ui::rgb_color color) {
+    line_data data;
+    data.grid_position = grid_position;
+    data.color = color;
+    data.period = UINT16_MAX;
+    data.thickness = view->lineThickness;
+    data.ytranslate = view->strikethroughTranslate;
+    return data;
 }
 
 - (void)displayLayer:(CALayer*)layer {
@@ -330,7 +340,7 @@ static inline void append_line_data(std::vector<line_data> &lines,
     buffer.clear();
     buffer.reserve(reserve_size);
     
-    uniform_data &data = buffer.emplace_back_unchecked<uniform_data>();
+    uniform_data &data   = buffer.emplace_back_unchecked<uniform_data>();
     data.pixel_size      = pixel_size;
     data.cell_pixel_size = cellSize;
     data.cell_size       = cellSize * pixel_size;
@@ -356,21 +366,34 @@ static inline void append_line_data(std::vector<line_data> &lines,
         
         for (size_t col=0; col<grid_width; ++col) {
             ui::cell *cell = cellrow + col;
-            ui::line_emphasis line_emphasis = cell->line_emphasis();
+            ui::line_attributes line_attrs = cell->line_attributes();
             
-            if (line_emphasis != ui::line_emphasis::none) {
-                append_line_data(lines, row, col, self, line_emphasis, cell->special());
+            if (line_attrs != ui::line_attributes::none) {
+                simd_short2 gridpos = simd_make_short2(row, col);
+                ui::rgb_color color = cell->special();
+                
+                if (line_attrs & ui::line_attributes::undercurl) {
+                    lines.push_back(make_undercurl_data(self, gridpos, color));
+                } else if (line_attrs & ui::line_attributes::underline) {
+                    lines.push_back(make_underline_data(self, gridpos, color));
+                }
+                
+                if (line_attrs & ui::line_attributes::strikethrough) {
+                    lines.push_back(make_strikethrough_data(self, gridpos, color));
+                }
             }
             
             if (!cell->empty()) {
                 cached_glyph glyph = glyph_manager->get(font_family, *cell);
-                glyph_data data = make_glyph_data(row, col, glyph, cell->foreground());
+                simd_short2 gridpos = simd_make_short2(row, col);
+                glyph_data data = make_glyph_data(gridpos, glyph, cell->foreground());
                 buffer.push_back_unchecked(data);
                 glyph_count += 1;
             }
         }
     }
 
+    simd_short2 cursor_gridpos = simd_make_short2(grid->cursor.row, grid->cursor.col);
     ui::cell *cursor_cell = grid->get(grid->cursor.row, grid->cursor.col);
     glyph_data *cursor_glyph = &buffer.emplace_back_unchecked<glyph_data>();
     const size_t glyph_offset = buffer.offset();
@@ -405,16 +428,15 @@ static inline void append_line_data(std::vector<line_data> &lines,
                          instanceCount:glyph_count];
     }
     
-    size_t lines_size = lines.size();
     size_t line_offset = 0;
+    line_data *cursor_line = nullptr;
     
-    if (lines_size) {
-        if (auto emphasis = cursor_cell->line_emphasis(); emphasis != ui::line_emphasis::none) {
-            append_line_data(lines, grid->cursor.row, grid->cursor.col,
-                             self, emphasis, grid->cursor.attrs.special.value);
-        }
-        
+    if (lines.size()) {
         buffer.insert(lines.data(), lines.size() * sizeof(line_data));
+        
+        cursor_line = &buffer.emplace_back<line_data>();
+        buffer.emplace_back<line_data>();
+        
         line_offset = buffer.offset();
         
         [commandEncoder setRenderPipelineState:lineRenderPipeline];
@@ -423,7 +445,7 @@ static inline void append_line_data(std::vector<line_data> &lines,
         [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                            vertexStart:0
                            vertexCount:4
-                         instanceCount:lines_size];
+                         instanceCount:lines.size()];
     }
     
     [commandEncoder setRenderPipelineState:cursorRenderPipeline];
@@ -462,8 +484,8 @@ static inline void append_line_data(std::vector<line_data> &lines,
             
             if (!cursor_cell->empty()) {
                 cached_glyph glyph = glyph_manager->get(font_family, *cursor_cell);
-                *cursor_glyph = make_glyph_data(grid->cursor.row, grid->cursor.col,
-                                                glyph, grid->cursor.attrs.foreground.value);
+                *cursor_glyph = make_glyph_data(cursor_gridpos,
+                                                glyph, grid->cursor.attrs.foreground);
                 
                 [commandEncoder setRenderPipelineState:glyphRenderPipeline];
                 [commandEncoder setVertexBufferOffset:glyph_offset atIndex:1];
@@ -475,15 +497,31 @@ static inline void append_line_data(std::vector<line_data> &lines,
                                   baseInstance:glyph_count];
             }
             
-            if (lines.size() != lines_size) {
+            if (auto attrs = cursor_cell->line_attributes(); attrs != ui::line_attributes::none) {
+                size_t count = 0;
+                ui::rgb_color color = cursor_cell->special();
+                
+                if (attrs & ui::line_attributes::undercurl) {
+                    *cursor_line++ = make_undercurl_data(self, cursor_gridpos, color);
+                    count += 1;
+                } else if (attrs & ui::line_attributes::underline) {
+                    *cursor_line++ = make_underline_data(self, cursor_gridpos, color);
+                    count += 1;
+                }
+                
+                if (attrs & ui::line_attributes::strikethrough) {
+                    *cursor_line++ = make_strikethrough_data(self, cursor_gridpos, color);
+                    count += 1;
+                }
+                
                 [commandEncoder setRenderPipelineState:lineRenderPipeline];
                 [commandEncoder setVertexBufferOffset:line_offset atIndex:1];
                 
                 [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                                    vertexStart:0
                                    vertexCount:4
-                                 instanceCount:lines.size() - lines_size
-                                  baseInstance:lines_size];
+                                 instanceCount:count
+                                  baseInstance:lines.size()];
             }
     }
     
