@@ -10,24 +10,27 @@
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
 
-#include <simd/simd.h>
-#include <unordered_map>
-#include "font.hpp"
+struct font_manager;
+struct glyph_manager;
 
 NS_ASSUME_NONNULL_BEGIN
 
-struct NVRenderContext {
-    id<MTLDevice> device;
-    id<MTLCommandQueue> commandQueue;
-    id<MTLRenderPipelineState> gridRenderPipeline;
-    id<MTLRenderPipelineState> glyphRenderPipeline;
-    id<MTLRenderPipelineState> cursorRenderPipeline;
-    id<MTLRenderPipelineState> lineRenderPipeline;
-    font_manager font_manager;
-    glyph_manager glyph_manager;
-    
-    NSError* init();
-};
+@interface NVRenderContext : NSObject
+
+@property (nonatomic, readonly) id<MTLDevice> device;
+@property (nonatomic, readonly) id<MTLCommandQueue> commandQueue;
+
+@property (nonatomic, readonly) id<MTLRenderPipelineState> gridRenderPipeline;
+@property (nonatomic, readonly) id<MTLRenderPipelineState> glyphRenderPipeline;
+@property (nonatomic, readonly) id<MTLRenderPipelineState> cursorRenderPipeline;
+@property (nonatomic, readonly) id<MTLRenderPipelineState> lineRenderPipeline;
+
+@property (nonatomic, readonly) struct font_manager* fontManager;
+@property (nonatomic, readonly) struct glyph_manager* glyphManager;
+
+- (instancetype)initWithError:(NSError **)error;
+
+@end
 
 @interface NVWindowController : NSWindowController<NSWindowDelegate>
 

@@ -32,64 +32,74 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
     return desc;
 }
 
-NSError* NVRenderContext::init() {
-    device = MTLCreateSystemDefaultDevice();
-    commandQueue = [device newCommandQueue];
+@implementation NVRenderContext {
+    font_manager font_manager;
+    glyph_manager glyph_manager;
+}
+
+- (instancetype)initWithError:(NSError **)error {
+    *error = nil;
     
-    id<MTLLibrary> lib = [device newDefaultLibrary];
-    NSError *error = nil;
+    self = [super init];
+    _device = MTLCreateSystemDefaultDevice();
+    _commandQueue = [_device newCommandQueue];
     
+    id<MTLLibrary> lib = [_device newDefaultLibrary];
+
     MTLRenderPipelineDescriptor *gridDesc = defaultPipelineDescriptor();
     gridDesc.label = @"Grid background render pipeline";
     gridDesc.vertexFunction = [lib newFunctionWithName:@"grid_background"];
     gridDesc.fragmentFunction = [lib newFunctionWithName:@"fill_background"];
-    gridRenderPipeline = [device newRenderPipelineStateWithDescriptor:gridDesc error:&error];
+    _gridRenderPipeline = [_device newRenderPipelineStateWithDescriptor:gridDesc error:error];
     
-    if (error) {
-        return error;
-    }
+    if (*error) return self;
     
     MTLRenderPipelineDescriptor *glyphDesc = blendedPipelineDescriptor();
     glyphDesc.label = @"Glyph render pipeline";
     glyphDesc.vertexFunction = [lib newFunctionWithName:@"glyph_render"];
     glyphDesc.fragmentFunction = [lib newFunctionWithName:@"glyph_fill"];
-    glyphRenderPipeline = [device newRenderPipelineStateWithDescriptor:glyphDesc error:&error];
+    _glyphRenderPipeline = [_device newRenderPipelineStateWithDescriptor:glyphDesc error:error];
     
-    if (error) {
-        return error;
-    }
+    if (*error) return self;
     
     MTLRenderPipelineDescriptor *cursorDesc = defaultPipelineDescriptor();
     cursorDesc.label = @"Cursor render pipeline";
     cursorDesc.vertexFunction = [lib newFunctionWithName:@"cursor_render"];
     cursorDesc.fragmentFunction = [lib newFunctionWithName:@"fill_background"];
-    cursorRenderPipeline = [device newRenderPipelineStateWithDescriptor:cursorDesc error:&error];
+    _cursorRenderPipeline = [_device newRenderPipelineStateWithDescriptor:cursorDesc error:error];
     
-    if (error) {
-        return error;
-    }
-    
+    if (*error) return self;
+
     MTLRenderPipelineDescriptor *lineDesc = blendedPipelineDescriptor();
     lineDesc.label = @"Line render pipeline";
     lineDesc.vertexFunction = [lib newFunctionWithName:@"line_render"];
     lineDesc.fragmentFunction = [lib newFunctionWithName:@"fill_line"];
-    lineRenderPipeline = [device newRenderPipelineStateWithDescriptor:lineDesc error:&error];
+    _lineRenderPipeline = [_device newRenderPipelineStateWithDescriptor:lineDesc error:error];
     
-    if (error) {
-        return error;
-    }
+    if (*error) return self;
         
     glyph_manager.rasterizer = glyph_rasterizer(256, 256);
-    glyph_manager.texture_cache = glyph_texture_cache(commandQueue, MTLPixelFormatA8Unorm, 512, 512);
+    glyph_manager.texture_cache = glyph_texture_cache(_commandQueue, MTLPixelFormatA8Unorm, 512, 512);
     
-    return nil;
+    return self;
 }
+
+- (glyph_manager*)glyphManager {
+    return &glyph_manager;
+}
+
+- (font_manager*)fontManager {
+    return &font_manager;
+}
+
+@end
 
 @implementation NVWindowController {
     NVRenderContext *renderContext;
     NVWindowController *windowIsOpen;
     NVWindowController *processIsAlive;
     NVGridView *gridView;
+    font_manager *font_manager;
     ui::ui_state *ui_controller;
     neovim nvim;
 }
@@ -108,9 +118,10 @@ NSError* NVRenderContext::init() {
     
     self = [super initWithWindow:window];
     self->renderContext = renderContext;
+    self->font_manager = renderContext.fontManager;
+    
     nvim.set_controller(self);
     ui_controller = nvim.ui_state();
-    
     return self;
 }
 
@@ -150,7 +161,7 @@ NSError* NVRenderContext::init() {
             gridView = [[NVGridView alloc] initWithFrame:window.frame renderContext:renderContext];
             [window setContentView:gridView];
             
-            font_family font = renderContext->font_manager.get("SF Mono", 15);
+            font_family font = font_manager->get("SF Mono", 15);
             [gridView setFont:font];
         }
     }

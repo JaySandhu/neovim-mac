@@ -166,41 +166,53 @@ public:
 };
 
 @implementation NVGridView {
-    NVRenderContext *renderContext;
-    id<MTLCommandQueue> commandQueue;
     CAMetalLayer *metalLayer;
+    
+    id<MTLDevice> device;
+    id<MTLCommandQueue> commandQueue;
+    id<MTLRenderPipelineState> gridRenderPipeline;
+    id<MTLRenderPipelineState> glyphRenderPipeline;
+    id<MTLRenderPipelineState> cursorRenderPipeline;
+    id<MTLRenderPipelineState> lineRenderPipeline;
+    
+    glyph_manager *glyph_manager;
+    font_family font_family;
     mtlbuffer buffers[3];
     ui::grid *grid;
-    font_family font_family;
+    
     simd_float2 cellSize;
     simd_float2 baselineTranslation;
     int32_t lineThickness;
     int32_t underlineTranslate;
     int32_t strikethroughTranslate;
-    uint64_t frame;
+    uint64_t frameIndex;
 }
 
 - (id)initWithFrame:(NSRect)frame renderContext:(NVRenderContext *)renderContext {
     self = [super initWithFrame:frame];
     
-    self->renderContext = renderContext;
-    self->commandQueue = renderContext->commandQueue;
-    self->frame = 0;
+    device               = renderContext.device;
+    commandQueue         = renderContext.commandQueue;
+    gridRenderPipeline   = renderContext.gridRenderPipeline;
+    glyphRenderPipeline  = renderContext.glyphRenderPipeline;
+    cursorRenderPipeline = renderContext.cursorRenderPipeline;
+    lineRenderPipeline   = renderContext.lineRenderPipeline;
+    glyph_manager        = renderContext.glyphManager;
     
     self.wantsLayer = YES;
     self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawDuringViewResize;
     self.layerContentsPlacement = NSViewLayerContentsPlacementTopLeft;
     
-    buffers[0] = mtlbuffer(renderContext->device, 524288);
-    buffers[1] = mtlbuffer(renderContext->device, 524288);
-    buffers[2] = mtlbuffer(renderContext->device, 524288);
+    buffers[0] = mtlbuffer(device, 524288);
+    buffers[1] = mtlbuffer(device, 524288);
+    buffers[2] = mtlbuffer(device, 524288);
 
     return self;
 }
 
 - (CALayer*)makeBackingLayer {
     metalLayer = [CAMetalLayer layer];
-    metalLayer.device = renderContext->device;
+    metalLayer.device = device;
     metalLayer.delegate = self;
     metalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm_sRGB;
     metalLayer.allowsNextDrawableTimeout = NO;
@@ -301,7 +313,7 @@ static inline void append_line_data(std::vector<line_data> &lines,
     const size_t grid_size = grid->cells.size();
     
     const CGSize drawable_size = [metalLayer drawableSize];
-    const uint64_t index = frame % 3;
+    const uint64_t index = frameIndex % 3;
     mtlbuffer &buffer = buffers[index];
     
     if (!buffer.aquire()) {
@@ -319,15 +331,14 @@ static inline void append_line_data(std::vector<line_data> &lines,
     buffer.reserve(reserve_size);
     
     uniform_data &data = buffer.emplace_back_unchecked<uniform_data>();
-    data.pixel_size = pixel_size;
+    data.pixel_size      = pixel_size;
     data.cell_pixel_size = cellSize;
-    data.cell_size = cellSize * pixel_size;
-    data.baseline = baselineTranslation;
-    data.grid_width = (uint32_t)grid_width;
-    data.cursor_position.x = grid->cursor.col;
-    data.cursor_position.y = grid->cursor.row;
-    data.cursor_color = grid->cursor.attrs.background.value;
-    data.cursor_width = 1;
+    data.cell_size       = cellSize * pixel_size;
+    data.baseline        = baselineTranslation;
+    data.grid_width      = (uint32_t)grid_width;
+    data.cursor_position = simd_make_short2(grid->cursor.col, grid->cursor.row);
+    data.cursor_color    = grid->cursor.attrs.background.value;
+    data.cursor_width    = 1;
     
     const size_t uniform_offset = buffer.offset();
         
@@ -337,7 +348,6 @@ static inline void append_line_data(std::vector<line_data> &lines,
     
     const size_t grid_offset = buffer.offset();
     
-    glyph_manager &glyph_manager = renderContext->glyph_manager;
     std::vector<line_data> lines;
     size_t glyph_count = 0;
     
@@ -353,7 +363,7 @@ static inline void append_line_data(std::vector<line_data> &lines,
             }
             
             if (!cell->empty()) {
-                cached_glyph glyph = glyph_manager.get(font_family, *cell);
+                cached_glyph glyph = glyph_manager->get(font_family, *cell);
                 glyph_data data = make_glyph_data(row, col, glyph, cell->foreground());
                 buffer.push_back_unchecked(data);
                 glyph_count += 1;
@@ -375,7 +385,7 @@ static inline void append_line_data(std::vector<line_data> &lines,
     id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
     id<MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:desc];
     
-    [commandEncoder setRenderPipelineState:renderContext->gridRenderPipeline];
+    [commandEncoder setRenderPipelineState:gridRenderPipeline];
     [commandEncoder setVertexBuffer:buffer.get() offset:uniform_offset atIndex:0];
     [commandEncoder setVertexBuffer:buffer.get() offset:grid_offset atIndex:1];
 
@@ -385,9 +395,9 @@ static inline void append_line_data(std::vector<line_data> &lines,
                      instanceCount:grid_size];
 
     if (glyph_count) {
-        [commandEncoder setRenderPipelineState:renderContext->glyphRenderPipeline];
+        [commandEncoder setRenderPipelineState:glyphRenderPipeline];
         [commandEncoder setVertexBufferOffset:glyph_offset atIndex:1];
-        [commandEncoder setFragmentTexture:glyph_manager.texture() atIndex:0];
+        [commandEncoder setFragmentTexture:glyph_manager->texture() atIndex:0];
 
         [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                            vertexStart:0
@@ -407,7 +417,7 @@ static inline void append_line_data(std::vector<line_data> &lines,
         buffer.insert(lines.data(), lines.size() * sizeof(line_data));
         line_offset = buffer.offset();
         
-        [commandEncoder setRenderPipelineState:renderContext->lineRenderPipeline];
+        [commandEncoder setRenderPipelineState:lineRenderPipeline];
         [commandEncoder setVertexBufferOffset:line_offset atIndex:1];
         
         [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
@@ -416,7 +426,7 @@ static inline void append_line_data(std::vector<line_data> &lines,
                          instanceCount:lines_size];
     }
     
-    [commandEncoder setRenderPipelineState:renderContext->cursorRenderPipeline];
+    [commandEncoder setRenderPipelineState:cursorRenderPipeline];
 
     switch (grid->cursor.attrs.shape) {
         case ui::cursor_shape::vertical:
@@ -451,11 +461,11 @@ static inline void append_line_data(std::vector<line_data> &lines,
                               baseInstance:4];
             
             if (!cursor_cell->empty()) {
-                cached_glyph glyph = glyph_manager.get(font_family, *cursor_cell);
+                cached_glyph glyph = glyph_manager->get(font_family, *cursor_cell);
                 *cursor_glyph = make_glyph_data(grid->cursor.row, grid->cursor.col,
                                                 glyph, grid->cursor.attrs.foreground.value);
                 
-                [commandEncoder setRenderPipelineState:renderContext->glyphRenderPipeline];
+                [commandEncoder setRenderPipelineState:glyphRenderPipeline];
                 [commandEncoder setVertexBufferOffset:glyph_offset atIndex:1];
 
                 [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
@@ -466,7 +476,7 @@ static inline void append_line_data(std::vector<line_data> &lines,
             }
             
             if (lines.size() != lines_size) {
-                [commandEncoder setRenderPipelineState:renderContext->lineRenderPipeline];
+                [commandEncoder setRenderPipelineState:lineRenderPipeline];
                 [commandEncoder setVertexBufferOffset:line_offset atIndex:1];
                 
                 [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
@@ -488,7 +498,7 @@ static inline void append_line_data(std::vector<line_data> &lines,
     [commandBuffer waitUntilScheduled];
     [drawable present];
     
-    frame += 1;
+    frameIndex += 1;
 }
 
 @end
