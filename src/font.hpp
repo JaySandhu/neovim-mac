@@ -74,6 +74,7 @@ public:
 class font_family {
 private:
     arc_ptr<CTFontRef> fonts[(size_t)ui::font_attributes::bold_italic + 1];
+    size_t font_id;
     
 public:
     font_family() = default;
@@ -157,21 +158,33 @@ struct glyph_metrics {
 struct glyph_bitmap {
     unsigned char *buffer;
     size_t stride;
-    glyph_metrics metrics;
+    int16_t left_bearing;
+    int16_t ascent;
+    int16_t width;
+    int16_t height;
+    
+    int16_t descent() const {
+        return ascent - height;
+    }
 };
 
 struct glyph_rasterizer {
+    static constexpr size_t pixel_size = 4;
+    
     arc_ptr<CGContextRef> context;
-    arc_ptr<CFMutableDictionaryRef> attributes;
     std::unique_ptr<unsigned char[]> buffer;
     size_t buffer_size;
-    size_t pixel_size;
     size_t midx;
     size_t midy;
 
-    void set_canvas(size_t width, size_t height, CGImageAlphaInfo format);
+    glyph_rasterizer() = default;
+    glyph_rasterizer(size_t width, size_t height);
+        
+    glyph_bitmap rasterize(uint32_t clear_pixel, CFAttributedStringRef string);
     
-    glyph_bitmap rasterize(CTFontRef font, std::string_view text);
+    glyph_bitmap rasterize_alpha(CTFontRef font,
+                                 ui::rgb_color foreground,
+                                 std::string_view text);
     
     size_t stride() const {
         return midx * 2 * pixel_size;
@@ -225,10 +238,12 @@ struct glyph_manager {
         size_t hash;
         char text[24];
         CTFontRef font;
+        uint64_t foreground;
         
         key_type(CTFontRef font, const ui::cell &cell): font(font) {
             memcpy(text, cell.text, ui::cell::max_text_size);
-            hash = cell.hash ^ ((uintptr_t)font >> 3);
+            foreground = cell.foreground().rgb();
+            hash = cell.hash ^ ((uintptr_t)font >> 3) ^ foreground;
         }
     };
     
@@ -260,17 +275,20 @@ struct glyph_manager {
         if (auto iter = map.find(key); iter != map.end()) {
             return iter->second;
         }
-         
-        glyph_bitmap glyph = rasterizer.rasterize(font, cell.text_view());
+
+        glyph_bitmap glyph = rasterizer.rasterize_alpha(font,
+                                                        cell.foreground(),
+                                                        cell.text_view());
+        
         auto texture_position = texture_cache.add(glyph);
         
         cached_glyph cached;
         cached.texture_position  = texture_position.xy;
         cached.texture_index = texture_position.z;
-        cached.glyph_position.x = glyph.metrics.left_bearing;
-        cached.glyph_position.y = -glyph.metrics.ascent;
-        cached.glyph_size.x = glyph.metrics.width;
-        cached.glyph_size.y = glyph.metrics.height;
+        cached.glyph_position.x = glyph.left_bearing;
+        cached.glyph_position.y = -glyph.ascent;
+        cached.glyph_size.x = glyph.width;
+        cached.glyph_size.y = glyph.height;
 
         map.emplace(key, cached);
         return cached;

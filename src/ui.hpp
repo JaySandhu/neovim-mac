@@ -39,6 +39,26 @@ struct rgb_color {
     bool is_default() const {
         return value & is_default_bit;
     }
+    
+    uint8_t red() const {
+        return value & 0xFF;
+    }
+    
+    uint8_t green() const {
+        return (value >> 8) & 0xFF;
+    }
+    
+    uint8_t blue() const {
+        return (value >> 16) & 0xFF;
+    }
+    
+    uint32_t rgb() const {
+        return value & 0xFFFFFF;
+    }
+    
+    operator uint32_t() const {
+        return value;
+    }
 };
 
 enum class cursor_shape {
@@ -138,16 +158,16 @@ struct cell {
         return size == 0;
     }
     
-    uint32_t foreground() const {
-        return attrs.foreground.value;
+    rgb_color foreground() const {
+        return attrs.foreground;
     }
     
-    uint32_t background() const {
-        return attrs.background.value;
+    rgb_color background() const {
+        return attrs.background;
     }
     
-    uint32_t special() const {
-        return attrs.special.value;
+    rgb_color special() const {
+        return attrs.special;
     }
     
     font_attributes font_attributes() const {

@@ -79,7 +79,7 @@ NSError* NVRenderContext::init() {
         return error;
     }
         
-    glyph_manager.rasterizer.set_canvas(256, 256, kCGImageAlphaOnly);
+    glyph_manager.rasterizer = glyph_rasterizer(256, 256);
     glyph_manager.texture_cache = glyph_texture_cache(commandQueue, MTLPixelFormatA8Unorm, 512, 512);
     
     return nil;

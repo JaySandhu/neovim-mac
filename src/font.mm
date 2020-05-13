@@ -55,38 +55,29 @@ font_family font_manager::get(std::string_view name, CGFloat size) {
     return back.font;
 }
 
-void glyph_rasterizer::set_canvas(size_t width, size_t height, CGImageAlphaInfo format) {
+glyph_rasterizer::glyph_rasterizer(size_t width, size_t height) {
     midx = std::min(width, 4096ul);
     midy = std::min(height, 4096ul);
     width = midx * 2;
     height = midy * 2;
 
-    arc_ptr<CGColorSpaceRef> color_space;
-
-    switch (format) {
-        case kCGImageAlphaOnly:
-            pixel_size = 1;
-            break;
-
-        case kCGImageAlphaPremultipliedLast:
-            pixel_size = 4;
-            color_space = CGColorSpaceCreateDeviceRGB();
-            break;
-
-        default:
-            std::abort();
-            break;
-    }
+    arc_ptr<CGColorSpaceRef> color_space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
 
     buffer_size = width * height * pixel_size;
     buffer.reset(new unsigned char[buffer_size]);
 
     context = CGBitmapContextCreate(buffer.get(), width, height, 8,
-                                    width * pixel_size,
-                                    color_space.get(), kCGImageAlphaOnly);
+                                    width * pixel_size, color_space.get(),
+                                    kCGImageAlphaPremultipliedLast);
     
+    CGContextSetAllowsAntialiasing(context.get(), true);
+    CGContextSetShouldAntialias(context.get(), true);
     CGContextSetAllowsFontSmoothing(context.get(), true);
     CGContextSetShouldSmoothFonts(context.get(), true);
+    CGContextSetAllowsFontSubpixelPositioning(context.get(), true);
+    CGContextSetShouldSubpixelPositionFonts(context.get(), true);
+    CGContextSetAllowsFontSubpixelQuantization(context.get(), true);
+    CGContextSetShouldSubpixelQuantizeFonts(context.get(), true);
 }
 
 static inline CGFloat clamp_abs(CGFloat value, CGFloat limit) {
@@ -99,24 +90,25 @@ static inline CGFloat clamp_abs(CGFloat value, CGFloat limit) {
     }
 }
 
-glyph_bitmap glyph_rasterizer::rasterize(CTFontRef font, std::string_view text) {
-    // TODO: How much are we save by reusing this dictionary?
-    extern CFStringRef NSFontAttributeName;
-    CFDictionarySetValue(attributes.get(), NSFontAttributeName, font);
+static inline void clear_bitmap(glyph_bitmap &bitmap, uint32_t clear_pixel) {
+    const size_t row_size = bitmap.width * glyph_rasterizer::pixel_size;
     
-    // TODO: We can optimize this memset
-    memset(buffer.get(), 0, buffer_size);
-    
-    CGContextSetTextPosition(context.get(), midx, midy);
-    CGContextSetRGBFillColor(context.get(), 1, 1, 1, 1);
-    
-    arc_ptr text_str = CFStringCreateWithBytes(nullptr, (UInt8*)text.data(),
-                                               text.size(), kCFStringEncodingUTF8, 0);
+    unsigned char *row = bitmap.buffer;
+    unsigned char *endrow = row + (bitmap.height * bitmap.stride);
 
-    // TODO: Implement fast path for strings that don't require shaping.
-    arc_ptr attr_str = CFAttributedStringCreate(nullptr, text_str.get(), attributes.get());
-    arc_ptr line = CTLineCreateWithAttributedString(attr_str.get());
-    CTLineDraw(line.get(), context.get());
+    for (; row != endrow; row += bitmap.stride) {
+        unsigned char *endpixel = row + row_size;
+        
+        for (unsigned char *pixel = row; pixel != endpixel; pixel += 4) {
+            memcpy(pixel, &clear_pixel, 4);
+        }
+    }
+}
+
+glyph_bitmap glyph_rasterizer::rasterize(uint32_t clear_pixel,
+                                         CFAttributedStringRef string) {
+    CGContextSetTextPosition(context.get(), midx, midy);
+    arc_ptr line = CTLineCreateWithAttributedString(string);
 
     CGRect bounds = CTLineGetBoundsWithOptions(line.get(), kCTLineBoundsUseGlyphPathBounds);
     CGFloat descent = bounds.origin.y - 2;
@@ -124,20 +116,108 @@ glyph_bitmap glyph_rasterizer::rasterize(CTFontRef font, std::string_view text) 
     CGFloat leftx   = bounds.origin.x - 2;
     CGFloat width   = bounds.size.width + 5;
         
-    glyph_metrics metrics;
-    metrics.left_bearing = clamp_abs(leftx, midx);
-    metrics.ascent = clamp_abs(ascent, midy);
-    metrics.width = clamp_abs(width, midx - metrics.left_bearing);
-    metrics.height = metrics.ascent - clamp_abs(descent, midy);
-
-    size_t col = (midy - metrics.ascent) * midx * 2;
-    size_t row = midx + metrics.left_bearing;
-    
     glyph_bitmap bitmap;
+    bitmap.left_bearing = clamp_abs(leftx, midx);
+    bitmap.ascent = clamp_abs(ascent, midy);
+    bitmap.width = clamp_abs(width, midx - bitmap.left_bearing);
+    bitmap.height = bitmap.ascent - clamp_abs(descent, midy);
+
+    size_t col = (midy - bitmap.ascent) * midx * 2;
+    size_t row = midx + bitmap.left_bearing;
+        
     bitmap.stride = stride();
     bitmap.buffer = buffer.get() + ((col + row) * pixel_size);
-    bitmap.metrics = metrics;
+        
+    clear_bitmap(bitmap, clear_pixel);
+    CTLineDraw(line.get(), context.get());
     return bitmap;
+}
+
+static inline double sRGB_to_linear(double x) {
+    if (x < 0.04045) {
+        return x / 12.92;
+    } else {
+        return pow((x + 0.055) / 1.055, 2.4);
+    }
+}
+
+glyph_bitmap glyph_rasterizer::rasterize_alpha(CTFontRef font,
+                                               ui::rgb_color foreground,
+                                               std::string_view text) {
+    double srgb_red   = (double)foreground.red()   / 255;
+    double srgb_green = (double)foreground.green() / 255;
+    double srgb_blue  = (double)foreground.blue()  / 255;
+    
+    double linear_red   = sRGB_to_linear(srgb_red);
+    double linear_green = sRGB_to_linear(srgb_green);
+    double linear_blue  = sRGB_to_linear(srgb_blue);
+        
+    arc_ptr fg_cgcolor = CGColorCreateSRGB(srgb_red, srgb_green, srgb_blue, 1);
+    
+    const void *keys[] = {
+        kCTFontAttributeName,
+        kCTForegroundColorAttributeName
+    };
+    
+    const void *values[] = {
+        font,
+        fg_cgcolor.get()
+    };
+    
+    arc_ptr attributes = CFDictionaryCreate(nullptr, keys, values, 2,
+                                            &kCFTypeDictionaryKeyCallBacks,
+                                            &kCFTypeDictionaryValueCallBacks);
+    
+    arc_ptr text_str = CFStringCreateWithBytes(nullptr, (UInt8*)text.data(),
+                                               text.size(), kCFStringEncodingUTF8, 0);
+
+    arc_ptr attr_str = CFAttributedStringCreate(nullptr, text_str.get(), attributes.get());
+    
+    double src_rgb = std::min({linear_red, linear_green, linear_blue});
+    double dest_rgb;
+    uint32_t clear_pixel;
+    
+    if (src_rgb > 0.7) {
+        src_rgb = std::max({linear_red, linear_green, linear_blue});
+        clear_pixel = 0xFF000000;
+        dest_rgb = 0;
+    } else {
+        clear_pixel = 0xFFFFFFFF;
+        dest_rgb = 1;
+    }
+    
+    glyph_bitmap rgb_bitmap = rasterize(clear_pixel, attr_str.get());
+    
+    glyph_bitmap alpha_bitmap = rgb_bitmap;
+    alpha_bitmap.buffer = buffer.get();
+    alpha_bitmap.stride = rgb_bitmap.width;
+    
+    unsigned char *row;
+    
+    if (src_rgb == linear_red) {
+        row = rgb_bitmap.buffer;
+    } else if (src_rgb == linear_green) {
+        row = rgb_bitmap.buffer + 1;
+    } else {
+        row = rgb_bitmap.buffer + 2;
+    }
+    
+    unsigned char *alpha_buffer = buffer.get();
+    unsigned char *endrow = row + (rgb_bitmap.height * rgb_bitmap.stride);
+
+    for (; row != endrow; row += rgb_bitmap.stride) {
+        unsigned char *endcol = row + (rgb_bitmap.width * 4);
+        
+        for (unsigned char *col = row; col != endcol; col += 4) {
+            double out_channel = *col;
+            double out_linear = sRGB_to_linear(out_channel / 255);
+            double alpha = ((out_linear - dest_rgb) / (src_rgb - dest_rgb));
+            
+            *alpha_buffer++ = std::min((int)(alpha * 255), 255);
+        }
+    }
+    
+    return alpha_bitmap;
 }
 
 glyph_texture_cache::glyph_texture_cache(id<MTLCommandQueue> queue,
@@ -193,8 +273,8 @@ simd_short3 glyph_texture_cache::add_new_page(const glyph_bitmap &bitmap) {
     [blitEncoder endEncoding];
     [commandBuffer commit];
     
-    x_used = std::min((size_t)bitmap.metrics.width + 1, x_size);
-    y_used = std::min((size_t)bitmap.metrics.height, y_size);
+    x_used = std::min((size_t)bitmap.width + 1, x_size);
+    y_used = std::min((size_t)bitmap.height, y_size);
     row_height = y_used;
     page_count = new_page_count;
     page_index += 1;
@@ -210,8 +290,8 @@ simd_short3 glyph_texture_cache::add_new_page(const glyph_bitmap &bitmap) {
 }
 
 simd_short3 glyph_texture_cache::add(const glyph_bitmap &bitmap) {
-    size_t glyph_height = bitmap.metrics.height;
-    size_t glyph_width  = bitmap.metrics.width;
+    size_t glyph_height = bitmap.height;
+    size_t glyph_width  = bitmap.width;
 
     row_height = std::max(glyph_height, row_height);
 
