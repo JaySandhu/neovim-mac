@@ -54,7 +54,7 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
     
     if (*error) return self;
     
-    MTLRenderPipelineDescriptor *glyphDesc = blendedPipelineDescriptor();
+    MTLRenderPipelineDescriptor *glyphDesc = defaultPipelineDescriptor();
     glyphDesc.label = @"Glyph render pipeline";
     glyphDesc.vertexFunction = [lib newFunctionWithName:@"glyph_render"];
     glyphDesc.fragmentFunction = [lib newFunctionWithName:@"glyph_fill"];
@@ -79,7 +79,7 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
     if (*error) return self;
         
     glyph_manager.rasterizer = glyph_rasterizer(256, 256);
-    glyph_manager.texture_cache = glyph_texture_cache(_commandQueue, MTLPixelFormatA8Unorm, 512, 512);
+    glyph_manager.texture_cache = glyph_texture_cache(_commandQueue, 512, 512);
     
     return self;
 }

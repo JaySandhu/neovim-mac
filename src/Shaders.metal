@@ -112,20 +112,22 @@ vertex extern glyph_rasterizer_data glyph_render(uint vertex_id [[vertex_id]],
     
     float2 glyph_position = float2(glyphs[instance_id].glyph_position.xy);
     float2 glyph_size = float2(glyphs[instance_id].glyph_size.xy);
-    
-    float2 cell_offset = uniforms.cell_pixel_size * float2(col, row);
     float2 vertex_offset = glyph_size * transforms[vertex_id];
     
-    float2 pixel_position = cell_offset +
-                            uniforms.baseline +
+    float2 pixel_position = uniforms.baseline +
                             vertex_offset +
                             glyph_position;
     
-    float2 position = float2(-1, 1) + (pixel_position * uniforms.pixel_size);
+    float2 clamped = clamp(pixel_position, float2(0, 0), uniforms.cell_pixel_size);
+    
+    float2 cell_offset = uniforms.cell_pixel_size * float2(col, row);
+    float2 texture_offset = vertex_offset - (pixel_position - clamped);
+    
+    float2 position = float2(-1, 1) + ((clamped + cell_offset) * uniforms.pixel_size);
     
     glyph_rasterizer_data data;
     data.position = float4(position.xy, 0, 1);
-    data.texture_position = float2(glyphs[instance_id].texture_position.xy) + vertex_offset;
+    data.texture_position = float2(glyphs[instance_id].texture_position.xy) + texture_offset;
     data.color = unpack_unorm4x8_srgb_to_float(glyphs[instance_id].color);
     data.texture_index = glyphs[instance_id].texture_index;
     return data;
@@ -143,6 +145,5 @@ fragment float4 glyph_fill(glyph_rasterizer_data in [[stage_in]],
                                       address::clamp_to_zero,
                                       coord::pixel);
     
-    float4 sampled = texture.sample(texture_sampler, in.texture_position, in.texture_index);
-    return float4(in.color.rgb, sampled.a);
+    return texture.sample(texture_sampler, in.texture_position, in.texture_index);
 }

@@ -180,11 +180,10 @@ struct glyph_rasterizer {
     glyph_rasterizer() = default;
     glyph_rasterizer(size_t width, size_t height);
         
-    glyph_bitmap rasterize(uint32_t clear_pixel, CFAttributedStringRef string);
-    
-    glyph_bitmap rasterize_alpha(CTFontRef font,
-                                 ui::rgb_color foreground,
-                                 std::string_view text);
+    glyph_bitmap rasterize(CTFontRef font,
+                           ui::rgb_color background,
+                           ui::rgb_color foreground,
+                           std::string_view text);
     
     size_t stride() const {
         return midx * 2 * pixel_size;
@@ -224,8 +223,7 @@ struct glyph_texture_cache {
     
     glyph_texture_cache() = default;
     
-    glyph_texture_cache(id<MTLCommandQueue> queue, MTLPixelFormat format,
-                        size_t page_width, size_t page_height);
+    glyph_texture_cache(id<MTLCommandQueue> queue, size_t page_width, size_t page_height);
     
     void erase_front(size_t count);
     
@@ -276,9 +274,10 @@ struct glyph_manager {
             return iter->second;
         }
 
-        glyph_bitmap glyph = rasterizer.rasterize_alpha(font,
-                                                        cell.foreground(),
-                                                        cell.text_view());
+        glyph_bitmap glyph = rasterizer.rasterize(font,
+                                                  cell.background(),
+                                                  cell.foreground(),
+                                                  cell.text_view());
         
         auto texture_position = texture_cache.add(glyph);
         

@@ -105,10 +105,41 @@ static inline void clear_bitmap(glyph_bitmap &bitmap, uint32_t clear_pixel) {
     }
 }
 
-glyph_bitmap glyph_rasterizer::rasterize(uint32_t clear_pixel,
-                                         CFAttributedStringRef string) {
+static inline arc_ptr<CTLineRef> make_line(CTFontRef font,
+                                           ui::rgb_color foreground,
+                                           std::string_view string) {
+    arc_ptr fg_cgcolor = CGColorCreateSRGB((double)foreground.red()   / 255,
+                                           (double)foreground.green() / 255,
+                                           (double)foreground.blue()  / 255, 1);
+        
+    const void *keys[] = {
+        kCTFontAttributeName,
+        kCTForegroundColorAttributeName
+    };
+    
+    const void *values[] = {
+        font,
+        fg_cgcolor.get()
+    };
+    
+    arc_ptr attributes = CFDictionaryCreate(nullptr, keys, values, 2,
+                                            &kCFTypeDictionaryKeyCallBacks,
+                                            &kCFTypeDictionaryValueCallBacks);
+    
+    arc_ptr cfstr = CFStringCreateWithBytes(nullptr, (UInt8*)string.data(),
+                                            string.size(), kCFStringEncodingUTF8, 0);
+
+    arc_ptr attr_str = CFAttributedStringCreate(nullptr, cfstr.get(), attributes.get());
+    
+    return CTLineCreateWithAttributedString(attr_str.get());
+}
+
+glyph_bitmap glyph_rasterizer::rasterize(CTFontRef font,
+                                         ui::rgb_color background,
+                                         ui::rgb_color foreground,
+                                         std::string_view text) {
     CGContextSetTextPosition(context.get(), midx, midy);
-    arc_ptr line = CTLineCreateWithAttributedString(string);
+    arc_ptr line = make_line(font, foreground, text);
 
     CGRect bounds = CTLineGetBoundsWithOptions(line.get(), kCTLineBoundsUseGlyphPathBounds);
     CGFloat descent = bounds.origin.y - 2;
@@ -128,101 +159,15 @@ glyph_bitmap glyph_rasterizer::rasterize(uint32_t clear_pixel,
     bitmap.stride = stride();
     bitmap.buffer = buffer.get() + ((col + row) * pixel_size);
         
-    clear_bitmap(bitmap, clear_pixel);
+    clear_bitmap(bitmap, background.value | 0xFF000000);
     CTLineDraw(line.get(), context.get());
+    
     return bitmap;
 }
 
-static inline double sRGB_to_linear(double x) {
-    if (x < 0.04045) {
-        return x / 12.92;
-    } else {
-        return pow((x + 0.055) / 1.055, 2.4);
-    }
-}
-
-glyph_bitmap glyph_rasterizer::rasterize_alpha(CTFontRef font,
-                                               ui::rgb_color foreground,
-                                               std::string_view text) {
-    double srgb_red   = (double)foreground.red()   / 255;
-    double srgb_green = (double)foreground.green() / 255;
-    double srgb_blue  = (double)foreground.blue()  / 255;
-    
-    double linear_red   = sRGB_to_linear(srgb_red);
-    double linear_green = sRGB_to_linear(srgb_green);
-    double linear_blue  = sRGB_to_linear(srgb_blue);
-        
-    arc_ptr fg_cgcolor = CGColorCreateSRGB(srgb_red, srgb_green, srgb_blue, 1);
-    
-    const void *keys[] = {
-        kCTFontAttributeName,
-        kCTForegroundColorAttributeName
-    };
-    
-    const void *values[] = {
-        font,
-        fg_cgcolor.get()
-    };
-    
-    arc_ptr attributes = CFDictionaryCreate(nullptr, keys, values, 2,
-                                            &kCFTypeDictionaryKeyCallBacks,
-                                            &kCFTypeDictionaryValueCallBacks);
-    
-    arc_ptr text_str = CFStringCreateWithBytes(nullptr, (UInt8*)text.data(),
-                                               text.size(), kCFStringEncodingUTF8, 0);
-
-    arc_ptr attr_str = CFAttributedStringCreate(nullptr, text_str.get(), attributes.get());
-    
-    double src_rgb = std::min({linear_red, linear_green, linear_blue});
-    double dest_rgb;
-    uint32_t clear_pixel;
-    
-    if (src_rgb > 0.7) {
-        src_rgb = std::max({linear_red, linear_green, linear_blue});
-        clear_pixel = 0xFF000000;
-        dest_rgb = 0;
-    } else {
-        clear_pixel = 0xFFFFFFFF;
-        dest_rgb = 1;
-    }
-    
-    glyph_bitmap rgb_bitmap = rasterize(clear_pixel, attr_str.get());
-    
-    glyph_bitmap alpha_bitmap = rgb_bitmap;
-    alpha_bitmap.buffer = buffer.get();
-    alpha_bitmap.stride = rgb_bitmap.width;
-    
-    unsigned char *row;
-    
-    if (src_rgb == linear_red) {
-        row = rgb_bitmap.buffer;
-    } else if (src_rgb == linear_green) {
-        row = rgb_bitmap.buffer + 1;
-    } else {
-        row = rgb_bitmap.buffer + 2;
-    }
-    
-    unsigned char *alpha_buffer = buffer.get();
-    unsigned char *endrow = row + (rgb_bitmap.height * rgb_bitmap.stride);
-
-    for (; row != endrow; row += rgb_bitmap.stride) {
-        unsigned char *endcol = row + (rgb_bitmap.width * 4);
-        
-        for (unsigned char *col = row; col != endcol; col += 4) {
-            double out_channel = *col;
-            double out_linear = sRGB_to_linear(out_channel / 255);
-            double alpha = ((out_linear - dest_rgb) / (src_rgb - dest_rgb));
-            
-            *alpha_buffer++ = std::min((int)(alpha * 255), 255);
-        }
-    }
-    
-    return alpha_bitmap;
-}
-
 glyph_texture_cache::glyph_texture_cache(id<MTLCommandQueue> queue,
-                                         MTLPixelFormat format,
-                                         size_t width, size_t height): queue(queue) {
+                                         size_t width,
+                                         size_t height): queue(queue) {
     device = [queue device];
     
     x_used = 0;
@@ -236,7 +181,7 @@ glyph_texture_cache::glyph_texture_cache(id<MTLCommandQueue> queue,
     MTLTextureDescriptor *desc = [[MTLTextureDescriptor alloc] init];
     desc.textureType = MTLTextureType2DArray;
     desc.arrayLength = 1;
-    desc.pixelFormat = format;
+    desc.pixelFormat = MTLPixelFormatRGBA8Unorm_sRGB;
     desc.width = width;
     desc.height = height;
     desc.mipmapLevelCount = 1;
@@ -250,7 +195,7 @@ simd_short3 glyph_texture_cache::add_new_page(const glyph_bitmap &bitmap) {
     MTLTextureDescriptor *desc = [[MTLTextureDescriptor alloc] init];
     desc.textureType = MTLTextureType2DArray;
     desc.arrayLength = new_page_count;
-    desc.pixelFormat = pixel_format();
+    desc.pixelFormat = MTLPixelFormatRGBA8Unorm_sRGB;
     desc.width = x_size;
     desc.height = y_size;
     desc.mipmapLevelCount = 1;
