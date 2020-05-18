@@ -268,15 +268,13 @@ public:
 }
 
 static inline glyph_data make_glyph_data(simd_short2 grid_position,
-                                         cached_glyph glyph,
-                                         ui::rgb_color color) {
+                                         cached_glyph glyph) {
     glyph_data data;
     data.grid_position = grid_position;
     data.texture_position = glyph.texture_position;
     data.glyph_position = glyph.glyph_position;
     data.glyph_size = glyph.glyph_size;
     data.texture_index = glyph.texture_index;
-    data.color = color;
     return data;
 }
 
@@ -386,7 +384,7 @@ static inline line_data make_strikethrough_data(NVGridView *view,
             if (!cell->empty()) {
                 cached_glyph glyph = glyph_manager->get(font_family, *cell);
                 simd_short2 gridpos = simd_make_short2(row, col);
-                glyph_data data = make_glyph_data(gridpos, glyph, cell->foreground());
+                glyph_data data = make_glyph_data(gridpos, glyph);
                 buffer.push_back_unchecked(data);
                 glyph_count += 1;
             }
@@ -490,8 +488,7 @@ static inline line_data make_strikethrough_data(NVGridView *view,
                                                         grid->cursor.attrs.background,
                                                         grid->cursor.attrs.foreground);
                 
-                *cursor_glyph = make_glyph_data(cursor_gridpos,
-                                                glyph, grid->cursor.attrs.foreground);
+                *cursor_glyph = make_glyph_data(cursor_gridpos, glyph);
                 
                 [commandEncoder setRenderPipelineState:glyphRenderPipeline];
                 [commandEncoder setVertexBufferOffset:glyph_offset atIndex:1];

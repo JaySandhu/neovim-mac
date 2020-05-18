@@ -29,7 +29,6 @@ struct glyph_data {
     simd_short2 glyph_position;
     simd_short2 glyph_size;
     uint32_t texture_index;
-    uint32_t color;
 };
 
 struct line_data {

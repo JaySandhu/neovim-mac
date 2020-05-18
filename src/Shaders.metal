@@ -25,7 +25,6 @@ struct line_rasterizer_data {
 
 struct glyph_rasterizer_data {
     float4 position [[position]];
-    float4 color;
     float2 texture_position;
     uint32_t texture_index;
 };
@@ -128,7 +127,6 @@ vertex extern glyph_rasterizer_data glyph_render(uint vertex_id [[vertex_id]],
     glyph_rasterizer_data data;
     data.position = float4(position.xy, 0, 1);
     data.texture_position = float2(glyphs[instance_id].texture_position.xy) + texture_offset;
-    data.color = unpack_unorm4x8_srgb_to_float(glyphs[instance_id].color);
     data.texture_index = glyphs[instance_id].texture_index;
     return data;
 }
