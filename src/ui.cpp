@@ -89,14 +89,12 @@ inline cell make_cell(const msg::string &text, const attributes *attrs) {
         return ret;
     }
     
-    size_t limit = std::min(text.size(), cell::max_text_size);
-    ret.hash = 5381;
+    size_t limit = std::min(text.size(), sizeof(grapheme_cluster));
     ret.size = limit;
     
     // TODO: Should we validate UTF-8 here?
     for (size_t i=0; i<limit; ++i) {
         ret.text[i] = text[i];
-        ret.hash = (ret.hash * 33) + text[i];
     }
     
     return ret;

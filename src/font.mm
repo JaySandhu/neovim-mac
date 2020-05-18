@@ -107,7 +107,7 @@ static inline void clear_bitmap(glyph_bitmap &bitmap, uint32_t clear_pixel) {
 
 static inline arc_ptr<CTLineRef> make_line(CTFontRef font,
                                            ui::rgb_color foreground,
-                                           std::string_view string) {
+                                           ui::grapheme_cluster_view string) {
     arc_ptr fg_cgcolor = CGColorCreateSRGB((double)foreground.red()   / 255,
                                            (double)foreground.green() / 255,
                                            (double)foreground.blue()  / 255, 1);
@@ -137,7 +137,7 @@ static inline arc_ptr<CTLineRef> make_line(CTFontRef font,
 glyph_bitmap glyph_rasterizer::rasterize(CTFontRef font,
                                          ui::rgb_color background,
                                          ui::rgb_color foreground,
-                                         std::string_view text) {
+                                         ui::grapheme_cluster_view text) {
     CGContextSetTextPosition(context.get(), midx, midy);
     arc_ptr line = make_line(font, foreground, text);
 

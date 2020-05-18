@@ -56,6 +56,10 @@ struct rgb_color {
         return value & 0xFFFFFF;
     }
     
+    uint32_t opaque() const {
+        return value | 0xFF000000;
+    }
+    
     operator uint32_t() const {
         return value;
     }
@@ -146,16 +150,39 @@ inline uint16_t operator&(line_attributes left, line_attributes right) {
     return (uint16_t)left & (uint16_t)right;
 }
 
-struct cell {
-    static constexpr size_t max_text_size = 24;
+using grapheme_cluster = std::array<char, 24>;
 
-    char text[max_text_size];
+struct grapheme_cluster_view {
+    const grapheme_cluster *graphemes;
+    size_t length;
+    
+    grapheme_cluster_view(const grapheme_cluster &graphemes, size_t length):
+        graphemes(&graphemes), length(length) {}
+    
+    grapheme_cluster value() const {
+        return *graphemes;
+    }
+    
+    const char* data() const {
+        return graphemes->data();
+    }
+    
+    size_t size() const {
+        return length;
+    }
+};
+
+struct cell {
+    grapheme_cluster text;
     uint16_t size;
     attributes attrs;
-    uint64_t hash;
     
-    std::string_view text_view() const {
-        return std::string_view(text, size);
+    grapheme_cluster graphemes() const {
+        return text;
+    }
+    
+    grapheme_cluster_view graphemes_view() const {
+        return grapheme_cluster_view(text, size);
     }
     
     bool empty() const {

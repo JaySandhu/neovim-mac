@@ -483,7 +483,13 @@ static inline line_data make_strikethrough_data(NVGridView *view,
                               baseInstance:4];
             
             if (!cursor_cell->empty()) {
-                cached_glyph glyph = glyph_manager->get(font_family, *cursor_cell);
+                CTFontRef font = font_family.get(cursor_cell->font_attributes());
+                
+                cached_glyph glyph = glyph_manager->get(font,
+                                                        cursor_cell->graphemes_view(),
+                                                        grid->cursor.attrs.background,
+                                                        grid->cursor.attrs.foreground);
+                
                 *cursor_glyph = make_glyph_data(cursor_gridpos,
                                                 glyph, grid->cursor.attrs.foreground);
                 

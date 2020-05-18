@@ -183,7 +183,7 @@ struct glyph_rasterizer {
     glyph_bitmap rasterize(CTFontRef font,
                            ui::rgb_color background,
                            ui::rgb_color foreground,
-                           std::string_view text);
+                           ui::grapheme_cluster_view graphemes);
     
     size_t stride() const {
         return midx * 2 * pixel_size;
@@ -234,14 +234,29 @@ struct glyph_texture_cache {
 struct glyph_manager {
     struct key_type {
         size_t hash;
-        char text[24];
+        ui::grapheme_cluster graphemes;
+        uint32_t background;
+        uint32_t foreground;
         CTFontRef font;
-        uint64_t foreground;
-        
-        key_type(CTFontRef font, const ui::cell &cell): font(font) {
-            memcpy(text, cell.text, ui::cell::max_text_size);
-            foreground = cell.foreground().rgb();
-            hash = cell.hash ^ ((uintptr_t)font >> 3) ^ foreground;
+
+        key_type(CTFontRef font,
+                 ui::grapheme_cluster_view graphemes,
+                 ui::rgb_color background,
+                 ui::rgb_color foreground):
+            graphemes(graphemes.value()),
+            font(font),
+            background(background.opaque()),
+            foreground(foreground.opaque()) {
+                            
+            simd_ulong4 jumbled;
+            memcpy(&jumbled, graphemes.data(), graphemes.size());
+                
+            jumbled *= simd_ulong4{41099511628211,
+                                   41099511628211,
+                                   41099511628211};
+                
+            jumbled.w = ((uintptr_t)font >> 3) ^ foreground ^ background;
+            hash = jumbled.x ^ jumbled.y ^ jumbled.z ^ jumbled.w;
         }
     };
     
@@ -266,18 +281,20 @@ struct glyph_manager {
     glyph_texture_cache texture_cache;
     glyph_map map;
     
-    cached_glyph get(const font_family &font_family, const ui::cell &cell) {
-        CTFontRef font = font_family.get(cell.font_attributes());
-        key_type key(font, cell);
+    cached_glyph get(CTFontRef font,
+                     ui::grapheme_cluster_view graphemes,
+                     ui::rgb_color background,
+                     ui::rgb_color foreground) {
+        key_type key(font, graphemes, background, foreground);
         
         if (auto iter = map.find(key); iter != map.end()) {
             return iter->second;
         }
 
         glyph_bitmap glyph = rasterizer.rasterize(font,
-                                                  cell.background(),
-                                                  cell.foreground(),
-                                                  cell.text_view());
+                                                  background,
+                                                  foreground,
+                                                  graphemes);
         
         auto texture_position = texture_cache.add(glyph);
         
@@ -291,6 +308,13 @@ struct glyph_manager {
 
         map.emplace(key, cached);
         return cached;
+    }
+    
+    cached_glyph get(const font_family &font_family, const ui::cell &cell) {
+        return get(font_family.get(cell.font_attributes()),
+                   cell.graphemes_view(),
+                   cell.background(),
+                   cell.foreground());
     }
      
     void evict();
