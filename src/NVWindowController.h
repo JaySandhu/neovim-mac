@@ -38,6 +38,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)shutdown;
 - (void)connect:(NSString *)addr;
+- (void)spawn;
 - (void)redraw;
 
 @end

@@ -187,6 +187,19 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
     nvim.ui_attach(80, 24);
 }
 
+- (void)spawn {
+    int error = nvim.spawn("/usr/local/bin/nvim",
+                           {"nvim", "--embed"}, {});
+    
+    if (error) {
+        printf("Spawn error: %i: %s\n", error, strerror(error));
+        return;
+    }
+    
+    processIsAlive = self;
+    nvim.ui_attach(80, 24);
+}
+
 - (void)dealloc {
     puts("NVWindowController dealloced!");
 }

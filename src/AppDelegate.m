@@ -30,7 +30,7 @@ os_log_t rpc;
     }
     
     NVWindowController *controller = [[NVWindowController alloc] initWithRenderContext:sharedRenderContext];
-    [controller connect:@"/users/jay/pipe"];
+    [controller spawn];
 }
 
 - (void)applicationWillTerminate:(NSNotification *)aNotification {
