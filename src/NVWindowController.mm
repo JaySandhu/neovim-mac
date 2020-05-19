@@ -39,11 +39,11 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
 
 - (instancetype)initWithError:(NSError **)error {
     *error = nil;
-    
+
     self = [super init];
     _device = MTLCreateSystemDefaultDevice();
     _commandQueue = [_device newCommandQueue];
-    
+
     id<MTLLibrary> lib = [_device newDefaultLibrary];
 
     MTLRenderPipelineDescriptor *gridDesc = defaultPipelineDescriptor();
@@ -51,23 +51,23 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
     gridDesc.vertexFunction = [lib newFunctionWithName:@"grid_background"];
     gridDesc.fragmentFunction = [lib newFunctionWithName:@"fill_background"];
     _gridRenderPipeline = [_device newRenderPipelineStateWithDescriptor:gridDesc error:error];
-    
+
     if (*error) return self;
-    
+
     MTLRenderPipelineDescriptor *glyphDesc = defaultPipelineDescriptor();
     glyphDesc.label = @"Glyph render pipeline";
     glyphDesc.vertexFunction = [lib newFunctionWithName:@"glyph_render"];
     glyphDesc.fragmentFunction = [lib newFunctionWithName:@"glyph_fill"];
     _glyphRenderPipeline = [_device newRenderPipelineStateWithDescriptor:glyphDesc error:error];
-    
+
     if (*error) return self;
-    
+
     MTLRenderPipelineDescriptor *cursorDesc = defaultPipelineDescriptor();
     cursorDesc.label = @"Cursor render pipeline";
     cursorDesc.vertexFunction = [lib newFunctionWithName:@"cursor_render"];
     cursorDesc.fragmentFunction = [lib newFunctionWithName:@"fill_background"];
     _cursorRenderPipeline = [_device newRenderPipelineStateWithDescriptor:cursorDesc error:error];
-    
+
     if (*error) return self;
 
     MTLRenderPipelineDescriptor *lineDesc = blendedPipelineDescriptor();
@@ -75,12 +75,12 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
     lineDesc.vertexFunction = [lib newFunctionWithName:@"line_render"];
     lineDesc.fragmentFunction = [lib newFunctionWithName:@"fill_line"];
     _lineRenderPipeline = [_device newRenderPipelineStateWithDescriptor:lineDesc error:error];
-    
+
     if (*error) return self;
-        
+
     glyph_manager.rasterizer = glyph_rasterizer(256, 256);
     glyph_manager.texture_cache = glyph_texture_cache(_commandQueue, 512, 512);
-    
+
     return self;
 }
 
@@ -115,11 +115,12 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
     [window setDelegate:self];
     [window setTitle:@"window"];
     [window setTabbingMode:NSWindowTabbingModeDisallowed];
-    
+    [window setWindowController:self];
+
     self = [super initWithWindow:window];
     self->renderContext = renderContext;
     self->font_manager = renderContext.fontManager;
-    
+
     nvim.set_controller(self);
     ui_controller = nvim.ui_state();
     return self;
@@ -152,17 +153,21 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
 
 - (void)redraw {
     ui::grid *grid = ui_controller->get_global_grid();
-    
+
     if (!windowIsOpen) {
         [self showWindow:nil];
-        
+
         if (!gridView) {
             NSWindow *window = [self window];
-            gridView = [[NVGridView alloc] initWithFrame:window.frame renderContext:renderContext];
-            [window setContentView:gridView];
             
-            font_family font = font_manager->get("SF Mono", 15);
-            [gridView setFont:font];
+            gridView = [[NVGridView alloc] initWithFrame:window.frame
+                                           renderContext:renderContext
+                                            neovimHandle:&nvim];
+            
+            [window setContentView:gridView];
+            [window makeFirstResponder:gridView];
+            
+            [gridView setFont:font_manager->get("SF Mono", 15)];
         }
     }
     
