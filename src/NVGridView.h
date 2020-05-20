@@ -25,6 +25,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setGrid:(ui::grid*)grid;
 - (void)setFont:(font_family)font;
 
+- (NSSize)getCellSize;
+
 @end
 
 NS_ASSUME_NONNULL_END

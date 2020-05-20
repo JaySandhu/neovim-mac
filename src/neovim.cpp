@@ -312,6 +312,10 @@ void neovim::ui_attach(int width, int height) {
     rpc_request(null_msgid, "nvim_ui_attach", width, height, map);
 }
 
+void neovim::try_resize(int width, int height) {
+    rpc_request(null_msgid, "nvim_ui_try_resize", width, height);
+}
+
 void neovim::input(std::string_view input) {
     rpc_request(null_msgid, "nvim_input", input);
 }

@@ -86,6 +86,7 @@ public:
     void get_api_info(response_handler handler);
     
     void ui_attach(int width, int height);
+    void try_resize(int width, int height);
     
     void input(std::string_view input);
 };

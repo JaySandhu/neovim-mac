@@ -164,10 +164,11 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
                                            renderContext:renderContext
                                             neovimHandle:&nvim];
             
+            [gridView setFont:font_manager->get("SF Mono", 15)];
+            
             [window setContentView:gridView];
             [window makeFirstResponder:gridView];
-            
-            [gridView setFont:font_manager->get("SF Mono", 15)];
+            [window setResizeIncrements:[gridView getCellSize]];
         }
     }
     

@@ -233,7 +233,24 @@ public:
 
 - (void)setFrameSize:(NSSize)newSize {
     [super setFrameSize:newSize];
-    metalLayer.drawableSize = [self convertSizeToBacking:newSize];
+    
+    NSSize scaledSize =  [self convertSizeToBacking:newSize];
+    metalLayer.drawableSize = scaledSize;
+    
+    if ([self inLiveResize]) {
+        int width  = scaledSize.width / cellSize.x;
+        int height = scaledSize.height / cellSize.y;
+
+        nvim->try_resize(width, height);
+    }
+}
+
+- (NSSize)getCellSize {
+    NSSize backingCellSize;
+    backingCellSize.height = cellSize.y;
+    backingCellSize.width = cellSize.x;
+    
+    return [self convertSizeFromBacking:backingCellSize];
 }
 
 - (void)viewDidChangeBackingProperties {
