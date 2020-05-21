@@ -564,9 +564,56 @@ static inline line_data make_strikethrough_data(NVGridView *view,
     frameIndex += 1;
 }
 
-static void namedKeyDown(neovim *nvim, NSEvent *event, std::string_view keyname) {
-    NSEventModifierFlags flags = [event modifierFlags];
+class input_modifiers {
+private:
+    char buffer[8];
+    size_t length;
+
+public:
+    void push_back(char value) {
+        const char data[2] = {value, '-'};
+        memcpy(buffer + length, data, 2);
+        length += 2;
+    }
+
+    explicit input_modifiers(NSEventModifierFlags flags) {
+        length = 0;
+
+        if (flags & NSEventModifierFlagShift) {
+            push_back('S');
+        }
+
+        if (flags & NSEventModifierFlagCommand) {
+            push_back('D');
+        }
+
+        if (flags & NSEventModifierFlagControl) {
+            push_back('C');
+        }
+
+        if (flags & NSEventModifierFlagOption) {
+            push_back('M');
+        }
+    }
     
+    constexpr size_t max_size() const {
+        return sizeof(buffer);
+    }
+
+    const char* data() const {
+        return buffer;
+    }
+
+    size_t size() const {
+        return length;
+    }
+
+    operator std::string_view() const {
+        return std::string_view(buffer, length);
+    }
+};
+
+static void namedKeyDown(neovim *nvim, NSEventModifierFlags flags, std::string_view keyname) {
     if (!(flags & (NSEventModifierFlagShift   |
                    NSEventModifierFlagCommand |
                    NSEventModifierFlagControl |
@@ -575,38 +622,17 @@ static void namedKeyDown(neovim *nvim, NSEvent *event, std::string_view keyname)
         return;
     }
 
-    char modifiers[64] = {'<'};
-    size_t modlength = 1;
-
-    if (flags & NSEventModifierFlagShift) {
-        modifiers[modlength++] = 'S';
-        modifiers[modlength++] = '-';
-    }
-
-    if (flags & NSEventModifierFlagCommand) {
-        modifiers[modlength++] = 'D';
-        modifiers[modlength++] = '-';
-    }
-
-    if (flags & NSEventModifierFlagControl) {
-        modifiers[modlength++] = 'C';
-        modifiers[modlength++] = '-';
-    }
-
-    if (flags & NSEventModifierFlagOption) {
-        modifiers[modlength++] = 'M';
-        modifiers[modlength++] = '-';
-    }
-
-    memcpy(modifiers + modlength, keyname.data() + 1, keyname.size() - 1);
-    size_t input_size = modlength + keyname.size() - 1;
-
-    nvim->input(std::string_view(modifiers, input_size));
+    input_modifiers modifiers = input_modifiers(flags);
+    
+    char inputbuff[64] = {'<'};
+    memcmp(inputbuff + 1,  modifiers.data(), modifiers.max_size());
+    memcmp(inputbuff + 1 + modifiers.size(), keyname.data() + 1, keyname.size() - 1);
+    
+    size_t inputsize = modifiers.size() + keyname.size() - 1;
+    nvim->input(std::string_view(inputbuff, inputsize));
 }
 
-static void keyDownIgnoreModifiers(neovim *nvim,
-                                   NSEventModifierFlags flags,
-                                   NSEvent *event) {
+static void keyDownIgnoreModifiers(neovim *nvim, NSEventModifierFlags flags, NSEvent *event) {
     NSString *nscharacters = [event charactersIgnoringModifiers];
     const char *characters = [nscharacters UTF8String];
     NSUInteger charlength = [nscharacters lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
@@ -615,42 +641,37 @@ static void keyDownIgnoreModifiers(neovim *nvim,
     if (!charlength) {
         return;
     }
-
-    char input_buff[64] = {'<'};
-    size_t modlength = 1;
-
-    if (flags & NSEventModifierFlagCommand) {
-        input_buff[modlength++] = 'D';
-        input_buff[modlength++] = '-';
+    
+    if (charlength == 1 && *characters == '<') {
+        namedKeyDown(nvim, flags & ~NSEventModifierFlagShift, "<lt>");
+        return;
     }
+    
+    input_modifiers modifiers = input_modifiers(flags & ~NSEventModifierFlagShift);
 
-    if (flags & NSEventModifierFlagControl) {
-        input_buff[modlength++] = 'C';
-        input_buff[modlength++] = '-';
-    }
-
-    if (flags & NSEventModifierFlagOption) {
-        input_buff[modlength++] = 'M';
-        input_buff[modlength++] = '-';
-    }
-
-    if (modlength == 1) {
+    if (modifiers.size() == 0) {
         nvim->input(std::string_view(characters, charlength));
         return;
     }
-    
-    size_t input_size = modlength + charlength;
-    
-    if (input_size < sizeof(input_buff)) {
-        memcpy(input_buff + modlength, characters, charlength);
-        input_buff[input_size] = '>';
-        nvim->input(std::string_view(input_buff, input_size + 1));
+
+    size_t inputsize = modifiers.size() + charlength + 2;
+
+    if (inputsize <= 64) {
+        char inputbuff[64];
+        inputbuff[0] = '<';
+        inputbuff[inputsize - 1] = '>';
+        
+        memcpy(inputbuff + 1,  modifiers.data(), modifiers.max_size());
+        memcpy(inputbuff + 1 + modifiers.size(), characters, charlength);
+        
+        nvim->input(std::string_view(inputbuff, inputsize));
         return;
     }
-    
+
     std::string input;
-    input.reserve(input_size);
-    input.append(input_buff, modlength);
+    input.reserve(inputsize);
+    input.push_back('<');
+    input.append(modifiers.data(), modifiers.size());
     input.append(characters, charlength);
     input.push_back('>');
 
