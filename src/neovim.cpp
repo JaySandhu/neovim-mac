@@ -319,3 +319,9 @@ void neovim::try_resize(int width, int height) {
 void neovim::input(std::string_view input) {
     rpc_request(null_msgid, "nvim_input", input);
 }
+
+void neovim::input_mouse(std::string_view button, std::string_view action,
+                         std::string_view modifiers, size_t row, size_t col) {
+    rpc_request(null_msgid, "nvim_input_mouse",
+                button, action, modifiers, 0, row, col);
+}

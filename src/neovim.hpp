@@ -89,6 +89,11 @@ public:
     void try_resize(int width, int height);
     
     void input(std::string_view input);
+    
+    void input_mouse(std::string_view button,
+                     std::string_view action,
+                     std::string_view modifiers,
+                     size_t row, size_t col);
 };
 
 #endif // NEOVIM_HPP
