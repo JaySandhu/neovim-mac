@@ -365,6 +365,7 @@ static inline line_data make_strikethrough_data(NVGridView *view,
 
     buffer.clear();
     buffer.reserve(reserve_size);
+    ui::cursor cursor = grid->cursor();
 
     uniform_data &data   = buffer.emplace_back_unchecked<uniform_data>();
     data.pixel_size      = pixel_size;
@@ -372,8 +373,8 @@ static inline line_data make_strikethrough_data(NVGridView *view,
     data.cell_size       = cellSize * pixel_size;
     data.baseline        = baselineTranslation;
     data.grid_width      = (uint32_t)grid_width;
-    data.cursor_position = simd_make_short2(grid->cursor.col, grid->cursor.row);
-    data.cursor_color    = grid->cursor.attrs.background.value;
+    data.cursor_position = simd_make_short2(cursor.col, cursor.row);
+    data.cursor_color    = cursor.attrs.background.value;
     data.cursor_width    = 1;
 
     const size_t uniform_offset = buffer.offset();
@@ -419,8 +420,8 @@ static inline line_data make_strikethrough_data(NVGridView *view,
         }
     }
 
-    simd_short2 cursor_gridpos = simd_make_short2(grid->cursor.row, grid->cursor.col);
-    ui::cell *cursor_cell = grid->get(grid->cursor.row, grid->cursor.col);
+    simd_short2 cursor_gridpos = simd_make_short2(cursor.row, cursor.col);
+    ui::cell *cursor_cell = cursor.cell();
     glyph_data *cursor_glyph = &buffer.emplace_back_unchecked<glyph_data>();
     const size_t glyph_offset = buffer.offset();
 
@@ -476,7 +477,7 @@ static inline line_data make_strikethrough_data(NVGridView *view,
 
     [commandEncoder setRenderPipelineState:cursorRenderPipeline];
 
-    switch (grid->cursor.attrs.shape) {
+    switch (cursor.attrs.shape) {
         case ui::cursor_shape::vertical:
             [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                                vertexStart:0
@@ -513,8 +514,8 @@ static inline line_data make_strikethrough_data(NVGridView *view,
 
                 cached_glyph glyph = glyph_manager->get(font,
                                                         cursor_cell->graphemes_view(),
-                                                        grid->cursor.attrs.background,
-                                                        grid->cursor.attrs.foreground);
+                                                        cursor.attrs.background,
+                                                        cursor.attrs.foreground);
 
                 *cursor_glyph = make_glyph_data(cursor_gridpos, glyph);
 

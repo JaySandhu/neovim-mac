@@ -257,8 +257,16 @@ void ui_state::grid_clear(size_t grid_id) {
 
 void ui_state::grid_cursor_goto(size_t grid_id, size_t row, size_t col) {
     grid *grid = get_grid(grid_id);
-    grid->cursor.row = row;
-    grid->cursor.col = col;
+    
+    if (row >= grid->height || col >= grid->width) {
+        return os_log_error(rpc, "Redraw error: Cursor out of bounds - "
+                                 "Event=grid_cursor_goto, "
+                                 "Grid=[%zu, %zu], Row=%zu, Col=%zu",
+                                 grid->width, grid->height, row, col);
+    }
+    
+    grid->cursor_row = row;
+    grid->cursor_col = col;
 }
 
 void ui_state::grid_scroll(size_t grid_id, size_t top, size_t bottom,
@@ -533,7 +541,7 @@ void ui_state::mode_change(msg::string name, size_t index) {
                                  mode_info_table.size(), index);
     }
     
-    writing->cursor.attrs = mode_info_table[index].cursor_attrs;
+    writing->cursor_attrs = mode_info_table[index].cursor_attrs;
 }
 
 } // namespace ui

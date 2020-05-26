@@ -88,12 +88,6 @@ struct mode_info {
     std::string mode_name;
 };
 
-struct cursor {
-    cursor_attributes attrs;
-    size_t row;
-    size_t col;
-};
-
 struct attributes {
     enum flag : uint16_t {
         bold          = 1 << 0,
@@ -217,12 +211,54 @@ struct cell {
     }
 };
 
+struct cursor {
+    cursor_attributes attrs;
+    size_t row;
+    size_t col;
+    cell *cellptr;
+    
+    cursor(size_t cursor_row, size_t cursor_col,
+           cell *cursor_cell, cursor_attributes cursor_attrs) {
+        row = cursor_row;
+        col = cursor_col;
+        attrs = cursor_attrs;
+        cellptr = cursor_cell;
+        
+        if (attrs.background.is_default() && attrs.foreground.is_default()) {
+            attrs.background = cellptr->foreground();
+            attrs.foreground = cellptr->background();
+            return;
+        }
+            
+        if (attrs.background.is_default()) {
+            attrs.background = cellptr->background();
+        }
+            
+        if (attrs.foreground.is_default()) {
+            attrs.foreground = cellptr->foreground();
+        }
+    }
+
+    ui::cell* cell() const {
+        return cellptr;
+    }
+};
+
 struct grid {
     std::vector<cell> cells;
     size_t width = 0;
     size_t height = 0;
-    cursor cursor;
+    cursor_attributes cursor_attrs;
+    size_t cursor_row;
+    size_t cursor_col;
     uint64_t draw_tick = 0;
+    
+    ui::cursor cursor() {
+        return ui::cursor(cursor_row,
+                          cursor_col,
+                          get(cursor_row, cursor_col),
+                          cursor_attrs);
+    }
     
     void resize(size_t width, size_t heigth);
         
