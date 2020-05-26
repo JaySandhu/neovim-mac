@@ -336,30 +336,35 @@ attributes* attribute_table::new_entry(size_t hlid) {
     return &table.back();
 }
 
+static inline void adjust_defaults(const attributes &def, attributes &attrs) {
+    bool reversed = attrs.flags & attributes::reverse;
+    
+    if (attrs.foreground.is_default()) {
+        attrs.foreground = reversed ? def.background : def.foreground;
+    }
+    
+    if (attrs.background.is_default()) {
+        attrs.background = reversed ? def.foreground : def.background;
+    }
+    
+    if (attrs.special.is_default()) {
+        attrs.special = def.special;
+    }
+}
+
 void ui_state::default_colors_set(uint32_t fg, uint32_t bg, uint32_t sp) {
-    rgb_color rgb_fg(fg, rgb_color::default_tag);
-    rgb_color rgb_bg(bg, rgb_color::default_tag);
-    rgb_color rgb_sp(sp, rgb_color::default_tag);
-     
     attributes *def = hltable.get_default();
-    def->foreground = rgb_fg;
-    def->background = rgb_bg;
-    def->special = rgb_sp;
+    def->foreground = rgb_color(fg, rgb_color::default_tag);
+    def->background = rgb_color(bg, rgb_color::default_tag);;
+    def->special = rgb_color(sp, rgb_color::default_tag);;
     def->flags = 0;
     
-    // TODO: handle reversed cells
+    for (attributes &attrs : hltable.table) {
+        adjust_defaults(*def, attrs);
+    }
+    
     for (cell &cell : writing->cells) {
-        if (cell.attrs.foreground.is_default()) {
-            cell.attrs.foreground = rgb_fg;
-        }
-        
-        if (cell.attrs.background.is_default()) {
-            cell.attrs.background = rgb_bg;
-        }
-        
-        if (cell.attrs.special.is_default()) {
-            cell.attrs.special = rgb_sp;
-        }
+        adjust_defaults(*def, cell.attrs);
     }
 }
 
@@ -376,7 +381,6 @@ static inline void set_rgb_color(rgb_color &color, const msg::object &object) {
 
 void ui_state::hl_attr_define(size_t hlid, msg::map definition) {
     attributes *attrs = hltable.new_entry(hlid);
-    bool reversed = false;
     
     for (const msg::pair &pair : definition) {
         if (!pair.first.is<msg::string>()) {
@@ -393,20 +397,19 @@ void ui_state::hl_attr_define(size_t hlid, msg::map definition) {
         } else if (name == "background") {
             set_rgb_color(attrs->background, pair.second);
         } else if (name == "underline") {
-             attrs->flags |= attributes::underline;
+            attrs->flags |= attributes::underline;
         } else if (name == "bold") {
-             attrs->flags |= attributes::bold;
+            attrs->flags |= attributes::bold;
         } else if (name == "italic") {
-             attrs->flags |= attributes::italic;
+            attrs->flags |= attributes::italic;
         } else if (name == "strikethrough") {
-             attrs->flags |= attributes::strikethrough;
+            attrs->flags |= attributes::strikethrough;
         } else if (name == "undercurl") {
             attrs->flags |= attributes::undercurl;
         } else if (name == "special") {
             set_rgb_color(attrs->special, pair.second);
         } else if (name == "reverse") {
-            reversed = true;
-             attrs->flags |= attributes::reverse;
+            attrs->flags |= attributes::reverse;
         } else {
             os_log_info(rpc, "Redraw info: Ignoring highlight attribute - "
                              "Event=hl_attr_define, Name=%.*s",
@@ -414,7 +417,7 @@ void ui_state::hl_attr_define(size_t hlid, msg::map definition) {
         }
     }
     
-    if (reversed) {
+    if (attrs->flags & attributes::reverse) {
         std::swap(attrs->background, attrs->foreground);
     }
 }
