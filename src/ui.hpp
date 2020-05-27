@@ -211,6 +211,32 @@ struct cell {
     }
 };
 
+struct grid_size {
+    size_t width;
+    size_t height;
+};
+
+struct grid_point {
+    size_t row;
+    size_t column;
+};
+
+inline bool operator==(const grid_size &left, const grid_size &right) {
+    return memcmp(&left, &right, sizeof(grid_size)) == 0;
+}
+
+inline bool operator!=(const grid_size &left, const grid_size &right) {
+    return memcmp(&left, &right, sizeof(grid_size)) != 0;
+}
+
+inline bool operator==(const grid_point &left, const grid_point &right) {
+    return memcmp(&left, &right, sizeof(grid_point)) == 0;
+}
+
+inline bool operator!=(const grid_point &left, const grid_point &right) {
+    return memcmp(&left, &right, sizeof(grid_point)) != 0;
+}
+
 struct cursor {
     cursor_attributes attrs;
     size_t row;
@@ -258,6 +284,10 @@ struct grid {
                           cursor_col,
                           get(cursor_row, cursor_col),
                           cursor_attrs);
+    }
+    
+    ui::grid_size size() const {
+        return ui::grid_size{width, height};
     }
     
     void resize(size_t width, size_t heigth);

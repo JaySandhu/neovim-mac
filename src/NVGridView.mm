@@ -179,7 +179,6 @@ public:
     id<MTLRenderPipelineState> cursorRenderPipeline;
     id<MTLRenderPipelineState> lineRenderPipeline;
 
-    neovim *nvim;
     glyph_manager *glyph_manager;
     font_family font_family;
     mtlbuffer buffers[3];
@@ -195,10 +194,8 @@ public:
 
 - (instancetype)initWithGrid:(ui::grid *)grid
                   fontFamily:(font_family)font
-               renderContext:(NVRenderContext *)renderContext
-                neovimHandle:(neovim *)neovimHandle {
+               renderContext:(NVRenderContext *)renderContext {
     self = [super init];
-    nvim = neovimHandle;
     
     device               = renderContext.device;
     commandQueue         = renderContext.commandQueue;
@@ -242,16 +239,29 @@ public:
 
 - (void)setFrameSize:(NSSize)newSize {
     [super setFrameSize:newSize];
-
+    
+    // Is this redundant?
     NSSize scaledSize =  [self convertSizeToBacking:newSize];
     metalLayer.drawableSize = scaledSize;
+}
 
-    if ([self inLiveResize]) {
-        int width  = scaledSize.width / cellSize.x;
-        int height = scaledSize.height / cellSize.y;
+- (NSSize)desiredFrameSize {
+    NSSize cellSize = [self getCellSize];
+    
+    NSSize frameSize;
+    frameSize.width = cellSize.width * grid->width;
+    frameSize.height = cellSize.height * grid->height;
+    
+    return frameSize;
+}
 
-        nvim->try_resize(width, height);
-    }
+- (ui::grid_size)desiredGridSize {
+    CGSize drawableSize = [metalLayer drawableSize];
+    
+    ui::grid_size size;
+    size.width  = drawableSize.width / cellSize.x;
+    size.height = drawableSize.height / cellSize.y;
+    return size;
 }
 
 - (NSSize)getCellSize {
@@ -578,14 +588,14 @@ static inline line_data make_strikethrough_data(NVGridView *view,
     return YES;
 }
 
-- (cell_location)cellLocation:(NSPoint)windowLocation {
+- (ui::grid_point)cellLocation:(NSPoint)windowLocation {
     NSPoint viewLocation = [self convertPoint:windowLocation fromView:nil];
     NSSize cellSize = [self getCellSize];
 
     size_t row = viewLocation.x / cellSize.width;
     size_t col = viewLocation.y / cellSize.height;
 
-    cell_location location;
+    ui::grid_point location;
     location.row = std::min(col, grid->height);
     location.column = std::min(row, grid->width);
     

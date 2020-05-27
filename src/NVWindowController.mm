@@ -117,16 +117,16 @@ static inline std::string_view buttonName(MouseButton button) {
     NVWindowController *processIsAlive;
     NVGridView *gridView;
     
+    neovim nvim;
     font_manager *font_manager;
     ui::ui_state *ui_controller;
-    neovim nvim;
-
-    cell_location lastMouseLocationLeft;
-    cell_location lastMouseLocationRight;
-    cell_location lastMouseLocationOther;
-    cell_location lastMouseLocation[3];
+    
+    ui::grid_size lastGridSize;
+    ui::grid_point lastMouseLocation[3];
     CGFloat scrollingDeltaX;
     CGFloat scrollingDeltaY;
+    
+    uint64_t isLiveResizing;
 }
 
 - (instancetype)initWithRenderContext:(NVRenderContext *)renderContext {
@@ -176,29 +176,74 @@ static inline std::string_view buttonName(MouseButton button) {
     processIsAlive = nil;
 }
 
+- (void)saveFrame {
+    NSRect rect = [self.window frame];
+    rect.size.width = lastGridSize.width;
+    rect.size.height = lastGridSize.height;
+    
+    NSString *stringRect = NSStringFromRect(rect);
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults setValue:stringRect forKey:@"NVWindowControllerFrameSave"];
+}
+
+- (NSRect)loadFrame {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSString *frameSave = [defaults valueForKey:@"NVWindowControllerFrameSave"];
+    
+    if (frameSave) {
+        return NSRectFromString(frameSave);
+    } else {
+        return CGRectNull;
+    }
+}
+
+static inline bool isNullRect(const CGRect &rect) {
+    return memcmp(&rect, &CGRectNull, sizeof(CGRect)) == 0;
+}
+
 - (void)redraw {
     ui::grid *grid = ui_controller->get_global_grid();
 
-    if (!windowIsOpen) {
+    if (!gridView) {
         [self showWindow:nil];
-
-        if (!gridView) {
-            NSWindow *window = [self window];
-            
-            gridView = [[NVGridView alloc] initWithGrid:grid
-                                             fontFamily:font_manager->get("SF Mono", 15)
-                                          renderContext:renderContext
-                                           neovimHandle:&nvim];
-            
-            [window setContentSize:gridView.frame.size];
-            [window setContentView:gridView];
-            [window setResizeIncrements:[gridView getCellSize]];
-            [window makeFirstResponder:self];
+        NSWindow *window = [self window];
+        lastGridSize = grid->size();
+        
+        gridView = [[NVGridView alloc] initWithGrid:grid
+                                         fontFamily:font_manager->get("SF Mono", 15)
+                                      renderContext:renderContext];
+        
+        [window setContentSize:gridView.frame.size];
+        [window setContentView:gridView];
+        [window setResizeIncrements:[gridView getCellSize]];
+        [window makeFirstResponder:self];
+    
+        NSRect savedRect = [self loadFrame];
+        
+        if (isNullRect(savedRect)) {
+            [window center];
+        } else {
+            [window setFrameOrigin:savedRect.origin];
         }
+        
+        [gridView setNeedsDisplay:YES];
+        return;
     }
     
     [gridView setGrid:grid];
     [gridView setNeedsDisplay:YES];
+    
+    ui::grid_size gridSize = grid->size();
+
+    if (gridSize != lastGridSize) {
+        lastGridSize = gridSize;
+        
+        if (!isLiveResizing) {
+            NSSize frameSize = [gridView desiredFrameSize];
+            [self.window setContentSize:frameSize];
+            [self saveFrame];
+        }
+    }
 }
 
 - (void)connect:(NSString *)addr {
@@ -210,7 +255,13 @@ static inline std::string_view buttonName(MouseButton button) {
     }
     
     processIsAlive = self;
-    nvim.ui_attach(80, 24);
+    NSRect savedFrame = [self loadFrame];
+    
+    if (isNullRect(savedFrame)) {
+        nvim.ui_attach(80, 24);
+    } else {
+        nvim.ui_attach(savedFrame.size.width, savedFrame.size.height);
+    }
 }
 
 - (void)spawn {
@@ -228,6 +279,39 @@ static inline std::string_view buttonName(MouseButton button) {
 
 - (void)dealloc {
     puts("NVWindowController dealloced!");
+}
+
+- (void)windowWillStartLiveResize:(NSNotification *)notification {
+    isLiveResizing += 1;
+}
+
+- (void)windowDidEndLiveResize:(NSNotification *)notification {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
+                   dispatch_get_main_queue(), ^{
+        self->isLiveResizing -= 1;
+
+        if (!self->isLiveResizing) {
+            NSSize currentSize = [self->gridView frame].size;
+            NSSize desiredSize = [self->gridView desiredFrameSize];
+            
+            if (memcmp(&currentSize, &desiredSize, sizeof(NSSize)) != 0) {
+                [self.window setContentSize:desiredSize];
+            }
+            
+            [self saveFrame];
+        }
+    });
+}
+
+- (void)windowDidMove:(NSNotification *)notification {
+    [self saveFrame];
+}
+
+- (void)windowDidResize:(NSNotification *)notification {
+    if (isLiveResizing) {
+        ui::grid_size size = [gridView desiredGridSize];
+        nvim.try_resize((int)size.width, (int)size.height);
+    }
 }
 
 class input_modifiers {
@@ -408,7 +492,7 @@ static void keyDownIgnoreModifiers(neovim &nvim, NSEventModifierFlags flags, NSE
 }
 
 - (void)mouseDown:(NSEvent *)event button:(MouseButton)button {
-    cell_location location = [gridView cellLocation:event.locationInWindow];
+    ui::grid_point location = [gridView cellLocation:event.locationInWindow];
     input_modifiers modifiers = input_modifiers(event.modifierFlags);
     
     nvim.input_mouse(buttonName(button), "press", modifiers, location.row, location.column);
@@ -416,8 +500,8 @@ static void keyDownIgnoreModifiers(neovim &nvim, NSEventModifierFlags flags, NSE
 }
 
 - (void)mouseDragged:(NSEvent *)event button:(MouseButton)button {
-    cell_location location = [gridView cellLocation:event.locationInWindow];
-    cell_location &lastLocation = lastMouseLocation[button];
+    ui::grid_point location = [gridView cellLocation:event.locationInWindow];
+    ui::grid_point &lastLocation = lastMouseLocation[button];
     
     if (location != lastLocation) {
         input_modifiers modifiers = input_modifiers(event.modifierFlags);
@@ -427,7 +511,7 @@ static void keyDownIgnoreModifiers(neovim &nvim, NSEventModifierFlags flags, NSE
 }
 
 - (void)mouseUp:(NSEvent *)event button:(MouseButton)button {
-    cell_location location = [gridView cellLocation:event.locationInWindow];
+    ui::grid_point location = [gridView cellLocation:event.locationInWindow];
     input_modifiers modifiers = input_modifiers(event.modifierFlags);
     
     nvim.input_mouse(buttonName(button), "release", modifiers, location.row, location.column);
@@ -470,7 +554,7 @@ static void keyDownIgnoreModifiers(neovim &nvim, NSEventModifierFlags flags, NSE
 }
 
 static void scrollEvent(neovim &nvim, size_t count, std::string_view direction,
-                        std::string_view modifiers, cell_location location) {
+                        std::string_view modifiers, ui::grid_point location) {
     for (size_t i=0; i<count; ++i) {
         nvim.input_mouse("wheel", direction, modifiers, location.row, location.column);
     }
@@ -481,7 +565,7 @@ static void scrollEvent(neovim &nvim, size_t count, std::string_view direction,
     CGFloat deltaY = [event scrollingDeltaY];
     
     input_modifiers modifiers = input_modifiers([event modifierFlags]);
-    cell_location location = [gridView cellLocation:event.locationInWindow];
+    ui::grid_point location = [gridView cellLocation:event.locationInWindow];
     
     if ([event hasPreciseScrollingDeltas]) {
         CGSize cellSize = [gridView getCellSize];
