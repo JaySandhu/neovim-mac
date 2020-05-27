@@ -160,12 +160,12 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
         if (!gridView) {
             NSWindow *window = [self window];
             
-            gridView = [[NVGridView alloc] initWithFrame:window.frame
-                                           renderContext:renderContext
-                                            neovimHandle:&nvim];
+            gridView = [[NVGridView alloc] initWithGrid:grid
+                                             fontFamily:font_manager->get("SF Mono", 15)
+                                          renderContext:renderContext
+                                           neovimHandle:&nvim];
             
-            [gridView setFont:font_manager->get("SF Mono", 15)];
-            
+            [window setContentSize:gridView.frame.size];
             [window setContentView:gridView];
             [window makeFirstResponder:gridView];
             [window setResizeIncrements:[gridView getCellSize]];

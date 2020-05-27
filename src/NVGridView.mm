@@ -200,12 +200,13 @@ public:
     CGFloat scrollingDeltaY;
 }
 
-- (instancetype)initWithFrame:(NSRect)frame
-                renderContext:(NVRenderContext *)renderContext
-                 neovimHandle:(neovim *)neovimHandle {
-    self = [super initWithFrame:frame];
+- (instancetype)initWithGrid:(ui::grid *)grid
+                  fontFamily:(font_family)font
+               renderContext:(NVRenderContext *)renderContext
+                neovimHandle:(neovim *)neovimHandle {
+    self = [super init];
     nvim = neovimHandle;
-
+    
     device               = renderContext.device;
     commandQueue         = renderContext.commandQueue;
     gridRenderPipeline   = renderContext.gridRenderPipeline;
@@ -221,7 +222,16 @@ public:
     buffers[0] = mtlbuffer(device, 524288);
     buffers[1] = mtlbuffer(device, 524288);
     buffers[2] = mtlbuffer(device, 524288);
-
+    
+    self->grid = grid;
+    [self setFont:font];
+    
+    NSSize cell = [self getCellSize];
+    NSSize frameSize;
+    frameSize.width = cell.width * grid->width;
+    frameSize.height = cell.height * grid->height;
+    
+    [self setFrameSize:frameSize];
     return self;
 }
 

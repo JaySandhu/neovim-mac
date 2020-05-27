@@ -18,9 +18,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface NVGridView : NSView<CALayerDelegate>
 
-- (instancetype)initWithFrame:(NSRect)frame
-                renderContext:(NVRenderContext *)renderContext
-                 neovimHandle:(neovim *)neovimHandle;
+- (instancetype)initWithGrid:(ui::grid *)grid
+                  fontFamily:(font_family)font
+               renderContext:(NVRenderContext *)renderContext
+                neovimHandle:(neovim *)neovimHandle;
 
 - (void)setGrid:(ui::grid*)grid;
 - (void)setFont:(font_family)font;
