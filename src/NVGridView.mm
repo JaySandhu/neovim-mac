@@ -7,7 +7,6 @@
 //  See LICENSE.txt for details.
 //
 
-#import <Carbon/Carbon.h>
 #import <QuartzCore/CAMetalLayer.h>
 #import <Metal/Metal.h>
 #import "NVGridView.h"
@@ -192,12 +191,6 @@ public:
     int32_t underlineTranslate;
     int32_t strikethroughTranslate;
     uint64_t frameIndex;
-
-    simd_uint2 lastMouseLocationLeft;
-    simd_uint2 lastMouseLocationRight;
-    simd_uint2 lastMouseLocationOther;
-    CGFloat scrollingDeltaX;
-    CGFloat scrollingDeltaY;
 }
 
 - (instancetype)initWithGrid:(ui::grid *)grid
@@ -581,309 +574,22 @@ static inline line_data make_strikethrough_data(NVGridView *view,
     frameIndex += 1;
 }
 
-class input_modifiers {
-private:
-    char buffer[8];
-    size_t length;
-
-public:
-    void push_back(char value) {
-        const char data[2] = {value, '-'};
-        memcpy(buffer + length, data, 2);
-        length += 2;
-    }
-
-    explicit input_modifiers(NSEventModifierFlags flags) {
-        length = 0;
-
-        if (flags & NSEventModifierFlagShift) {
-            push_back('S');
-        }
-
-        if (flags & NSEventModifierFlagCommand) {
-            push_back('D');
-        }
-
-        if (flags & NSEventModifierFlagControl) {
-            push_back('C');
-        }
-
-        if (flags & NSEventModifierFlagOption) {
-            push_back('M');
-        }
-    }
-    
-    constexpr size_t max_size() const {
-        return sizeof(buffer);
-    }
-
-    const char* data() const {
-        return buffer;
-    }
-
-    size_t size() const {
-        return length;
-    }
-
-    operator std::string_view() const {
-        return std::string_view(buffer, length);
-    }
-};
-
-static void namedKeyDown(neovim *nvim, NSEventModifierFlags flags, std::string_view keyname) {
-    if (!(flags & (NSEventModifierFlagShift   |
-                   NSEventModifierFlagCommand |
-                   NSEventModifierFlagControl |
-                   NSEventModifierFlagOption))) {
-        nvim->input(keyname);
-        return;
-    }
-
-    input_modifiers modifiers = input_modifiers(flags);
-    
-    char inputbuff[64] = {'<'};
-    memcmp(inputbuff + 1,  modifiers.data(), modifiers.max_size());
-    memcmp(inputbuff + 1 + modifiers.size(), keyname.data() + 1, keyname.size() - 1);
-    
-    size_t inputsize = modifiers.size() + keyname.size() - 1;
-    nvim->input(std::string_view(inputbuff, inputsize));
-}
-
-static void keyDownIgnoreModifiers(neovim *nvim, NSEventModifierFlags flags, NSEvent *event) {
-    NSString *nscharacters = [event charactersIgnoringModifiers];
-    const char *characters = [nscharacters UTF8String];
-    NSUInteger charlength = [nscharacters lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
-
-    // Can this ever happen?
-    if (!charlength) {
-        return;
-    }
-    
-    if (charlength == 1 && *characters == '<') {
-        namedKeyDown(nvim, flags & ~NSEventModifierFlagShift, "<lt>");
-        return;
-    }
-    
-    input_modifiers modifiers = input_modifiers(flags & ~NSEventModifierFlagShift);
-
-    if (modifiers.size() == 0) {
-        nvim->input(std::string_view(characters, charlength));
-        return;
-    }
-
-    size_t inputsize = modifiers.size() + charlength + 2;
-
-    if (inputsize <= 64) {
-        char inputbuff[64];
-        inputbuff[0] = '<';
-        inputbuff[inputsize - 1] = '>';
-        
-        memcpy(inputbuff + 1,  modifiers.data(), modifiers.max_size());
-        memcpy(inputbuff + 1 + modifiers.size(), characters, charlength);
-        
-        nvim->input(std::string_view(inputbuff, inputsize));
-        return;
-    }
-
-    std::string input;
-    input.reserve(inputsize);
-    input.push_back('<');
-    input.append(modifiers.data(), modifiers.size());
-    input.append(characters, charlength);
-    input.push_back('>');
-
-    nvim->input(input);
-}
-
-- (void)keyDown:(NSEvent *)event {
-    unsigned short code = [event keyCode];
-    NSEventModifierFlags flags = [event modifierFlags];
-
-    switch (code) {
-        case kVK_Return:        return namedKeyDown(nvim, flags, "<CR>");
-        case kVK_Tab:           return namedKeyDown(nvim, flags, "<Tab>");
-        case kVK_Space:         return namedKeyDown(nvim, flags, "<Space>");
-        case kVK_Delete:        return namedKeyDown(nvim, flags, "<BS>");
-        case kVK_ForwardDelete: return namedKeyDown(nvim, flags, "<Del>");
-        case kVK_Escape:        return namedKeyDown(nvim, flags, "<Esc>");
-        case kVK_LeftArrow:     return namedKeyDown(nvim, flags, "<Left>");
-        case kVK_RightArrow:    return namedKeyDown(nvim, flags, "<Right>");
-        case kVK_DownArrow:     return namedKeyDown(nvim, flags, "<Down>");
-        case kVK_UpArrow:       return namedKeyDown(nvim, flags, "<Up>");
-        case kVK_VolumeUp:      return namedKeyDown(nvim, flags, "<VolumeUp>");
-        case kVK_VolumeDown:    return namedKeyDown(nvim, flags, "<VolumeDown>");
-        case kVK_Mute:          return namedKeyDown(nvim, flags, "<Mute>");
-        case kVK_Help:          return namedKeyDown(nvim, flags, "<Help>");
-        case kVK_Home:          return namedKeyDown(nvim, flags, "<Home>");
-        case kVK_End:           return namedKeyDown(nvim, flags, "<End>");
-        case kVK_PageUp:        return namedKeyDown(nvim, flags, "<PageUp>");
-        case kVK_PageDown:      return namedKeyDown(nvim, flags, "<PageDown>");
-        case kVK_F1:            return namedKeyDown(nvim, flags, "<F1>");
-        case kVK_F2:            return namedKeyDown(nvim, flags, "<F2>");
-        case kVK_F3:            return namedKeyDown(nvim, flags, "<F3>");
-        case kVK_F4:            return namedKeyDown(nvim, flags, "<F4>");
-        case kVK_F5:            return namedKeyDown(nvim, flags, "<F5>");
-        case kVK_F6:            return namedKeyDown(nvim, flags, "<F6>");
-        case kVK_F7:            return namedKeyDown(nvim, flags, "<F7>");
-        case kVK_F8:            return namedKeyDown(nvim, flags, "<F8>");
-        case kVK_F9:            return namedKeyDown(nvim, flags, "<F9>");
-        case kVK_F10:           return namedKeyDown(nvim, flags, "<F10>");
-        case kVK_F11:           return namedKeyDown(nvim, flags, "<F11>");
-        case kVK_F12:           return namedKeyDown(nvim, flags, "<F12>");
-        case kVK_F13:           return namedKeyDown(nvim, flags, "<F13>");
-        case kVK_F14:           return namedKeyDown(nvim, flags, "<F14>");
-        case kVK_F15:           return namedKeyDown(nvim, flags, "<F15>");
-        case kVK_F16:           return namedKeyDown(nvim, flags, "<F16>");
-        case kVK_F17:           return namedKeyDown(nvim, flags, "<F17>");
-        case kVK_F18:           return namedKeyDown(nvim, flags, "<F18>");
-        case kVK_F19:           return namedKeyDown(nvim, flags, "<F19>");
-        case kVK_F20:           return namedKeyDown(nvim, flags, "<F20>");
-    }
-
-    NSString *characters = [event characters];
-    NSUInteger length = [characters lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
-    bool cmdOrCtrl = flags & (NSEventModifierFlagCommand | NSEventModifierFlagControl);
-
-    if (!length || cmdOrCtrl) {
-        keyDownIgnoreModifiers(nvim, flags, event);
-        return;
-    }
-
-    std::string input([characters UTF8String], length);
-
-    if (input == "<") {
-        namedKeyDown(nvim, flags & ~NSEventModifierFlagShift, "<lt>");
-    } else {
-        nvim->input(input);
-    }
-}
-
 - (BOOL)isFlipped {
     return YES;
 }
 
-static simd_uint2 cellLocation(NVGridView *self, NSEvent *event) {
-    NSPoint windowLocation = [event locationInWindow];
+- (cell_location)cellLocation:(NSPoint)windowLocation {
     NSPoint viewLocation = [self convertPoint:windowLocation fromView:nil];
     NSSize cellSize = [self getCellSize];
 
-    unsigned row = viewLocation.x / cellSize.width;
-    unsigned col = viewLocation.y / cellSize.height;
+    size_t row = viewLocation.x / cellSize.width;
+    size_t col = viewLocation.y / cellSize.height;
 
-    simd_uint2 cellLoc;
-    cellLoc.x = std::min(row, (unsigned)self->grid->width);
-    cellLoc.y = std::min(col, (unsigned)self->grid->height);
-    return cellLoc;
-}
-
-static void mouseDownEvent(NVGridView *self, NSEvent *event,
-                           simd_uint2 &lastLocation, std::string_view button) {
-    simd_uint2 location = cellLocation(self, event);
-    input_modifiers modifiers = input_modifiers([event modifierFlags]);
-
-    self->nvim->input_mouse(button, "press", modifiers, location.y, location.x);
-    lastLocation = location;
-}
-
-static void mouseDragEvent(NVGridView *self, NSEvent *event,
-                           simd_uint2 &lastLocation, std::string_view button) {
-    simd_uint2 location = cellLocation(self, event);
-
-    if (!simd_equal(location, lastLocation)) {
-        input_modifiers modifiers = input_modifiers([event modifierFlags]);
-        
-        self->nvim->input_mouse(button, "drag", modifiers, location.y, location.x);
-        lastLocation = location;
-    }
-}
-
-static void mouseUpEvent(NVGridView *self, NSEvent *event, std::string_view button) {
-    simd_uint2 location = cellLocation(self, event);
-    input_modifiers modifiers = input_modifiers([event modifierFlags]);
-
-    self->nvim->input_mouse(button, "release", modifiers, location.y, location.x);
-}
-
-- (void)mouseDown:(NSEvent *)event {
-    mouseDownEvent(self, event, lastMouseLocationLeft, "left");
-}
-
-- (void)mouseDragged:(NSEvent *)event {
-    mouseDragEvent(self, event, lastMouseLocationLeft, "left");
-}
-
-- (void)mouseUp:(NSEvent *)event {
-    mouseUpEvent(self, event, "left");
-}
-
-- (void)rightMouseDown:(NSEvent *)event {
-    mouseDownEvent(self, event, lastMouseLocationRight, "right");
-}
-
-- (void)rightMouseDragged:(NSEvent *)event {
-    mouseDragEvent(self, event, lastMouseLocationRight, "right");
-}
-
-- (void)rightMouseUp:(NSEvent *)event {
-    mouseUpEvent(self, event, "right");
-}
-
-- (void)otherMouseDown:(NSEvent *)event {
-    mouseDownEvent(self, event, lastMouseLocationOther, "middle");
-}
-
-- (void)otherMouseDragged:(NSEvent *)event {
-    mouseDragEvent(self, event, lastMouseLocationOther, "middle");
-}
-
-- (void)otherMouseUp:(NSEvent *)event {
-    mouseUpEvent(self, event, "middle");
-}
-
-static void scrollEvent(neovim *nvim, size_t count, std::string_view direction,
-                        std::string_view modifiers, simd_uint2 location) {
-    for (size_t i=0; i<count; ++i) {
-        nvim->input_mouse("wheel", direction, modifiers, location.y, location.x);
-    }
-}
-
-- (void)scrollWheel:(NSEvent *)event {
-    CGFloat deltaX = [event scrollingDeltaX];
-    CGFloat deltaY = [event scrollingDeltaY];
+    cell_location location;
+    location.row = std::min(col, grid->height);
+    location.column = std::min(row, grid->width);
     
-    input_modifiers modifiers = input_modifiers([event modifierFlags]);
-    simd_uint2 location = cellLocation(self, event);
-    
-    if ([event hasPreciseScrollingDeltas]) {
-        CGSize cellSize = [self getCellSize];
-        NSEventPhase phase = [event phase];
-        
-        if (phase == NSEventPhaseBegan) {
-            scrollingDeltaX = 0;
-            scrollingDeltaY = 0;
-        }
-
-        scrollingDeltaX += deltaX;
-        scrollingDeltaY += deltaY;
-        
-        deltaY = floor(scrollingDeltaY / cellSize.height);
-        scrollingDeltaY -= (deltaY * cellSize.height);
-        
-        deltaX = floor(scrollingDeltaX / cellSize.width);
-        scrollingDeltaX -= (deltaX * cellSize.width);
-    }
-            
-    if (deltaY > 0) {
-        scrollEvent(nvim, deltaY, "up", modifiers, location);
-    } else if (deltaY < 0) {
-        scrollEvent(nvim, -deltaY, "down", modifiers, location);
-    }
-    
-    if (deltaX > 0) {
-        scrollEvent(nvim, deltaX, "left", modifiers, location);
-    } else if (deltaX < 0) {
-        scrollEvent(nvim, -deltaX, "right", modifiers, location);
-    }
+    return location;
 }
 
 @end

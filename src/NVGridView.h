@@ -16,6 +16,19 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+struct cell_location {
+    size_t row;
+    size_t column;
+};
+
+inline bool operator==(const cell_location &left, const cell_location &right) {
+    return memcmp(&left, &right, sizeof(cell_location)) == 0;
+}
+
+inline bool operator!=(const cell_location &left, const cell_location &right) {
+    return memcmp(&left, &right, sizeof(cell_location)) != 0;
+}
+
 @interface NVGridView : NSView<CALayerDelegate>
 
 - (instancetype)initWithGrid:(ui::grid *)grid
@@ -27,6 +40,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setFont:(font_family)font;
 
 - (NSSize)getCellSize;
+
+- (cell_location)cellLocation:(NSPoint)windowLocation;
 
 @end
 
