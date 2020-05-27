@@ -25,7 +25,6 @@
 		695C0ABD242E274800266D89 /* msgpack.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 695C0ABC242E274800266D89 /* msgpack.cpp */; };
 		695C0AC0242E27CC00266D89 /* Msgpack.mm in Sources */ = {isa = PBXBuildFile; fileRef = 695C0ABE242E277700266D89 /* Msgpack.mm */; };
 		695F29C324475B7E0020B613 /* font.mm in Sources */ = {isa = PBXBuildFile; fileRef = 695F29C124475B7E0020B613 /* font.mm */; };
-		69E15155244DFE3400F8AEC7 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 69E15154244DFE3400F8AEC7 /* MetalKit.framework */; };
 		69E15157244E023900F8AEC7 /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 69E15156244E023900F8AEC7 /* Shaders.metal */; };
 /* End PBXBuildFile section */
 
@@ -85,7 +84,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				69E15155244DFE3400F8AEC7 /* MetalKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
