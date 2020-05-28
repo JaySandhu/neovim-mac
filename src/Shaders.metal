@@ -63,11 +63,16 @@ vertex extern grid_rasterizer_data cursor_render(uint vertex_id [[vertex_id]],
         {{ 0,  0}, { 0,  0}, { 0,  0}, { 0,  0}}
     };
 
-    float2 base_translation = uniforms.cell_pixel_size - float2(uniforms.cursor_width);
+    float2 cell_pixel_size = uniforms.cell_pixel_size;
+    cell_pixel_size.x *= uniforms.cursor_cell_width;
+    
+    float2 base_translation = cell_pixel_size - float2(uniforms.cursor_line_width);
     float2 translate = base_translation * translations[instance_id][vertex_id];
     
-    float2 cell_vertex = float2(uniforms.cursor_position.xy) + transforms[vertex_id];
-    float2 pixel_position = (uniforms.cell_pixel_size * cell_vertex) - translate;
+    float2 cell_vertex = float2(uniforms.cursor_position.xy) * uniforms.cell_pixel_size;
+    cell_vertex += (cell_pixel_size * transforms[vertex_id]);
+    
+    float2 pixel_position = (cell_vertex) - translate;
     float2 position = float2(-1, 1) + (pixel_position * uniforms.pixel_size);
     
     grid_rasterizer_data data;
@@ -117,7 +122,10 @@ vertex extern glyph_rasterizer_data glyph_render(uint vertex_id [[vertex_id]],
                             vertex_offset +
                             glyph_position;
     
-    float2 clamped = clamp(pixel_position, float2(0, 0), uniforms.cell_pixel_size);
+    float2 cell_width = uniforms.cell_pixel_size;
+    cell_width.x *= glyphs[instance_id].cell_width;
+    
+    float2 clamped = clamp(pixel_position, float2(0, 0), cell_width);
     
     float2 cell_offset = uniforms.cell_pixel_size * float2(col, row);
     float2 texture_offset = vertex_offset - (pixel_position - clamped);

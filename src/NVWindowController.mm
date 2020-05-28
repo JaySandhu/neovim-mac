@@ -210,7 +210,7 @@ static inline bool isNullRect(const CGRect &rect) {
         lastGridSize = grid->size();
         
         gridView = [[NVGridView alloc] initWithGrid:grid
-                                         fontFamily:font_manager->get("SF Mono", 15)
+                                         fontFamily:font_manager->get("SF Mono", 32)
                                       renderContext:renderContext];
         
         [window setContentSize:gridView.frame.size];

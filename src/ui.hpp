@@ -117,7 +117,8 @@ struct attribute_table {
     
     const attributes* get_entry(size_t hlid) const {
         if (hlid >= table.size()) {
-            return nullptr;
+            // Fallback to default colors
+            return table.data();
         }
         
         return table.data() + hlid;
@@ -208,6 +209,10 @@ struct cell {
                                          attributes::strikethrough;
         
         return static_cast<enum line_attributes>(attrs.flags & mask);
+    }
+    
+    uint32_t cellwidth() const {
+        return (bool)(attrs.flags & attributes::doublewidth) + 1;
     }
 };
 

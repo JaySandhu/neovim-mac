@@ -213,7 +213,9 @@ void ui_state::grid_line(size_t grid_id, size_t row,
         return log_grid_out_of_bounds(grid, "grid_line", row, col);
     }
     
-    cell *cell = grid->get(row, col);
+    cell *rowbegin = grid->get(row, 0);
+    cell *cell = rowbegin + col;
+    
     size_t remaining = grid->width - col;
     cell_update update;
     
@@ -224,14 +226,23 @@ void ui_state::grid_line(size_t grid_id, size_t row,
                                      msg::type_string(object).c_str());
         }
         
-        if (!update.hlattr) {
-            return os_log_error(rpc, "Redraw error: Unknown highlight id - "
-                                     "Event=grid_line");
-        }
-        
         if (update.repeat > remaining) {
             return os_log_error(rpc, "Redraw error: Row overflow - "
                                      "Event=grid_line");
+        }
+        
+        if (update.text.size() == 0) {
+            if (cell == rowbegin) {
+                return;
+            }
+            
+            ui::cell *left = cell - 1;
+            cell->attrs = left->attrs;
+            left->attrs.flags |= attributes::doublewidth;
+            
+            cell += 1;
+            remaining -= 1;
+            continue;
         }
         
         *cell = make_cell(update.text, update.hlattr);
