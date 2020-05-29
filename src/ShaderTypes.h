@@ -39,6 +39,7 @@ struct line_data {
     int16_t ytranslate;
     uint16_t period;
     uint16_t thickness;
+    uint16_t count;
 };
 
 #endif // SHADER_TYPES_H

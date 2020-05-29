@@ -96,10 +96,13 @@ vertex extern line_rasterizer_data line_render(uint vertex_id [[vertex_id]],
     float2 pixel_position = cell_offset + (line_size * transforms[vertex_id]);
     float2 position = float2(-1, 1) + (pixel_position * uniforms.pixel_size);
     
+    float count = line.count + transforms[vertex_id].x;
+    float period = uniforms.cell_pixel_size.x * count / line.period;
+    
     line_rasterizer_data data;
     data.position = float4(position.xy, 0, 1);
     data.color = unpack_unorm4x8_srgb_to_float(line.color);
-    data.period = pixel_position.x * 3.14159265359 / line.period;
+    data.period = select(0.5, period, line.period);
     return data;
 }
 
@@ -140,8 +143,7 @@ vertex extern glyph_rasterizer_data glyph_render(uint vertex_id [[vertex_id]],
 }
 
 fragment float4 fill_line(line_rasterizer_data in [[stage_in]]) {
-    float2 test = float2(1, 0);
-    return float4(in.color.rgb, test[sin(in.period) > 0.5]);
+    return float4(in.color.rgb, select(0.0, 1.0, sinpi(in.period) > 0));
 }
 
 fragment float4 glyph_fill(glyph_rasterizer_data in [[stage_in]],

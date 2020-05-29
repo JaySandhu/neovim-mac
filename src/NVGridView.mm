@@ -327,15 +327,17 @@ static inline line_data make_underline_data(NVGridView *view,
     line_data data;
     data.grid_position = grid_position;
     data.color = color;
-    data.period = UINT16_MAX;
+    data.period = 0;
     data.thickness = view->lineThickness;
     data.ytranslate = view->underlineTranslate;
+    data.count = 0;
     return data;
 }
 
 static inline line_data make_undercurl_data(NVGridView *view,
                                             simd_short2 grid_position,
-                                            ui::rgb_color color) {
+                                            ui::rgb_color color,
+                                            uint16_t count) {
     line_data data;
     data.grid_position = grid_position;
     data.color = color;
@@ -343,7 +345,24 @@ static inline line_data make_undercurl_data(NVGridView *view,
     data.period = 2;
     data.thickness = 2;
     data.ytranslate = view->underlineTranslate;
+    data.count = count;
     return data;
+}
+
+static inline line_data make_undercurl_data(NVGridView *view,
+                                            simd_short2 grid_position,
+                                            ui::rgb_color color,
+                                            ui::cell *cell) {
+    size_t count = 0;
+    ui::cell *rowbegin = cell - grid_position.x;
+    
+    while (cell != rowbegin) {
+        if ((--cell)->line_attributes() & ui::line_attributes::undercurl) {
+            count += 1;
+        }
+    }
+    
+    return make_undercurl_data(view, grid_position, color, count);
 }
 
 static inline line_data make_strikethrough_data(NVGridView *view,
@@ -352,9 +371,10 @@ static inline line_data make_strikethrough_data(NVGridView *view,
     line_data data;
     data.grid_position = grid_position;
     data.color = color;
-    data.period = UINT16_MAX;
+    data.period = 0;
     data.thickness = view->lineThickness;
     data.ytranslate = view->strikethroughTranslate;
+    data.count = 0;
     return data;
 }
 
@@ -406,7 +426,10 @@ static inline line_data make_strikethrough_data(NVGridView *view,
 
     for (size_t row=0; row<grid_height; ++row) {
         ui::cell *cellrow = grid->get(row, 0);
-
+        
+        size_t undercurl_last = grid_width;
+        uint16_t undercurl_count = 0;
+        
         for (size_t col=0; col<grid_width; ++col) {
             ui::cell *cell = cellrow + col;
             ui::line_attributes line_attrs = cell->line_attributes();
@@ -416,7 +439,14 @@ static inline line_data make_strikethrough_data(NVGridView *view,
                 ui::rgb_color color = cell->special();
 
                 if (line_attrs & ui::line_attributes::undercurl) {
-                    lines.push_back(make_undercurl_data(self, gridpos, color));
+                    if (undercurl_last + 1 == col) {
+                        undercurl_count += 1;
+                    } else {
+                        undercurl_count = 0;
+                    }
+                    
+                    undercurl_last = col;
+                    lines.push_back(make_undercurl_data(self, gridpos, color, undercurl_count));
                 } else if (line_attrs & ui::line_attributes::underline) {
                     lines.push_back(make_underline_data(self, gridpos, color));
                 }
@@ -552,7 +582,7 @@ static inline line_data make_strikethrough_data(NVGridView *view,
                 ui::rgb_color color = cursor_cell->special();
 
                 if (attrs & ui::line_attributes::undercurl) {
-                    *cursor_line++ = make_undercurl_data(self, cursor_gridpos, color);
+                    *cursor_line++ = make_undercurl_data(self, cursor_gridpos, color, cursor_cell);
                     count += 1;
                 } else if (attrs & ui::line_attributes::underline) {
                     *cursor_line++ = make_underline_data(self, cursor_gridpos, color);
