@@ -22,7 +22,9 @@ NS_ASSUME_NONNULL_BEGIN
                renderContext:(NVRenderContext *)renderContext;
 
 - (void)setGrid:(ui::grid*)grid;
+
 - (void)setFont:(font_family)font;
+- (font_family*)getFont;
 
 - (NSSize)getCellSize;
 

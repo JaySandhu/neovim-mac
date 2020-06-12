@@ -17,9 +17,16 @@ os_log_t rpc;
     NVRenderContext *sharedRenderContext;
 }
 
+- (void)applicationWillFinishLaunching:(NSNotification *)notification {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults setBool:YES forKey:@"NSDisabledDictationMenuItem"];
+    [defaults setBool:YES forKey:@"NSDisabledCharacterPaletteMenuItem"];
+}
+
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
-    rpc = os_log_create("io.github.jaysandhu.neovim-mac", "RPC");
     signal(SIGPIPE, SIG_IGN);
+    
+    rpc = os_log_create("io.github.jaysandhu.neovim-mac", "RPC");
     
     NSError *error = nil;
     sharedRenderContext = [[NVRenderContext alloc] initWithError:&error];
@@ -33,7 +40,57 @@ os_log_t rpc;
     [controller connect:@"/users/jay/pipe"];
 }
 
-- (void)applicationWillTerminate:(NSNotification *)aNotification {
+- (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender {
+    if (![NVWindowController modifiedBuffers]) {
+        return NSTerminateNow;
+    }
+
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.alertStyle = NSAlertStyleWarning;
+    alert.messageText = @"Quit without saving?";
+    alert.informativeText = @"There are modified buffers, if you quit now "
+                             "all changes will be lost. Quit anyway?";
+     
+    [alert addButtonWithTitle:@"Quit"];
+    [alert addButtonWithTitle:@"Cancel"];
+    
+    NSModalResponse response = [alert runModal];
+    
+    if (response == NSAlertFirstButtonReturn) {
+        return NSTerminateNow;
+    } else {
+        return NSTerminateCancel;
+    }
+}
+
+- (IBAction)closeAllWindows:(id)sender {
+    for (NSWindow *window in [[NSApplication sharedApplication] windows]) {
+        [[window windowController] close];
+    }
+}
+
+- (IBAction)newDocument:(id)sender {
+    [[[NVWindowController alloc] initWithRenderContext:sharedRenderContext] spawn];
+}
+
+- (IBAction)newTab:(id)sender {
+    [[[NVWindowController alloc] initWithRenderContext:sharedRenderContext] spawn];
+}
+
+- (void)openDocument:(id)sender {
+    NSOpenPanel *panel = [[NSOpenPanel alloc] init];
+    panel.canChooseFiles = YES;
+    panel.canChooseDirectories = YES;
+    panel.allowsMultipleSelection = YES;
+    
+    NSModalResponse response = [panel runModal];
+    
+    if (response != NSModalResponseOK) {
+        return;
+    }
+    
+    NVWindowController *controller = [[NVWindowController alloc] initWithRenderContext:sharedRenderContext];
+    [controller spawnOpenFiles:[panel URLs]];
 }
 
 @end

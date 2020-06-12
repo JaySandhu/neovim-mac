@@ -10,9 +10,10 @@
 #include <CoreText/CoreText.h>
 #include "font.hpp"
 
-font_family::font_family(std::string_view name, CGFloat size) {
+font_family::font_family(std::string_view name, CGFloat size, size_t font_index) {
     const CTFontSymbolicTraits mask = kCTFontBoldTrait | kCTFontItalicTrait;
     
+    index = font_index;
     arc_ptr cfname = CFStringCreateWithBytes(nullptr, (UInt8*)name.data(),
                                              name.size(), kCFStringEncodingUTF8, false);
     
@@ -27,6 +28,14 @@ font_family::font_family(std::string_view name, CGFloat size) {
     
     fonts[(size_t)ui::font_attributes::bold_italic] =
         CTFontCreateCopyWithSymbolicTraits(regular(), size, nullptr, mask, mask);
+}
+
+font_family::font_family(const font_family &family, CGFloat size, size_t font_index) {
+    for (int i=0; i<4; ++i) {
+        fonts[i] = CTFontCreateCopyWithAttributes(family.fonts[i].get(), size, nullptr, nullptr);
+    }
+    
+    index = font_index;
 }
 
 CGFloat font_family::width() const {
@@ -51,7 +60,22 @@ font_family font_manager::get(std::string_view name, CGFloat size) {
         }
     }
     
-    font_entry &back = used_fonts.emplace_back(name, size);
+    size_t index = used_fonts.size();
+    font_entry &back = used_fonts.emplace_back(name, size, index);
+    return back.font;
+}
+
+font_family font_manager::get_resized(const font_family &font, CGFloat new_size) {
+    const std::string &name = used_fonts[font.index].name;
+    
+    for (const font_entry &entry : used_fonts) {
+        if (entry.name == name && entry.size == new_size) {
+            return entry.font;
+        }
+    }
+    
+    size_t index = used_fonts.size();
+    font_entry &back = used_fonts.emplace_back(name, new_size, font, index);
     return back.font;
 }
 

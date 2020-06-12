@@ -101,13 +101,19 @@ enum MouseButton {
     MouseButtonOther
 };
 
+enum WindowPosition {
+    WindowPositionOrigin,
+    WindowPositionCenter,
+    WindowPositionCascade
+};
+
 static inline std::string_view buttonName(MouseButton button) {
     static constexpr std::string_view names[] = {
         "left",
         "right",
         "middle"
     };
-    
+
     return names[button];
 }
 
@@ -116,22 +122,27 @@ static inline std::string_view buttonName(MouseButton button) {
     NVWindowController *windowIsOpen;
     NVWindowController *processIsAlive;
     NVGridView *gridView;
-    
+
     neovim nvim;
     font_manager *font_manager;
     ui::ui_state *ui_controller;
-    
+
     ui::grid_size lastGridSize;
     ui::grid_point lastMouseLocation[3];
     CGFloat scrollingDeltaX;
     CGFloat scrollingDeltaY;
-    
+
+    NSPoint origin;
+    WindowPosition windowPosition;
+
     uint64_t isLiveResizing;
 }
 
-- (instancetype)initWithRenderContext:(NVRenderContext *)renderContext {
+- (instancetype)initWithRenderContext:(NVRenderContext *)renderContext
+                            gridWidth:(size_t)width
+                           gridHeight:(size_t)height {
     NSWindow *window = [[NSWindow alloc] init];
-    
+
     [window setStyleMask:NSWindowStyleMaskTitled                |
                          NSWindowStyleMaskClosable              |
                          NSWindowStyleMaskMiniaturizable        |
@@ -148,6 +159,49 @@ static inline std::string_view buttonName(MouseButton button) {
 
     nvim.set_controller(self);
     ui_controller = nvim.ui_state();
+
+    lastGridSize.width = width;
+    lastGridSize.height = height;
+    return self;
+}
+
+- (instancetype)initWithRenderContext:(NVRenderContext *)renderContext {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSString *savedFrameString = [defaults valueForKey:@"NVWindowControllerFrameSave"];
+
+    if (savedFrameString) {
+        NSRect savedFrame = NSRectFromString(savedFrameString);
+
+        self = [self initWithRenderContext:renderContext
+                                 gridWidth:savedFrame.size.width
+                                gridHeight:savedFrame.size.height];
+
+        origin = savedFrame.origin;
+        windowPosition = WindowPositionOrigin;
+    } else {
+        self = [self initWithRenderContext:renderContext
+                                 gridWidth:80
+                                gridHeight:24];
+
+        windowPosition = WindowPositionCenter;
+    }
+
+    return self;
+}
+
+- (instancetype)initWithNVWindowController:(NVWindowController *)controller {
+    self = [self initWithRenderContext:controller->renderContext
+                             gridWidth:controller->lastGridSize.width
+                            gridHeight:controller->lastGridSize.height];
+
+    NSWindow *window = [controller window];
+    NSRect frame = [window frame];
+
+    NSPoint topLeft = CGPointMake(frame.origin.x,
+                                  frame.origin.y + frame.size.height);
+    
+    origin = [window cascadeTopLeftFromPoint:topLeft];
+    windowPosition = WindowPositionCascade;
     return self;
 }
 
@@ -166,6 +220,53 @@ static inline std::string_view buttonName(MouseButton button) {
     return NO;
 }
 
++ (NSArray<NVWindowController*>*)windows {
+    NSArray *windows = [[NSApplication sharedApplication] windows];
+    NSMutableArray *neovimWindows = [NSMutableArray arrayWithCapacity:windows.count];
+    
+    Class nvController = [NVWindowController class];
+    
+    for (NSWindow *window in windows) {
+        NSWindowController *controller = [window windowController];
+        
+        if (controller && [controller isKindOfClass:nvController]) {
+            [neovimWindows addObject:controller];
+        }
+    }
+    
+    return neovimWindows;
+}
+
++ (BOOL)modifiedBuffers {
+    NSArray<NVWindowController*> *windows = [NVWindowController windows];
+    NSUInteger windowsCount = [windows count];
+    
+    if (!windowsCount) {
+        return NO;
+    }
+    
+    dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 250 * NSEC_PER_MSEC);
+    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+    std::atomic<unsigned long> waiting = windowsCount;
+    BOOL unsaved = NO;
+    
+    for (NVWindowController *win in windows) {
+        win->nvim.eval("len(filter(map(getbufinfo(), 'v:val.changed'), 'v:val'))", timeout,
+                       [&](const msg::object &error, const msg::object &result, bool timed_out) {
+            if (timed_out || !result.is<msg::integer>() || result.get<msg::integer>() != 0) {
+                unsaved = YES;
+            }
+            
+            if (--waiting == 0) {
+                dispatch_semaphore_signal(semaphore);
+            }
+        });
+    }
+    
+    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+    return unsaved;
+}
+
 - (void)close {
     if (windowIsOpen) {
         [super close];
@@ -180,70 +281,113 @@ static inline std::string_view buttonName(MouseButton button) {
     NSRect rect = [self.window frame];
     rect.size.width = lastGridSize.width;
     rect.size.height = lastGridSize.height;
-    
+
     NSString *stringRect = NSStringFromRect(rect);
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     [defaults setValue:stringRect forKey:@"NVWindowControllerFrameSave"];
 }
 
-- (NSRect)loadFrame {
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    NSString *frameSave = [defaults valueForKey:@"NVWindowControllerFrameSave"];
+- (void)neovimDidResize {
+    NSWindow *window = [self window];
+
+    NSRect windowRect = [window frame];
+    NSRect screenRect = [[window screen] visibleFrame];
+    NSSize cellSize = [gridView getCellSize];
+
+    CGFloat borderHeight = windowRect.size.height - window.contentView.frame.size.height;
+    size_t maxGridHeight = (screenRect.size.height - borderHeight) / cellSize.height;
+    size_t maxGridWidth = screenRect.size.width / cellSize.width;
     
-    if (frameSave) {
-        return NSRectFromString(frameSave);
-    } else {
-        return CGRectNull;
+    size_t gridWidth = std::min(lastGridSize.width, maxGridWidth);
+    size_t gridHeight = std::min(lastGridSize.height, maxGridHeight);
+    
+    NSSize contentSize = CGSizeMake(gridWidth * cellSize.width,
+                                    gridHeight * cellSize.height);
+    
+    [window setContentSize:contentSize];
+    windowRect = [window frame];
+    
+    CGFloat maxX = screenRect.origin.x + (screenRect.size.width - windowRect.size.width);
+    
+    NSPoint origin = NSMakePoint(std::min(windowRect.origin.x, maxX),
+                                 std::max(windowRect.origin.y, screenRect.origin.y));
+    
+    [window setFrameOrigin:origin];
+    [self saveFrame];
+    
+    if (lastGridSize.width != gridWidth && lastGridSize.height != gridHeight) {
+        nvim.try_resize(gridWidth, gridHeight);
+    } else if (lastGridSize.width != gridWidth) {
+        nvim.try_resize(gridWidth, lastGridSize.height);
+    } else if (lastGridSize.height != gridHeight) {
+        nvim.try_resize(lastGridSize.width, gridHeight);
     }
 }
 
-static inline bool isNullRect(const CGRect &rect) {
-    return memcmp(&rect, &CGRectNull, sizeof(CGRect)) == 0;
+- (void)positionWindow:(NSWindow *)window {
+    switch (windowPosition) {
+        case WindowPositionOrigin:
+            [window setFrameOrigin:origin];
+            break;
+
+        case WindowPositionCenter:
+            [window center];
+            break;
+
+        case WindowPositionCascade:
+            [window setFrameTopLeftPoint:origin];
+            break;
+    }
+    
+    [self neovimDidResize];
+}
+
+- (void)cellSizeDidChange {
+    NSWindow *window = [self window];
+    NSSize cellSize = [gridView getCellSize];
+    
+    [window setResizeIncrements:cellSize];
+    [window setContentMinSize:CGSizeMake(cellSize.width * 12, cellSize.height * 3)];
 }
 
 - (void)redraw {
     ui::grid *grid = ui_controller->get_global_grid();
 
     if (!gridView) {
-        [self showWindow:nil];
-        NSWindow *window = [self window];
         lastGridSize = grid->size();
-        
+
         gridView = [[NVGridView alloc] initWithGrid:grid
-                                         fontFamily:font_manager->get("SF Mono", 32)
+                                         fontFamily:font_manager->get("SF Mono", 15)
                                       renderContext:renderContext];
-        
-        [window setContentSize:gridView.frame.size];
+
+        NSWindow *window = [self window];
         [window setContentView:gridView];
-        [window setResizeIncrements:[gridView getCellSize]];
         [window makeFirstResponder:self];
-    
-        NSRect savedRect = [self loadFrame];
-        
-        if (isNullRect(savedRect)) {
-            [window center];
-        } else {
-            [window setFrameOrigin:savedRect.origin];
-        }
-        
-        [gridView setNeedsDisplay:YES];
+        [window setAnimationBehavior:NSWindowAnimationBehaviorDocumentWindow];
+
+        [self cellSizeDidChange];
+        [self positionWindow:window];
+        [self showWindow:nil];
+
         return;
     }
-    
+
     [gridView setGrid:grid];
     [gridView setNeedsDisplay:YES];
-    
     ui::grid_size gridSize = grid->size();
 
     if (gridSize != lastGridSize) {
         lastGridSize = gridSize;
-        
+
         if (!isLiveResizing) {
-            NSSize frameSize = [gridView desiredFrameSize];
-            [self.window setContentSize:frameSize];
-            [self saveFrame];
+            [self neovimDidResize];
         }
     }
+}
+
+- (void)attach {
+    processIsAlive = self;
+    nvim.ui_attach(lastGridSize.width, lastGridSize.height);
 }
 
 - (void)connect:(NSString *)addr {
@@ -253,28 +397,42 @@ static inline bool isNullRect(const CGRect &rect) {
         printf("Connect error: %i: %s\n", error, strerror(error));
         return;
     }
-    
-    processIsAlive = self;
-    NSRect savedFrame = [self loadFrame];
-    
-    if (isNullRect(savedFrame)) {
-        nvim.ui_attach(80, 24);
-    } else {
-        nvim.ui_attach(savedFrame.size.width, savedFrame.size.height);
-    }
+
+    [self attach];
 }
 
 - (void)spawn {
     int error = nvim.spawn("/usr/local/bin/nvim",
                            {"nvim", "--embed"}, {});
+
+    if (error) {
+        printf("Spawn error: %i: %s\n", error, strerror(error));
+        return;
+    }
+
+    [self attach];
+}
+
+- (void)spawnOpenFiles:(NSArray<NSURL*>*)urls {
+    std::vector<std::string> args{"nvim", "--embed"};
+    
+    if ([urls count]) {
+        for (NSURL *url in urls) {
+            args.push_back([[url path] UTF8String]);
+        }
+    
+        args.push_back("-c");
+        args.push_back("tab all");
+    }
+    
+    int error = nvim.spawn("/usr/local/bin/nvim", std::move(args), {});
     
     if (error) {
         printf("Spawn error: %i: %s\n", error, strerror(error));
         return;
     }
-    
-    processIsAlive = self;
-    nvim.ui_attach(80, 24);
+
+    [self attach];
 }
 
 - (void)dealloc {
@@ -293,11 +451,11 @@ static inline bool isNullRect(const CGRect &rect) {
         if (!self->isLiveResizing) {
             NSSize currentSize = [self->gridView frame].size;
             NSSize desiredSize = [self->gridView desiredFrameSize];
-            
+
             if (memcmp(&currentSize, &desiredSize, sizeof(NSSize)) != 0) {
                 [self.window setContentSize:desiredSize];
             }
-            
+
             [self saveFrame];
         }
     });
@@ -310,7 +468,7 @@ static inline bool isNullRect(const CGRect &rect) {
 - (void)windowDidResize:(NSNotification *)notification {
     if (isLiveResizing) {
         ui::grid_size size = [gridView desiredGridSize];
-        nvim.try_resize((int)size.width, (int)size.height);
+        nvim.try_resize(size.width, size.height);
     }
 }
 
@@ -345,7 +503,7 @@ public:
             push_back('M');
         }
     }
-    
+
     constexpr size_t max_size() const {
         return sizeof(buffer);
     }
@@ -373,11 +531,11 @@ static void namedKeyDown(neovim &nvim, NSEventModifierFlags flags, std::string_v
     }
 
     input_modifiers modifiers = input_modifiers(flags);
-    
+
     char inputbuff[64] = {'<'};
     memcmp(inputbuff + 1,  modifiers.data(), modifiers.max_size());
     memcmp(inputbuff + 1 + modifiers.size(), keyname.data() + 1, keyname.size() - 1);
-    
+
     size_t inputsize = modifiers.size() + keyname.size() - 1;
     nvim.input(std::string_view(inputbuff, inputsize));
 }
@@ -391,12 +549,12 @@ static void keyDownIgnoreModifiers(neovim &nvim, NSEventModifierFlags flags, NSE
     if (!charlength) {
         return;
     }
-    
+
     if (charlength == 1 && *characters == '<') {
         namedKeyDown(nvim, flags & ~NSEventModifierFlagShift, "<lt>");
         return;
     }
-    
+
     input_modifiers modifiers = input_modifiers(flags & ~NSEventModifierFlagShift);
 
     if (modifiers.size() == 0) {
@@ -407,13 +565,12 @@ static void keyDownIgnoreModifiers(neovim &nvim, NSEventModifierFlags flags, NSE
     size_t inputsize = modifiers.size() + charlength + 2;
 
     if (inputsize <= 64) {
-        char inputbuff[64];
-        inputbuff[0] = '<';
-        inputbuff[inputsize - 1] = '>';
-        
+        char inputbuff[64] = {'<'};
+
         memcpy(inputbuff + 1,  modifiers.data(), modifiers.max_size());
         memcpy(inputbuff + 1 + modifiers.size(), characters, charlength);
-        
+        inputbuff[inputsize - 1] = '>';
+
         nvim.input(std::string_view(inputbuff, inputsize));
         return;
     }
@@ -494,7 +651,7 @@ static void keyDownIgnoreModifiers(neovim &nvim, NSEventModifierFlags flags, NSE
 - (void)mouseDown:(NSEvent *)event button:(MouseButton)button {
     ui::grid_point location = [gridView cellLocation:event.locationInWindow];
     input_modifiers modifiers = input_modifiers(event.modifierFlags);
-    
+
     nvim.input_mouse(buttonName(button), "press", modifiers, location.row, location.column);
     lastMouseLocation[button] = location;
 }
@@ -502,7 +659,7 @@ static void keyDownIgnoreModifiers(neovim &nvim, NSEventModifierFlags flags, NSE
 - (void)mouseDragged:(NSEvent *)event button:(MouseButton)button {
     ui::grid_point location = [gridView cellLocation:event.locationInWindow];
     ui::grid_point &lastLocation = lastMouseLocation[button];
-    
+
     if (location != lastLocation) {
         input_modifiers modifiers = input_modifiers(event.modifierFlags);
         nvim.input_mouse(buttonName(button), "drag", modifiers, location.row, location.column);
@@ -513,7 +670,7 @@ static void keyDownIgnoreModifiers(neovim &nvim, NSEventModifierFlags flags, NSE
 - (void)mouseUp:(NSEvent *)event button:(MouseButton)button {
     ui::grid_point location = [gridView cellLocation:event.locationInWindow];
     input_modifiers modifiers = input_modifiers(event.modifierFlags);
-    
+
     nvim.input_mouse(buttonName(button), "release", modifiers, location.row, location.column);
 }
 
@@ -563,14 +720,14 @@ static void scrollEvent(neovim &nvim, size_t count, std::string_view direction,
 - (void)scrollWheel:(NSEvent *)event {
     CGFloat deltaX = [event scrollingDeltaX];
     CGFloat deltaY = [event scrollingDeltaY];
-    
+
     input_modifiers modifiers = input_modifiers([event modifierFlags]);
     ui::grid_point location = [gridView cellLocation:event.locationInWindow];
-    
+
     if ([event hasPreciseScrollingDeltas]) {
         CGSize cellSize = [gridView getCellSize];
         NSEventPhase phase = [event phase];
-        
+
         if (phase == NSEventPhaseBegan) {
             scrollingDeltaX = 0;
             scrollingDeltaY = 0;
@@ -578,25 +735,445 @@ static void scrollEvent(neovim &nvim, size_t count, std::string_view direction,
 
         scrollingDeltaX += deltaX;
         scrollingDeltaY += deltaY;
-        
+
         deltaY = floor(scrollingDeltaY / cellSize.height);
         scrollingDeltaY -= (deltaY * cellSize.height);
-        
+
         deltaX = floor(scrollingDeltaX / cellSize.width);
         scrollingDeltaX -= (deltaX * cellSize.width);
     }
-            
+
     if (deltaY > 0) {
         scrollEvent(nvim, deltaY, "up", modifiers, location);
     } else if (deltaY < 0) {
         scrollEvent(nvim, -deltaY, "down", modifiers, location);
     }
-    
+
     if (deltaX > 0) {
         scrollEvent(nvim, deltaX, "left", modifiers, location);
     } else if (deltaX < 0) {
         scrollEvent(nvim, -deltaX, "right", modifiers, location);
     }
+}
+
+static bool is_error(const msg::object &error, std::string_view error_string) {
+    if (error.is<msg::array>()) {
+        msg::array array = error.get<msg::array>();
+
+        if (array.size() == 2 &&
+            array[1].is<msg::string>() &&
+            array[1].get<msg::string>() == error_string) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+std::string mode_string(neovim_mode mode) {
+    char buffer[9] = {'u', 'n'};
+    buffer[8] = 0;
+
+    memcpy(buffer, &mode, 8);
+    return std::string(buffer);
+}
+
+static inline bool is_ex_mode(neovim_mode mode) {
+    return mode == neovim_mode::ex_mode ||
+           mode == neovim_mode::ex_mode_vim;
+}
+
+static inline bool is_prompt(neovim_mode mode) {
+    const char *bytes = reinterpret_cast<const char*>(&mode);
+    return bytes[0] == 'r';
+}
+
+static inline bool is_visual_mode(neovim_mode mode) {
+    return mode == neovim_mode::visual_block ||
+           mode == neovim_mode::visual_char  ||
+           mode == neovim_mode::visual_line;
+}
+
+static inline bool is_normal_mode(neovim_mode mode) {
+    return mode == neovim_mode::normal                  ||
+           mode == neovim_mode::normal_ctrli_insert     ||
+           mode == neovim_mode::normal_ctrli_replace    ||
+           mode == neovim_mode::normal_ctrli_virtual_replace;
+}
+
+static inline bool is_select_mode(neovim_mode mode) {
+    return mode == neovim_mode::select_block ||
+           mode == neovim_mode::select_char  ||
+           mode == neovim_mode::select_line;
+}
+
+static inline bool is_insert_mode(neovim_mode mode) {
+    return mode == neovim_mode::insert            ||
+           mode == neovim_mode::insert_completion ||
+           mode == neovim_mode::insert_completion_ctrlx;
+}
+
+static inline bool is_replace_mode(neovim_mode mode) {
+    return mode == neovim_mode::replace                  ||
+           mode == neovim_mode::replace_completion       ||
+           mode == neovim_mode::replace_completion_ctrlx ||
+           mode == neovim_mode::replace_virtual;
+}
+
+static inline bool is_command_line_mode(neovim_mode mode) {
+    return mode == neovim_mode::command_line;
+}
+
+static inline bool is_operator_pending(neovim_mode mode) {
+    static constexpr char prefix[2] = {'n', 'o'};
+    return memcmp(&mode, prefix, 2) == 0;
+}
+
+#define CTRL_C "\x03"
+#define CTRL_G "\x07"
+#define CTRL_N "\x0e"
+#define CTRL_O "\x0f"
+#define CTRL_R "\x12"
+#define CTRL_W "\x17"
+#define CTRL_BACKSLASH "\x1c"
+
+- (IBAction)newDocument:(id)sender {
+    [[[NVWindowController alloc] initWithNVWindowController:self] spawn];
+}
+
+- (void)normalCommand:(std::string_view)command {
+    neovim_mode mode = nvim.get_mode();
+
+    if (mode == neovim_mode::unknown || is_ex_mode(mode) || is_prompt(mode)) {
+        return NSBeep();
+    }
+
+    if (mode != neovim_mode::normal) {
+        nvim.feedkeys(CTRL_BACKSLASH CTRL_N);
+    }
+
+    nvim.command(command);
+}
+
+static constexpr std::string_view openTabFunction =
+R"VIMSCRIPT(function! NeovimForMacTabOpen(path) abort
+    if bufnr('$') == 1 && line('$') == 1 && len(bufname(1)) == 0 && len(getline(1)) == 0
+        execute "edit " . path
+        return
+    endif
+
+    let bufnr = bufnr(a:path)
+
+    if bufnr != -1
+        let window_ids = getbufinfo(bufnr)[0]["windows"]
+
+        if len(window_ids) == 0
+            let bufnr = -1
+        endif
+    endif
+
+    if bufnr == -1
+        execute "tabedit " . a:path
+        return
+    endif
+
+    let [tabpage, window] = win_id2tabwin(window_ids[0])
+
+    execute "tabnext " . tabpage
+    execute window . " wincmd w"
+endfunction
+)VIMSCRIPT";
+
+- (IBAction)openDocument:(id)sender {
+    neovim_mode mode = nvim.get_mode();
+
+    if (mode == neovim_mode::unknown || is_ex_mode(mode) || is_prompt(mode)) {
+        return NSBeep();
+    }
+
+    NSOpenPanel *panel = [[NSOpenPanel alloc] init];
+    panel.canChooseFiles = YES;
+    panel.canChooseDirectories = YES;
+    panel.allowsMultipleSelection = YES;
+    
+    NSModalResponse response = [panel runModal];
+    
+    if (response != NSModalResponseOK) {
+        return;
+    }
+        
+    std::string command;
+    command.reserve(2048);
+    command.append(openTabFunction);
+    
+    for (NSURL *url in [panel URLs]) {
+        command.append("call NeovimForMacTabOpen(\"");
+        
+        const char *file = url.path.UTF8String;
+        
+        while (char c = *file++) {
+            if (c == '"') command.push_back('\\');
+            command.push_back(c);
+        }
+        
+        command.append("\")\n");
+    }
+    
+    [self normalCommand:command];
+}
+
+static inline bool canSave(neovim &nvim) {
+    neovim_mode mode = nvim.get_mode();
+    
+    if (mode == neovim_mode::unknown  || is_prompt(mode) ||
+        mode == neovim_mode::terminal || is_ex_mode(mode)) {
+        return false;
+    }
+
+    if (mode == neovim_mode::command_line || is_operator_pending(mode)) {
+        nvim.feedkeys(CTRL_C);
+    }
+    
+    return true;
+}
+
+- (IBAction)saveDocument:(id)sender {
+    if (!canSave(nvim)) {
+        return NSBeep();
+    }
+
+    nvim.command("write", [self](const msg::object &error,
+                                 const msg::object &result, bool timed_out) {
+        if (is_error(error, "Vim(write):E32: No file name")) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self saveDocumentAs:nil];
+            });
+        }
+    });
+}
+
+- (IBAction)saveDocumentAs:(id)sender {
+    if (!canSave(nvim)) {
+        return NSBeep();
+    }
+    
+    NSSavePanel *savePanel = [[NSSavePanel alloc] init];
+
+    [savePanel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse result) {
+        if (result != NSModalResponseOK) {
+            return;
+        }
+        
+        if (canSave(self->nvim)) {
+            return NSBeep();
+        }
+                
+        std::string command("write ");
+        command.append(savePanel.URL.path.UTF8String);
+        
+        self->nvim.command(command);
+    }];
+}
+
+- (IBAction)newTab:(id)sender {
+    [self normalCommand:"tabnew"];
+}
+
+- (IBAction)closeTab:(id)sender {
+    [self normalCommand:"if tabpagenr('$') == 1 | quit | else | tabclose | endif"];
+}
+
+- (IBAction)showHelp:(id)sender {
+    [self normalCommand:"tab help"];
+}
+
+- (IBAction)selectAll:(id)sender {
+    neovim_mode mode = nvim.get_mode();
+
+    switch (mode) {
+        case neovim_mode::normal:
+            nvim.feedkeys("ggVG");
+            break;
+
+        case neovim_mode::command_line:
+        case neovim_mode::operator_pending:
+        case neovim_mode::operator_pending_forced_char:
+        case neovim_mode::operator_pending_forced_line:
+        case neovim_mode::operator_pending_forced_block:
+        case neovim_mode::visual_block:
+        case neovim_mode::visual_char:
+        case neovim_mode::visual_line:
+            nvim.feedkeys(CTRL_C "ggVG");
+            break;
+
+        case neovim_mode::normal_ctrli_insert:
+        case neovim_mode::normal_ctrli_replace:
+        case neovim_mode::normal_ctrli_virtual_replace:
+            nvim.feedkeys("gg" CTRL_O "VG");
+            break;
+
+        case neovim_mode::insert:
+        case neovim_mode::insert_completion:
+        case neovim_mode::insert_completion_ctrlx:
+        case neovim_mode::replace:
+        case neovim_mode::replace_completion:
+        case neovim_mode::replace_completion_ctrlx:
+        case neovim_mode::replace_virtual:
+            nvim.feedkeys(CTRL_O "gg" CTRL_O "VG");
+            break;
+
+        case neovim_mode::select_block:
+        case neovim_mode::select_line:
+        case neovim_mode::select_char:
+            nvim.feedkeys(CTRL_C "gggH" CTRL_O "G");
+
+        default:
+            NSBeep();
+            break;
+    }
+}
+
+- (IBAction)cut:(id)sender {
+    neovim_mode mode = nvim.get_mode();
+
+    if (is_visual_mode(mode)) {
+        nvim.feedkeys("\"+x");
+        return;
+    }
+
+    if (is_select_mode(mode)) {
+        nvim.feedkeys(CTRL_O "\"+x");
+        return;
+    }
+    
+    NSBeep();
+}
+
+- (IBAction)copy:(id)sender {
+    neovim_mode mode = nvim.get_mode();
+
+    if (is_visual_mode(mode)) {
+        nvim.feedkeys("\"+y");
+        return;
+    }
+
+    if (is_select_mode(mode)) {
+        nvim.feedkeys(CTRL_O "\"+ygv" CTRL_G);
+        return;
+    }
+    
+    NSBeep();
+}
+
+- (IBAction)paste:(id)sender {
+    neovim_mode mode = nvim.get_mode();
+
+    if (is_normal_mode(mode)) {
+        nvim.feedkeys("\"+gP");
+        return;
+    }
+    
+    if (is_visual_mode(mode)) {
+        nvim.feedkeys("\"_dP");
+        return;
+    }
+
+    if (is_insert_mode(mode) || is_replace_mode(mode)) {
+        nvim.feedkeys(CTRL_O "\"+gP");
+        return;
+    }
+    
+    if (is_select_mode(mode)) {
+        nvim.feedkeys(CTRL_O "\"_dP");
+        return;
+    }
+
+    if (is_operator_pending(mode)) {
+        nvim.feedkeys(CTRL_C "\"+gP");
+        return;
+    }
+
+    if (is_command_line_mode(mode)) {
+        nvim.feedkeys(CTRL_R "+");
+        return;
+    }
+    
+    if (mode == neovim_mode::terminal) {
+        nvim.feedkeys(CTRL_W "\"+");
+        return;
+    }
+    
+    NSBeep();
+}
+
+- (IBAction)undo:(id)sender {
+    neovim_mode mode = nvim.get_mode();
+
+    if (is_normal_mode(mode)) {
+        nvim.feedkeys("u");
+        return;
+    }
+
+    if (is_insert_mode(mode) || is_replace_mode(mode)) {
+        nvim.feedkeys(CTRL_O "u");
+        return;
+    }
+
+    if (is_command_line_mode(mode) || is_operator_pending(mode) ||
+        is_visual_mode(mode)       || is_select_mode(mode)) {
+        nvim.feedkeys(CTRL_C "u");
+        return;
+    }
+    
+    NSBeep();
+}
+
+- (IBAction)redo:(id)sender {
+    neovim_mode mode = nvim.get_mode();
+
+    if (is_normal_mode(mode)) {
+        nvim.feedkeys(CTRL_R);
+        return;
+    }
+
+    if (is_insert_mode(mode) || is_replace_mode(mode)) {
+        nvim.feedkeys(CTRL_O CTRL_R);
+        return;
+    }
+
+    if (is_command_line_mode(mode) || is_operator_pending(mode) ||
+        is_visual_mode(mode)       || is_select_mode(mode)) {
+        nvim.feedkeys(CTRL_C CTRL_R);
+        return;
+    }
+    
+    NSBeep();
+}
+
+- (IBAction)zoomIn:(id)sender {
+    font_family *font = [gridView getFont];
+    CGFloat size = font->size() + 1;
+    
+    if (size > 72) {
+        return NSBeep();
+    }
+    
+    [gridView setFont:font_manager->get_resized(*font, size)];
+    [self neovimDidResize];
+    [self cellSizeDidChange];
+}
+
+- (IBAction)zoomOut:(id)sender {
+    font_family *font = [gridView getFont];
+    CGFloat size = font->size() - 1;
+    
+    if (size < 6) {
+        return NSBeep();
+    }
+    
+    [gridView setFont:font_manager->get_resized(*font, size)];
+    [self neovimDidResize];
+    [self cellSizeDidChange];
 }
 
 @end

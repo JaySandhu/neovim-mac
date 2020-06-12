@@ -34,11 +34,17 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface NVWindowController : NSWindowController<NSWindowDelegate>
 
++ (NSArray<NVWindowController*>*)windows;
++ (BOOL)modifiedBuffers;
+
 - (instancetype)initWithRenderContext:(NVRenderContext *)renderState;
 
 - (void)shutdown;
 - (void)connect:(NSString *)addr;
+
 - (void)spawn;
+- (void)spawnOpenFiles:(NSArray<NSURL*>*)urls;
+
 - (void)redraw;
 
 @end

@@ -74,11 +74,15 @@ public:
 class font_family {
 private:
     arc_ptr<CTFontRef> fonts[(size_t)ui::font_attributes::bold_italic + 1];
-    size_t font_id;
+    size_t index;
+    
+    font_family(const font_family &font, CGFloat size, size_t font_id);
+    font_family(std::string_view name, CGFloat size, size_t font_id);
     
 public:
+    friend class font_manager;
+    
     font_family() = default;
-    font_family(std::string_view name, CGFloat size);
     
     CTFontRef regular() const {
         return fonts[(size_t)ui::font_attributes::none].get();
@@ -134,14 +138,19 @@ private:
         CGFloat size;
         font_family font;
         
-        explicit font_entry(std::string_view name, CGFloat size):
-            name(name), size(size), font(name, size) {}
+        font_entry(std::string_view name, CGFloat size, size_t index):
+            name(name), size(size), font(name, size, index) {}
+        
+        font_entry(const std::string &name, CGFloat size,
+                   const font_family &font, size_t index):
+            name(name), size(size), font(font, size, index) {}
     };
     
     std::vector<font_entry> used_fonts;
 
 public:
     font_family get(std::string_view name, CGFloat size);
+    font_family get_resized(const font_family &font, CGFloat new_size);
 };
 
 struct glyph_metrics {

@@ -308,6 +308,10 @@ public:
     lineThickness = floor(font.underline_thickness() + 0.5);
 }
 
+- (font_family*)getFont {
+    return &font_family;
+}
+
 static inline glyph_data make_glyph_data(simd_short2 grid_position,
                                          cached_glyph glyph,
                                          uint32_t cell_width) {
