@@ -41,6 +41,7 @@
 /* Begin PBXFileReference section */
 		6904995D24377F2B002C7B95 /* window_controller.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = window_controller.mm; sourceTree = "<group>"; };
 		6904995E24377F2B002C7B95 /* window_controller.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = window_controller.hpp; sourceTree = "<group>"; };
+		690A0C5B2498E0D00047E131 /* unfair_lock.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = unfair_lock.hpp; sourceTree = "<group>"; };
 		69208E292457142600DBB860 /* NVGridView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NVGridView.h; sourceTree = "<group>"; };
 		69208E2A2457142600DBB860 /* NVGridView.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = NVGridView.mm; sourceTree = "<group>"; };
 		69240E16242B9854004E0DE0 /* Neovim.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Neovim.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -132,6 +133,7 @@
 				695BBE9324349ED1007CF9F5 /* spawn.cpp */,
 				695F29C224475B7E0020B613 /* font.hpp */,
 				695F29C124475B7E0020B613 /* font.mm */,
+				690A0C5B2498E0D00047E131 /* unfair_lock.hpp */,
 				69431233243E098B0015C0EA /* ui.hpp */,
 				69431232243E098B0015C0EA /* ui.cpp */,
 				69D42C4B244611AA0006FEF3 /* log.h */,

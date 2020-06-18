@@ -11,13 +11,13 @@
 #define NEOVIM_HPP
 
 #include <dispatch/dispatch.h>
-#include <os/lock.h>
 #include <functional>
 #include <deque>
 #include <string>
 #include <vector>
 
 #include "msgpack.hpp"
+#include "unfair_lock.hpp"
 #include "ui.hpp"
 
 using response_handler = std::function<void(const msg::object&,
@@ -74,27 +74,6 @@ inline neovim_mode make_neovim_mode(std::string_view shortname) {
     memcpy(&val, shortname.data(), std::min(shortname.size(), 8ul));
     return static_cast<neovim_mode>(val);
 }
-
-class unfair_lock {
-private:
-    os_unfair_lock os_lock;
-    
-public:
-    unfair_lock() {
-        os_lock = OS_UNFAIR_LOCK_INIT;
-    }
-    
-    unfair_lock(const unfair_lock&) = delete;
-    unfair_lock& operator=(const unfair_lock&) = delete;
-    
-    void lock() {
-        os_unfair_lock_lock(&os_lock);
-    }
-    
-    void unlock() {
-        os_unfair_lock_unlock(&os_lock);
-    }
-};
 
 class neovim {
 private:
