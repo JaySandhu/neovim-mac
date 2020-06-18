@@ -74,11 +74,7 @@ public:
 class font_family {
 private:
     arc_ptr<CTFontRef> fonts[(size_t)ui::font_attributes::bold_italic + 1];
-    size_t index;
-    
-    font_family(const font_family &font, CGFloat size, size_t font_id);
-    font_family(std::string_view name, CGFloat size, size_t font_id);
-    
+        
 public:
     friend class font_manager;
     
@@ -134,22 +130,25 @@ public:
 class font_manager {
 private:
     struct font_entry {
-        std::string name;
+        arc_ptr<CTFontRef> font;
+        arc_ptr<CFStringRef> name;
         CGFloat size;
-        font_family font;
         
-        font_entry(std::string_view name, CGFloat size, size_t index):
-            name(name), size(size), font(name, size, index) {}
-        
-        font_entry(const std::string &name, CGFloat size,
-                   const font_family &font, size_t index):
-            name(name), size(size), font(font, size, index) {}
+        font_entry(arc_ptr<CTFontRef> font,
+                   arc_ptr<CFStringRef> name,
+                   CGFloat size): font(font), name(name), size(size) {}
     };
     
     std::vector<font_entry> used_fonts;
+    
+    arc_ptr<CTFontRef> get_font(CTFontDescriptorRef descriptor, CGFloat size);
 
 public:
-    font_family get(std::string_view name, CGFloat size);
+    static arc_ptr<CTFontDescriptorRef> make_descriptor(std::string_view name);
+    static arc_ptr<CTFontDescriptorRef> default_descriptor();
+    
+    font_family get(CTFontDescriptorRef descriptor, CGFloat size);
+
     font_family get_resized(const font_family &font, CGFloat new_size);
 };
 

@@ -10,34 +10,6 @@
 #include <CoreText/CoreText.h>
 #include "font.hpp"
 
-font_family::font_family(std::string_view name, CGFloat size, size_t font_index) {
-    const CTFontSymbolicTraits mask = kCTFontBoldTrait | kCTFontItalicTrait;
-    
-    index = font_index;
-    arc_ptr cfname = CFStringCreateWithBytes(nullptr, (UInt8*)name.data(),
-                                             name.size(), kCFStringEncodingUTF8, false);
-    
-    fonts[(size_t)ui::font_attributes::none] =
-        CTFontCreateWithName(cfname.get(), size, nullptr);
-    
-    fonts[(size_t)ui::font_attributes::italic] =
-        CTFontCreateCopyWithSymbolicTraits(regular(), size, nullptr, kCTFontItalicTrait, mask);
-    
-    fonts[(size_t)ui::font_attributes::bold] =
-        CTFontCreateCopyWithSymbolicTraits(regular(), size, nullptr, kCTFontBoldTrait, mask);
-    
-    fonts[(size_t)ui::font_attributes::bold_italic] =
-        CTFontCreateCopyWithSymbolicTraits(regular(), size, nullptr, mask, mask);
-}
-
-font_family::font_family(const font_family &family, CGFloat size, size_t font_index) {
-    for (int i=0; i<4; ++i) {
-        fonts[i] = CTFontCreateCopyWithAttributes(family.fonts[i].get(), size, nullptr, nullptr);
-    }
-    
-    index = font_index;
-}
-
 CGFloat font_family::width() const {
     unichar mchar = 'M';
     CGGlyph mglyph;
@@ -53,30 +25,71 @@ CGFloat font_family::width() const {
     return advance.width;
 }
 
-font_family font_manager::get(std::string_view name, CGFloat size) {
+arc_ptr<CTFontRef> font_manager::get_font(CTFontDescriptorRef descriptor, CGFloat size) {
+    arc_ptr name = (CFStringRef)CTFontDescriptorCopyAttribute(descriptor, kCTFontNameAttribute);
+    
     for (const font_entry &entry : used_fonts) {
-        if (entry.name == name && entry.size == size) {
+        if (entry.size == size && CFEqual(entry.name.get(), name.get())) {
             return entry.font;
         }
     }
     
-    size_t index = used_fonts.size();
-    font_entry &back = used_fonts.emplace_back(name, size, index);
-    return back.font;
+    arc_ptr font = CTFontCreateWithFontDescriptorAndOptions(descriptor, size,
+                                                            nullptr, kCTFontOptionsDefault);
+    
+    used_fonts.emplace_back(font, std::move(name), size);
+    return font;
 }
 
-font_family font_manager::get_resized(const font_family &font, CGFloat new_size) {
-    const std::string &name = used_fonts[font.index].name;
+arc_ptr<CTFontDescriptorRef> font_manager::make_descriptor(std::string_view name) {
+    arc_ptr fontname = CFStringCreateWithBytes(nullptr, (UInt8*)name.data(),
+                                               name.size(), kCFStringEncodingUTF8, 0);
     
-    for (const font_entry &entry : used_fonts) {
-        if (entry.name == name && entry.size == new_size) {
-            return entry.font;
-        }
+    const void *keys[] = {
+        kCTFontNameAttribute,
+    };
+    
+    const void *values[] = {
+        fontname.get(),
+    };
+    
+    arc_ptr attributes = CFDictionaryCreate(nullptr, keys, values, 1,
+                                            &kCFTypeDictionaryKeyCallBacks,
+                                            &kCFTypeDictionaryValueCallBacks);
+    
+    arc_ptr font_descriptor = CTFontDescriptorCreateWithAttributes(attributes.get());
+    return CTFontDescriptorCreateMatchingFontDescriptor(font_descriptor.get(), nullptr);
+}
+
+arc_ptr<CTFontDescriptorRef> font_manager::default_descriptor() {
+    return make_descriptor("Menlo");
+}
+
+font_family font_manager::get(CTFontDescriptorRef descriptor, CGFloat size) {
+    const CTFontSymbolicTraits mask = kCTFontBoldTrait | kCTFontItalicTrait;
+    
+    arc_ptr bold = CTFontDescriptorCreateCopyWithSymbolicTraits(descriptor, kCTFontBoldTrait, mask);
+    arc_ptr italic = CTFontDescriptorCreateCopyWithSymbolicTraits(descriptor, kCTFontItalicTrait, mask);
+    arc_ptr bold_italic = CTFontDescriptorCreateCopyWithSymbolicTraits(descriptor, mask, mask);
+    
+    font_family family;
+    family.fonts[(size_t)ui::font_attributes::none] = get_font(descriptor, size);
+    family.fonts[(size_t)ui::font_attributes::bold] = get_font(bold.get(), size);
+    family.fonts[(size_t)ui::font_attributes::italic] = get_font(italic.get(), size);
+    family.fonts[(size_t)ui::font_attributes::bold_italic] = get_font(bold_italic.get(), size);
+    
+    return family;
+}
+
+font_family font_manager::get_resized(const font_family &family, CGFloat new_size) {
+    font_family resized;
+    
+    for (int i=0; i<4; ++i) {
+        arc_ptr descriptor = CTFontCopyFontDescriptor(family.fonts[i].get());
+        resized.fonts[i] = get_font(descriptor.get(), new_size);
     }
     
-    size_t index = used_fonts.size();
-    font_entry &back = used_fonts.emplace_back(name, new_size, font, index);
-    return back.font;
+    return resized;
 }
 
 glyph_rasterizer::glyph_rasterizer(size_t width, size_t height) {
