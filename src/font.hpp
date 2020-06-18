@@ -29,13 +29,13 @@ public:
 
     arc_ptr(const arc_ptr &other) {
         ptr = other.ptr;
-        CFRetain(ptr);
+        if (ptr) CFRetain(ptr);
     }
 
     arc_ptr& operator=(const arc_ptr &other) {
         if (ptr) CFRelease(ptr);
         ptr = other.ptr;
-        CFRetain(ptr);
+        if (ptr) CFRetain(ptr);
         return *this;
     }
 
