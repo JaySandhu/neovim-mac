@@ -215,6 +215,8 @@ public:
     
     void paste(std::string_view data);
 
+    void error_writeln(std::string_view error);
+    
     neovim_mode get_mode();
 
     void input_mouse(std::string_view button,

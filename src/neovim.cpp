@@ -456,6 +456,10 @@ void neovim::eval(std::string_view expr,
     rpc_request(id, "nvim_eval", expr);
 }
 
+void neovim::error_writeln(std::string_view error) {
+    rpc_request(null_msgid, "nvim_err_writeln", error);
+}
+
 void neovim::input_mouse(std::string_view button, std::string_view action,
                          std::string_view modifiers, size_t row, size_t col) {
     rpc_request(null_msgid, "nvim_input_mouse",
