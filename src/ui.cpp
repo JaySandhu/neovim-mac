@@ -28,6 +28,8 @@ template<typename T>
 bool is(const msg::object &object) {
     if constexpr (!std::is_same_v<T, msg::boolean> && std::is_integral_v<T>) {
         return object.is<msg::integer>();
+    } else if constexpr (std::is_same_v<T, msg::object>) {
+        return true;
     } else {
         return object.is<T>();
     }
@@ -37,6 +39,8 @@ template<typename T>
 T get(const msg::object &object) {
     if constexpr (!std::is_same_v<T, msg::boolean> && std::is_integral_v<T>) {
         return object.get<msg::integer>().as<T>();
+    } else if constexpr (std::is_same_v<T, msg::object>) {
+        return object;
     } else {
         return object.get<T>();
     }
@@ -141,8 +145,24 @@ void ui_state::redraw_event(const msg::object &event_object) {
         return apply(this, &ui_state::mode_change, name, args);
     } else if (name == "grid_cursor_goto") {
         return apply(this, &ui_state::grid_cursor_goto, name, args);
-    } else if (name == "mouse_on" || name == "mouse_off") {
-        return; // ignored
+    } else if (name == "set_title") {
+        return apply(this, &ui_state::set_title, name, args);
+    } else if (name == "option_set") {
+        std::lock_guard lock(option_lock);
+        options oldopts = opts;
+        apply(this, &ui_state::set_option, name, args);
+
+        if (opts != oldopts) {
+            window.options_set();
+        }
+        
+        return;
+    } else if (name == "mouse_on"   ||
+               name == "mouse_off"  ||
+               name == "set_icon"   ||
+               name == "hl_group_set") {
+        // ignored
+        return;
     }
     
     os_log_info(rpc, "Redraw info: Unhandled event - Name=%.*s Args=%s",
@@ -553,6 +573,132 @@ void ui_state::mode_change(msg::string name, size_t index) {
     }
     
     writing->cursor_attrs = mode_info_table[index].cursor_attrs;
+}
+
+void ui_state::set_title(msg::string new_title) {
+    {
+        std::lock_guard lock(option_lock);
+        title = new_title;
+    }
+
+    window.title_set();
+}
+
+static guifont make_guifont(std::string_view fontstr, double default_size) {
+    size_t index = fontstr.size();
+    size_t multiply = 1;
+    size_t size = 0;
+    
+    while (index) {
+        index -= 1;
+        char digit = fontstr[index];
+        
+        if (isdigit(digit)) {
+            size = size + (multiply * (digit - '0'));
+            multiply *= 10;
+        } else {
+            break;
+        }
+    }
+    
+    if (size && index && fontstr[index] == 'h' && fontstr[index - 1] == ':') {
+        return guifont{fontstr.substr(0, index - 1), (double)size};
+    } else {
+        return guifont{fontstr, default_size};
+    }
+}
+
+static inline size_t find_unescaped_comma(std::string_view string, size_t pos) {
+    for (;;) {
+        pos = string.find(',', pos);
+
+        if (pos == std::string_view::npos) {
+            return pos;
+        }
+        
+        if (pos != 0 && string[pos - 1] != '\\') {
+            return pos;
+        }
+        
+        pos += 1;
+    }
+}
+
+std::vector<guifont> ui_state::get_fonts(double default_size) {
+    std::vector<guifont> fonts;
+    
+    if (!opt_guifont.size()) {
+        return fonts;
+    }
+    
+    std::string_view fontopt = opt_guifont;
+    size_t index = 0;
+
+    for (;;) {
+        size_t pos = find_unescaped_comma(fontopt, index);
+
+        if (pos == std::string_view::npos) {
+            auto fontstr = fontopt.substr(index);
+            fonts.push_back(make_guifont(fontstr, default_size));
+            break;
+        }
+
+        auto fontstr = fontopt.substr(index, pos - index);
+        fonts.push_back(make_guifont(fontstr, default_size));
+        
+        index = fontopt.find_first_not_of(' ', pos + 1);
+
+        if (pos == std::string::npos) {
+            break;
+        }
+    }
+    
+    return fonts;
+}
+
+static inline void set_font_option(std::string &opt_guifont,
+                                   const msg::object &value,
+                                   window_controller &window) {
+    if (!value.is<msg::string>()) {
+        return os_log_info(rpc, "Redraw info: Option type error - "
+                                "Option=guifont Type=%s",
+                                msg::type_string(value).c_str());
+    }
+
+    opt_guifont = value.get<msg::string>();
+    window.font_set();
+}
+
+static inline void set_ext_option(bool &opt, const msg::object &value) {
+    if (!value.is<msg::boolean>()) {
+        return os_log_info(rpc, "Redraw info: Option type error - "
+                                "Option=ext Type=%s",
+                                msg::type_string(value).c_str());
+    }
+
+    opt = value.get<msg::boolean>();
+}
+
+void ui_state::set_option(msg::string name, msg::object value) {
+    if (name == "guifont") {
+        return set_font_option(opt_guifont, value, window);
+    } else if (name == "ext_cmdline")  {
+        return set_ext_option(opts.ext_cmdline, value);
+    } else if (name == "ext_hlstate")  {
+        return set_ext_option(opts.ext_hlstate, value);
+    } else if (name == "ext_linegrid")  {
+        return set_ext_option(opts.ext_linegrid, value);
+    } else if (name == "ext_messages")  {
+        return set_ext_option(opts.ext_messages, value);
+    } else if (name == "ext_multigrid")  {
+        return set_ext_option(opts.ext_multigrid, value);
+    } else if (name == "ext_popupmenu")  {
+        return set_ext_option(opts.ext_popupmenu, value);
+    } else if (name == "ext_tabline")  {
+        return set_ext_option(opts.ext_tabline, value);
+    } else if (name == "ext_termcolors")  {
+        return set_ext_option(opts.ext_termcolors, value);
+    }
 }
 
 } // namespace ui

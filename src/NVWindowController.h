@@ -47,6 +47,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)redraw;
 
+- (void)titleDidChange;
+- (void)fontDidChange;
+- (void)optionsDidChange;
+
 @end
 
 NS_ASSUME_NONNULL_END

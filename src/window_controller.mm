@@ -31,3 +31,21 @@ void window_controller::redraw() {
         [(__bridge NVWindowController*)context redraw];
     });
 }
+
+void window_controller::title_set() {
+    dispatch_async_f(dispatch_get_main_queue(), controller, [](void *context) {
+        [(__bridge NVWindowController*)context titleDidChange];
+    });
+}
+
+void window_controller::font_set() {
+    dispatch_async_f(dispatch_get_main_queue(), controller, [](void *context) {
+        [(__bridge NVWindowController*)context fontDidChange];
+    });
+}
+
+void window_controller::options_set() {
+    dispatch_async_f(dispatch_get_main_queue(), controller, [](void *context) {
+        [(__bridge NVWindowController*)context optionsDidChange];
+    });
+}

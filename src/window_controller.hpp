@@ -27,6 +27,12 @@ public:
     void close();
     void shutdown();
     void redraw();
+    
+    void ui_option_error();
+   
+    void title_set();
+    void font_set();
+    void options_set();
 };
 
 #endif // NEOVIM_CONTROLLER_HPP

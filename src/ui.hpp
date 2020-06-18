@@ -12,6 +12,7 @@
 
 #include <atomic>
 #include "msgpack.hpp"
+#include "unfair_lock.hpp"
 #include "window_controller.hpp"
 
 namespace ui {
@@ -302,6 +303,30 @@ struct grid {
     }
 };
 
+struct options {
+    bool ext_cmdline;
+    bool ext_hlstate;
+    bool ext_linegrid;
+    bool ext_messages;
+    bool ext_multigrid;
+    bool ext_popupmenu;
+    bool ext_tabline;
+    bool ext_termcolors;
+};
+
+inline bool operator==(const options &left, const options &right) {
+    return memcmp(&left, &right, sizeof(options)) == 0;
+}
+
+inline bool operator!=(const options &left, const options &right) {
+    return memcmp(&left, &right, sizeof(options)) != 0;
+}
+
+struct guifont {
+    std::string_view name;
+    double size;
+};
+
 struct ui_state {
     window_controller window;
     attribute_table hltable;
@@ -312,7 +337,12 @@ struct ui_state {
     std::atomic<grid*> complete;
     grid *writing;
     grid *drawing;
-
+    
+    unfair_lock option_lock;
+    std::string title;
+    std::string opt_guifont;
+    options opts;
+    
     ui_state() {
         complete = &triple_buffered[0];
         writing  = &triple_buffered[1];
@@ -352,6 +382,12 @@ struct ui_state {
     void mode_change(msg::string name, size_t index);
     
     void default_colors_set(uint32_t fg, uint32_t bg, uint32_t sp);
+    
+    void set_title(msg::string title);
+    
+    void set_option(msg::string name, msg::object object);
+    
+    std::vector<guifont> get_fonts(double default_size);
 };
 
 } // namespace ui

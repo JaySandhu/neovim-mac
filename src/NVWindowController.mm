@@ -11,6 +11,7 @@
 #import "NVWindowController.h"
 #import "NVGridView.h"
 
+#include <thread>
 #include "neovim.hpp"
 
 static inline MTLRenderPipelineDescriptor* defaultPipelineDescriptor() {
@@ -350,23 +351,61 @@ static inline std::string_view buttonName(MouseButton button) {
     [window setContentMinSize:CGSizeMake(cellSize.width * 12, cellSize.height * 3)];
 }
 
+static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(neovim &nvim,
+                                                                          ui::ui_state *ui_controller,
+                                                                          CGFloat scaleFactor) {
+    std::lock_guard lock(ui_controller->option_lock);
+    
+    CGFloat defaultSize = [NSFont systemFontSize];
+    std::vector<ui::guifont> fonts = ui_controller->get_fonts(defaultSize);
+    
+    for (auto [name, size] : fonts) {
+        arc_ptr descriptor = font_manager::make_descriptor(name);
+        
+        if (descriptor) {
+            return {descriptor, size * scaleFactor};
+        }
+    }
+    
+    if (fonts.size()) {
+        std::string error;
+        error.reserve(512);
+        error.append("Error: Invalid font(s): guifont=");
+        error.append(ui_controller->opt_guifont);
+        
+        nvim.error_writeln(error);
+    }
+    
+    return {};
+}
+
 - (void)redraw {
     ui::grid *grid = ui_controller->get_global_grid();
 
     if (!gridView) {
         lastGridSize = grid->size();
-
-        gridView = [[NVGridView alloc] initWithGrid:grid
-                                         fontFamily:font_manager->get("SF Mono", 15)
-                                      renderContext:renderContext];
-
         NSWindow *window = [self window];
+    
+        CGFloat scaleFactor = [window backingScaleFactor];
+        auto [fontDescriptor, fontSize] = getFontDescriptor(nvim, ui_controller, scaleFactor);
+        
+        if (!fontDescriptor) {
+            fontDescriptor = font_manager::default_descriptor();
+        }
+        
+        font_family font = font_manager->get(fontDescriptor.get(), fontSize);
+        
+        gridView = [[NVGridView alloc] initWithGrid:grid
+                                         fontFamily:font
+                                      renderContext:renderContext];
+        
+
         [window setContentView:gridView];
         [window makeFirstResponder:self];
         [window setAnimationBehavior:NSWindowAnimationBehaviorDocumentWindow];
-
-        [self cellSizeDidChange];
+        
         [self positionWindow:window];
+        [self cellSizeDidChange];
         [self showWindow:nil];
 
         return;
@@ -980,7 +1019,7 @@ static inline bool canSave(neovim &nvim) {
 }
 
 - (IBAction)closeTab:(id)sender {
-    [self normalCommand:"if tabpagenr('$') == 1 | quit | else | tabclose | endif"];
+    [self normalCommand:"quit"];
 }
 
 - (IBAction)showHelp:(id)sender {
@@ -1174,6 +1213,63 @@ static inline bool canSave(neovim &nvim) {
     [gridView setFont:font_manager->get_resized(*font, size)];
     [self neovimDidResize];
     [self cellSizeDidChange];
+}
+
+- (void)titleDidChange {
+    NSString *title = [=](){
+        std::lock_guard lock(ui_controller->option_lock);
+
+        return [[NSString alloc] initWithBytes:ui_controller->title.data()
+                                        length:ui_controller->title.size()
+                                      encoding:NSUTF8StringEncoding];
+    }();
+    
+    [[self window] setTitle:title];
+}
+
+- (void)fontDidChange {
+    if (!windowIsOpen) {
+        return;
+    }
+    
+    CGFloat scaleFactor = [self.window backingScaleFactor];
+    auto [fontDescriptor, fontSize] = getFontDescriptor(nvim, ui_controller, scaleFactor);
+    
+    if (fontDescriptor) {
+        font_family newfont = font_manager->get(fontDescriptor.get(), fontSize);
+        
+        [gridView setFont:newfont];
+        [self neovimDidResize];
+        [self cellSizeDidChange];
+    }
+}
+
+- (void)optionsDidChange {
+    static constexpr ui::options expected = {
+        .ext_cmdline    = false,
+        .ext_hlstate    = false,
+        .ext_linegrid   = true,
+        .ext_messages   = false,
+        .ext_multigrid  = false,
+        .ext_popupmenu  = false,
+        .ext_tabline    = false,
+        .ext_termcolors = false
+    };
+    
+    ui::options opts = [=](){
+        std::lock_guard lock(ui_controller->option_lock);
+        return ui_controller->opts;
+    }();
+    
+    if (opts != expected) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.alertStyle = NSAlertStyleWarning;
+        alert.messageText = @"Unexpected UI options";
+        alert.informativeText = @"Neovim is currently using unsupported UI options. "
+                                 "This may cause rendering defects.";
+        
+        [alert runModal];
+    }
 }
 
 @end
