@@ -128,6 +128,7 @@ static inline std::string_view buttonName(MouseButton button) {
     font_manager *font_manager;
     ui::ui_state *ui_controller;
 
+    dispatch_source_t blinkTimer;
     ui::grid_size lastGridSize;
     ui::grid_point lastMouseLocation[3];
     CGFloat scrollingDeltaX;
@@ -276,6 +277,7 @@ static inline std::string_view buttonName(MouseButton button) {
 
 - (void)shutdown {
     processIsAlive = nil;
+    blinkTimer = nil;
 }
 
 - (void)saveFrame {
@@ -326,6 +328,8 @@ static inline std::string_view buttonName(MouseButton button) {
 }
 
 - (void)positionWindow:(NSWindow *)window {
+    [window setContentSize:[gridView desiredFrameSize]];
+
     switch (windowPosition) {
         case WindowPositionOrigin:
             [window setFrameOrigin:origin];
@@ -339,7 +343,7 @@ static inline std::string_view buttonName(MouseButton button) {
             [window setFrameTopLeftPoint:origin];
             break;
     }
-    
+
     [self neovimDidResize];
 }
 
@@ -398,7 +402,6 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(neovim
         gridView = [[NVGridView alloc] initWithGrid:grid
                                          fontFamily:font
                                       renderContext:renderContext];
-        
 
         [window setContentView:gridView];
         [window makeFirstResponder:self];
@@ -412,7 +415,6 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(neovim
     }
 
     [gridView setGrid:grid];
-    [gridView setNeedsDisplay:YES];
     ui::grid_size gridSize = grid->size();
 
     if (gridSize != lastGridSize) {
@@ -476,6 +478,14 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(neovim
 
 - (void)dealloc {
     puts("NVWindowController dealloced!");
+}
+
+- (void)windowDidBecomeKey:(NSNotification *)notification {
+    [gridView setActive];
+}
+
+- (void)windowDidResignKey:(NSNotification *)notification {
+    [gridView setInactive];
 }
 
 - (void)windowWillStartLiveResize:(NSNotification *)notification {

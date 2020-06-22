@@ -515,7 +515,7 @@ static inline T to(const msg::object &object) {
 
 static mode_info to_mode_info(const attribute_table &hl_table,
                               const msg::map &map) {
-    mode_info info;
+    mode_info info = {};
     
     for (const msg::pair &pair : map) {
         if (!pair.first.is<msg::string>()) {
@@ -542,6 +542,12 @@ static mode_info to_mode_info(const attribute_table &hl_table,
         } else if (name == "attr_id") {
             set_color_attrs(&info.cursor_attrs, hl_table, pair.second);
         }
+    }
+
+    if (info.cursor_attrs.blinkwait &&
+        info.cursor_attrs.blinkoff  &&
+        info.cursor_attrs.blinkon) {
+        info.cursor_attrs.blinks = true;
     }
     
     return info;

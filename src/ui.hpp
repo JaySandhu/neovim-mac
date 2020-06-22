@@ -66,7 +66,7 @@ struct rgb_color {
     }
 };
 
-enum class cursor_shape {
+enum class cursor_shape : uint8_t {
     block,
     horizontal,
     vertical,
@@ -78,6 +78,7 @@ struct cursor_attributes {
     rgb_color background;
     rgb_color special;
     cursor_shape shape;
+    bool blinks;
     uint16_t percentage;
     uint16_t blinkwait;
     uint16_t blinkon;
@@ -248,7 +249,9 @@ struct cursor {
     size_t row;
     size_t col;
     cell *cellptr;
-    
+
+    cursor(): attrs(), row(0), col(0), cellptr(nullptr) {}
+
     cursor(size_t cursor_row, size_t cursor_col,
            cell *cursor_cell, cursor_attributes cursor_attrs) {
         row = cursor_row;
@@ -273,6 +276,34 @@ struct cursor {
 
     ui::cell* cell() const {
         return cellptr;
+    }
+
+    bool blinks() const {
+        return attrs.blinks;
+    }
+
+    uint16_t blinkwait() const {
+        return attrs.blinkwait;
+    }
+
+    uint16_t blinkoff() const {
+        return attrs.blinkoff;
+    }
+
+    uint16_t blinkon() const {
+        return attrs.blinkon;
+    }
+
+    void toggle_off() {
+        attrs.shape = static_cast<cursor_shape>((uint8_t)attrs.shape | 128);
+    }
+
+    void toggle_on() {
+        attrs.shape = static_cast<cursor_shape>((uint8_t)attrs.shape & 127);
+    }
+
+    void toggle() {
+        attrs.shape = static_cast<cursor_shape>((uint8_t)attrs.shape ^ 128);
     }
 };
 

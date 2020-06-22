@@ -183,6 +183,7 @@ public:
     font_family font_family;
     mtlbuffer buffers[3];
     ui::grid *grid;
+    ui::cursor cursor;
 
     simd_float2 cellSize;
     simd_float2 baselineTranslation;
@@ -190,6 +191,10 @@ public:
     int32_t underlineTranslate;
     int32_t strikethroughTranslate;
     uint64_t frameIndex;
+
+    dispatch_source_t blinkTimer;
+    bool blinkTimerActive;
+    bool inactive;
 }
 
 - (instancetype)initWithGrid:(ui::grid *)grid
@@ -212,8 +217,17 @@ public:
     buffers[0] = mtlbuffer(device, 524288);
     buffers[1] = mtlbuffer(device, 524288);
     buffers[2] = mtlbuffer(device, 524288);
+
+    blinkTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
+                                        dispatch_get_main_queue());
+
+    dispatch_set_context(blinkTimer, (__bridge void*)self);
+
+    dispatch_source_set_cancel_handler_f(blinkTimer, [](void*){
+        puts("Timer cancelled");
+    });
     
-    self->grid = grid;
+    [self setGrid:grid];
     [self setFont:font];
     
     NSSize cell = [self getCellSize];
@@ -276,8 +290,79 @@ public:
     [super viewDidChangeBackingProperties];
 }
 
+static void blinkCursorToggleOff(void *context);
+static void blinkCursorToggleOn(void *context);
+
 - (void)setGrid:(ui::grid *)newGrid {
+    [self setNeedsDisplay:YES];
+
     grid = newGrid;
+    cursor = newGrid->cursor();
+
+    if (inactive) {
+        assert(!blinkTimerActive);
+        cursor.attrs.shape = ui::cursor_shape::block_outline;
+    } else if (cursor.blinks()) {
+        auto time = dispatch_time(DISPATCH_TIME_NOW, cursor.blinkwait() * NSEC_PER_MSEC);
+
+        dispatch_source_set_timer(blinkTimer, time, DISPATCH_TIME_FOREVER, 1 * NSEC_PER_MSEC);
+        dispatch_source_set_event_handler_f(blinkTimer, blinkCursorToggleOff);
+
+        if (!blinkTimerActive) {
+            dispatch_resume(blinkTimer);
+            blinkTimerActive = true;
+        }
+    } else if (blinkTimerActive) {
+        dispatch_suspend(blinkTimer);
+        blinkTimerActive = false;
+    }
+}
+
+- (void)setInactive {
+    if (inactive) {
+        return;
+    }
+
+    inactive = true;
+    cursor.attrs.shape = ui::cursor_shape::block_outline;
+
+    if (blinkTimerActive) {
+        dispatch_suspend(blinkTimer);
+        blinkTimerActive = false;
+    }
+
+    [self setNeedsDisplay:YES];
+}
+
+- (void)setActive {
+    if (inactive) {
+        inactive = false;
+        [self setGrid:grid];
+    }
+}
+
+static void blinkCursorToggleOff(void *context) {
+    NVGridView *self = (__bridge NVGridView*)context;
+
+    self->cursor.toggle_off();
+    [self setNeedsDisplay:YES];
+
+    auto time = dispatch_time(DISPATCH_TIME_NOW, self->cursor.blinkoff() * NSEC_PER_MSEC);
+
+    dispatch_source_set_timer(self->blinkTimer, time, DISPATCH_TIME_FOREVER, 1 * NSEC_PER_MSEC);
+    dispatch_source_set_event_handler_f(self->blinkTimer, blinkCursorToggleOn);
+}
+
+static void blinkCursorToggleOn(void *context) {
+    NVGridView *self = (__bridge NVGridView*)context;
+
+    self->cursor.toggle_on();
+    [self setNeedsDisplay:YES];
+
+    auto time = dispatch_time(DISPATCH_TIME_NOW, self->cursor.blinkon() * NSEC_PER_MSEC);
+
+    dispatch_source_set_timer(self->blinkTimer, time, DISPATCH_TIME_FOREVER, 1 * NSEC_PER_MSEC);
+    dispatch_source_set_event_handler_f(self->blinkTimer, blinkCursorToggleOff);
 }
 
 - (void)setFont:(font_family)font {
@@ -404,7 +489,6 @@ static inline line_data make_strikethrough_data(NVGridView *view,
 
     buffer.clear();
     buffer.reserve(reserve_size);
-    ui::cursor cursor = grid->cursor();
 
     uniform_data &data     = buffer.emplace_back_unchecked<uniform_data>();
     data.pixel_size        = pixel_size;
@@ -639,6 +723,14 @@ static inline line_data make_strikethrough_data(NVGridView *view,
     location.column = std::min(row, grid->width);
     
     return location;
+}
+
+- (void)dealloc {
+    if (!blinkTimerActive) {
+        dispatch_resume(blinkTimer);
+    }
+
+    dispatch_source_cancel(blinkTimer);
 }
 
 @end

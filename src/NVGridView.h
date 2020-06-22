@@ -34,6 +34,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (ui::grid_point)cellLocation:(NSPoint)windowLocation;
 
+- (void)setInactive;
+- (void)setActive;
+
 @end
 
 NS_ASSUME_NONNULL_END
