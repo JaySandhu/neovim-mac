@@ -74,7 +74,9 @@ public:
 class font_family {
 private:
     arc_ptr<CTFontRef> fonts[(size_t)ui::font_attributes::bold_italic + 1];
-        
+    CGFloat unscaled_size_;
+    CGFloat scale_factor_;
+
 public:
     friend class font_manager;
     
@@ -102,6 +104,14 @@ public:
     
     CGFloat size() const {
         return CTFontGetSize(regular());
+    }
+
+    CGFloat unscaled_size() const {
+        return unscaled_size_;
+    }
+
+    CGFloat scale_factor() const {
+        return scale_factor_;
     }
     
     CGFloat leading() const {
@@ -147,9 +157,11 @@ public:
     static arc_ptr<CTFontDescriptorRef> make_descriptor(std::string_view name);
     static arc_ptr<CTFontDescriptorRef> default_descriptor();
     
-    font_family get(CTFontDescriptorRef descriptor, CGFloat size);
+    font_family get(CTFontDescriptorRef descriptor,
+                    CGFloat size, CGFloat scale_factor);
 
-    font_family get_resized(const font_family &font, CGFloat new_size);
+    font_family get_resized(const font_family &font,
+                            CGFloat new_size, CGFloat scale_factor);
 };
 
 struct glyph_metrics {
@@ -285,7 +297,7 @@ struct glyph_manager {
                                          key_hash,
                                          key_equal>;
     
-    glyph_rasterizer rasterizer;
+    glyph_rasterizer *rasterizer;
     glyph_texture_cache texture_cache;
     glyph_map map;
     
@@ -299,10 +311,10 @@ struct glyph_manager {
             return iter->second;
         }
 
-        glyph_bitmap glyph = rasterizer.rasterize(font,
-                                                  background,
-                                                  foreground,
-                                                  graphemes);
+        glyph_bitmap glyph = rasterizer->rasterize(font,
+                                                   background,
+                                                   foreground,
+                                                   graphemes);
         
         auto texture_position = texture_cache.add(glyph);
         

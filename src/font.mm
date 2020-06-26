@@ -65,30 +65,39 @@ arc_ptr<CTFontDescriptorRef> font_manager::default_descriptor() {
     return make_descriptor("Menlo");
 }
 
-font_family font_manager::get(CTFontDescriptorRef descriptor, CGFloat size) {
+font_family font_manager::get(CTFontDescriptorRef descriptor,
+                              CGFloat size, CGFloat scale_factor) {
+    const CGFloat scaled_size = size * scale_factor;
     const CTFontSymbolicTraits mask = kCTFontBoldTrait | kCTFontItalicTrait;
-    
+
     arc_ptr bold = CTFontDescriptorCreateCopyWithSymbolicTraits(descriptor, kCTFontBoldTrait, mask);
     arc_ptr italic = CTFontDescriptorCreateCopyWithSymbolicTraits(descriptor, kCTFontItalicTrait, mask);
     arc_ptr bold_italic = CTFontDescriptorCreateCopyWithSymbolicTraits(descriptor, mask, mask);
     
     font_family family;
-    family.fonts[(size_t)ui::font_attributes::none] = get_font(descriptor, size);
-    family.fonts[(size_t)ui::font_attributes::bold] = get_font(bold.get(), size);
-    family.fonts[(size_t)ui::font_attributes::italic] = get_font(italic.get(), size);
-    family.fonts[(size_t)ui::font_attributes::bold_italic] = get_font(bold_italic.get(), size);
-    
+    family.fonts[(size_t)ui::font_attributes::none] = get_font(descriptor, scaled_size);
+    family.fonts[(size_t)ui::font_attributes::bold] = get_font(bold.get(), scaled_size);
+    family.fonts[(size_t)ui::font_attributes::italic] = get_font(italic.get(), scaled_size);
+    family.fonts[(size_t)ui::font_attributes::bold_italic] = get_font(bold_italic.get(), scaled_size);
+    family.scale_factor_ = scale_factor;
+    family.unscaled_size_ = size;
+
     return family;
 }
 
-font_family font_manager::get_resized(const font_family &family, CGFloat new_size) {
+font_family font_manager::get_resized(const font_family &family,
+                                      CGFloat new_size, CGFloat scale_factor) {
+    const CGFloat scaled_size = new_size * scale_factor;
+
     font_family resized;
-    
+    resized.unscaled_size_ = new_size;
+    resized.scale_factor_ = scale_factor;
+
     for (int i=0; i<4; ++i) {
         arc_ptr descriptor = CTFontCopyFontDescriptor(family.fonts[i].get());
-        resized.fonts[i] = get_font(descriptor.get(), new_size);
+        resized.fonts[i] = get_font(descriptor.get(), scaled_size);
     }
-    
+
     return resized;
 }
 
