@@ -17,16 +17,16 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface NVGridView : NSView<CALayerDelegate>
 
-- (instancetype)initWithGrid:(ui::grid *)grid
-                  fontFamily:(font_family)font
-               renderContext:(NVRenderContext *)renderContext;
-
 - (void)setGrid:(ui::grid*)grid;
+- (ui::grid*)grid;
 
 - (void)setFont:(font_family)font;
-- (font_family*)getFont;
+- (font_family*)font;
 
-- (NSSize)getCellSize;
+- (void)setRenderContext:(NVRenderContext *)renderContext;
+- (NVRenderContext *)renderContext;
+
+- (NSSize)cellSize;
 
 - (NSSize)desiredFrameSize;
 

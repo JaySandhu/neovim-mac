@@ -8,13 +8,68 @@
 //
 
 #import "AppDelegate.h"
+#import "NVRenderContext.h"
 #import "NVWindowController.h"
 #import "log.h"
 
 os_log_t rpc;
 
+@interface AppDelegate() <NVMetalDeviceDelegate>
+@end
+
 @implementation AppDelegate {
-    NVRenderContext *sharedRenderContext;
+    NVRenderContextManager *contextManager;
+}
+
+- (void)metalUnavailable {
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.alertStyle = NSAlertStyleCritical;
+    alert.messageText = @"This Mac does not support Metal";
+
+    alert.informativeText = @"No Metal capable devices were found. "
+                             "Neovim-Mac requires a Metal capable device.";
+
+    [alert addButtonWithTitle:@"Quit"];
+    [alert runModal];
+
+    exit(1);
+}
+
+- (void)metalDeviceFailedToInitialize:(NSString *)deviceName {
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.alertStyle = NSAlertStyleWarning;
+    alert.messageText = @"Failed to initialize Metal device";
+
+    alert.informativeText = [NSString stringWithFormat:
+        @"Failed to initialize device: %@. "
+        @"This may cause degraded performance in some circumstances.", deviceName];
+
+    [alert runModal];
+}
+
+- (void)metalDevicesFailedToInitalize:(NSArray<NSString *> *)deviceNames
+                      hasAlternatives:(BOOL)hasAlternatives {
+    NSString *nameList = [deviceNames componentsJoinedByString:@", "];
+
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.alertStyle = NSAlertStyleWarning;
+    alert.messageText = @"Failed to initialize Metal device(s)";
+
+    if (hasAlternatives) {
+        alert.informativeText = [NSString stringWithFormat:
+            @"Failed to initialize device(s): %@. "
+            @"This may cause degraded performance in some circumstances.", nameList];
+
+        [alert runModal];
+    } else {
+        alert.informativeText = [NSString stringWithFormat:
+            @"Failed to initialize device(s): %@.\n"
+            @"No Metal capable device is available.", nameList];
+
+        [alert addButtonWithTitle:@"Quit"];
+        [alert runModal];
+        exit(1);
+    }
 }
 
 - (void)applicationWillFinishLaunching:(NSNotification *)notification {
@@ -25,19 +80,17 @@ os_log_t rpc;
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
     signal(SIGPIPE, SIG_IGN);
-    
     rpc = os_log_create("io.github.jaysandhu.neovim-mac", "RPC");
     
-    NSError *error = nil;
-    sharedRenderContext = [[NVRenderContext alloc] initWithError:&error];
-    
-    if (error) {
-        abort();
-        return;
-    }
-    
-    NVWindowController *controller = [[NVWindowController alloc] initWithRenderContext:sharedRenderContext];
-    [controller connect:@"/users/jay/pipe"];
+    struct NVRenderContextOptions options;
+    options.rasterizerWidth = 512;
+    options.rasterizerHeight = 512;
+    options.texturePageWidth = 1024;
+    options.texturePageHeight = 1024;
+
+    contextManager = [[NVRenderContextManager alloc] initWithOptions:options delegate:self];
+    NVWindowController *controller = [[NVWindowController alloc] initWithContextManager:contextManager];
+    [controller connect:@"/Users/jay/pipe"];
 }
 
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender {
@@ -70,11 +123,11 @@ os_log_t rpc;
 }
 
 - (IBAction)newDocument:(id)sender {
-    [[[NVWindowController alloc] initWithRenderContext:sharedRenderContext] spawn];
+    [[[NVWindowController alloc] initWithContextManager:contextManager] spawn];
 }
 
 - (IBAction)newTab:(id)sender {
-    [[[NVWindowController alloc] initWithRenderContext:sharedRenderContext] spawn];
+    [[[NVWindowController alloc] initWithContextManager:contextManager] spawn];
 }
 
 - (void)openDocument:(id)sender {
@@ -89,7 +142,7 @@ os_log_t rpc;
         return;
     }
     
-    NVWindowController *controller = [[NVWindowController alloc] initWithRenderContext:sharedRenderContext];
+    NVWindowController *controller = [[NVWindowController alloc] initWithContextManager:contextManager];
     [controller spawnOpenFiles:[panel URLs]];
 }
 

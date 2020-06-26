@@ -9,35 +9,16 @@
 
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
-
-struct font_manager;
-struct glyph_manager;
+#import "NVRenderContext.h"
 
 NS_ASSUME_NONNULL_BEGIN
-
-@interface NVRenderContext : NSObject
-
-@property (nonatomic, readonly) id<MTLDevice> device;
-@property (nonatomic, readonly) id<MTLCommandQueue> commandQueue;
-
-@property (nonatomic, readonly) id<MTLRenderPipelineState> gridRenderPipeline;
-@property (nonatomic, readonly) id<MTLRenderPipelineState> glyphRenderPipeline;
-@property (nonatomic, readonly) id<MTLRenderPipelineState> cursorRenderPipeline;
-@property (nonatomic, readonly) id<MTLRenderPipelineState> lineRenderPipeline;
-
-@property (nonatomic, readonly) struct font_manager* fontManager;
-@property (nonatomic, readonly) struct glyph_manager* glyphManager;
-
-- (instancetype)initWithError:(NSError **)error;
-
-@end
 
 @interface NVWindowController : NSWindowController<NSWindowDelegate>
 
 + (NSArray<NVWindowController*>*)windows;
 + (BOOL)modifiedBuffers;
 
-- (instancetype)initWithRenderContext:(NVRenderContext *)renderState;
+- (instancetype)initWithContextManager:(NVRenderContextManager *)contextManager;
 
 - (void)shutdown;
 - (void)connect:(NSString *)addr;

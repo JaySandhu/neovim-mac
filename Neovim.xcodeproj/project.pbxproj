@@ -26,6 +26,7 @@
 		695C0AC0242E27CC00266D89 /* Msgpack.mm in Sources */ = {isa = PBXBuildFile; fileRef = 695C0ABE242E277700266D89 /* Msgpack.mm */; };
 		695F29C324475B7E0020B613 /* font.mm in Sources */ = {isa = PBXBuildFile; fileRef = 695F29C124475B7E0020B613 /* font.mm */; };
 		69E15157244E023900F8AEC7 /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 69E15156244E023900F8AEC7 /* Shaders.metal */; };
+		69FB837D24A0F370008CCED1 /* NVRenderContext.mm in Sources */ = {isa = PBXBuildFile; fileRef = 69FB837C24A0F370008CCED1 /* NVRenderContext.mm */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -78,6 +79,8 @@
 		69D42C4B244611AA0006FEF3 /* log.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = log.h; sourceTree = "<group>"; };
 		69E15154244DFE3400F8AEC7 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 		69E15156244E023900F8AEC7 /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
+		69FB837B24A0F370008CCED1 /* NVRenderContext.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NVRenderContext.h; sourceTree = "<group>"; };
+		69FB837C24A0F370008CCED1 /* NVRenderContext.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = NVRenderContext.mm; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -141,6 +144,8 @@
 				6945A1532434E593005D68ED /* neovim.cpp */,
 				6904995E24377F2B002C7B95 /* window_controller.hpp */,
 				6904995D24377F2B002C7B95 /* window_controller.mm */,
+				69FB837B24A0F370008CCED1 /* NVRenderContext.h */,
+				69FB837C24A0F370008CCED1 /* NVRenderContext.mm */,
 				6955FE6424363AD400008191 /* NVWindowController.h */,
 				6955FE6524363AD400008191 /* NVWindowController.mm */,
 				69208E292457142600DBB860 /* NVGridView.h */,
@@ -294,6 +299,7 @@
 				69E15157244E023900F8AEC7 /* Shaders.metal in Sources */,
 				69240E1B242B9854004E0DE0 /* AppDelegate.m in Sources */,
 				6904995F24377F2B002C7B95 /* window_controller.mm in Sources */,
+				69FB837D24A0F370008CCED1 /* NVRenderContext.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

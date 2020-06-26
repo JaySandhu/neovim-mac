@@ -172,6 +172,7 @@ public:
 @implementation NVGridView {
     CAMetalLayer *metalLayer;
 
+    NVRenderContext *renderContext;
     id<MTLDevice> device;
     id<MTLCommandQueue> commandQueue;
     id<MTLRenderPipelineState> gridRenderPipeline;
@@ -197,26 +198,12 @@ public:
     bool inactive;
 }
 
-- (instancetype)initWithGrid:(ui::grid *)grid
-                  fontFamily:(font_family)font
-               renderContext:(NVRenderContext *)renderContext {
+- (instancetype)init {
     self = [super init];
-    
-    device               = renderContext.device;
-    commandQueue         = renderContext.commandQueue;
-    gridRenderPipeline   = renderContext.gridRenderPipeline;
-    glyphRenderPipeline  = renderContext.glyphRenderPipeline;
-    cursorRenderPipeline = renderContext.cursorRenderPipeline;
-    lineRenderPipeline   = renderContext.lineRenderPipeline;
-    glyph_manager        = renderContext.glyphManager;
 
     self.wantsLayer = YES;
     self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawDuringViewResize;
     self.layerContentsPlacement = NSViewLayerContentsPlacementTopLeft;
-
-    buffers[0] = mtlbuffer(device, 524288);
-    buffers[1] = mtlbuffer(device, 524288);
-    buffers[2] = mtlbuffer(device, 524288);
 
     blinkTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
                                         dispatch_get_main_queue());
@@ -226,22 +213,33 @@ public:
     dispatch_source_set_cancel_handler_f(blinkTimer, [](void*){
         puts("Timer cancelled");
     });
-    
-    [self setGrid:grid];
-    [self setFont:font];
-    
-    NSSize cell = [self getCellSize];
-    NSSize frameSize;
-    frameSize.width = cell.width * grid->width;
-    frameSize.height = cell.height * grid->height;
-    
-    [self setFrameSize:frameSize];
+
     return self;
+}
+
+- (void)setRenderContext:(NVRenderContext *)context {
+    renderContext        = context;
+    device               = context.device;
+    commandQueue         = context.commandQueue;
+    gridRenderPipeline   = context.gridRenderPipeline;
+    glyphRenderPipeline  = context.glyphRenderPipeline;
+    cursorRenderPipeline = context.cursorRenderPipeline;
+    lineRenderPipeline   = context.lineRenderPipeline;
+    glyph_manager        = context.glyphManager;
+
+    metalLayer.device = device;
+
+    buffers[0] = mtlbuffer(device, 524288);
+    buffers[1] = mtlbuffer(device, 524288);
+    buffers[2] = mtlbuffer(device, 524288);
+}
+
+- (NVRenderContext *)renderContext {
+    return renderContext;
 }
 
 - (CALayer*)makeBackingLayer {
     metalLayer = [CAMetalLayer layer];
-    metalLayer.device = device;
     metalLayer.delegate = self;
     metalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm_sRGB;
     metalLayer.allowsNextDrawableTimeout = NO;
@@ -260,7 +258,7 @@ public:
 }
 
 - (NSSize)desiredFrameSize {
-    NSSize cellSize = [self getCellSize];
+    NSSize cellSize = [self cellSize];
     
     NSSize frameSize;
     frameSize.width = cellSize.width * grid->width;
@@ -278,7 +276,7 @@ public:
     return size;
 }
 
-- (NSSize)getCellSize {
+- (NSSize)cellSize {
     NSSize backingCellSize;
     backingCellSize.height = cellSize.y;
     backingCellSize.width = cellSize.x;
@@ -316,6 +314,10 @@ static void blinkCursorToggleOn(void *context);
         dispatch_suspend(blinkTimer);
         blinkTimerActive = false;
     }
+}
+
+- (ui::grid *)grid {
+    return grid;
 }
 
 - (void)setInactive {
@@ -393,8 +395,12 @@ static void blinkCursorToggleOn(void *context) {
     lineThickness = floor(font.underline_thickness() + 0.5);
 }
 
-- (font_family*)getFont {
+- (font_family*)font {
     return &font_family;
+}
+
+- (CGFloat)scaleFactor {
+    return font_family.scale_factor();
 }
 
 static inline glyph_data make_glyph_data(simd_short2 grid_position,
@@ -713,7 +719,7 @@ static inline line_data make_strikethrough_data(NVGridView *view,
 
 - (ui::grid_point)cellLocation:(NSPoint)windowLocation {
     NSPoint viewLocation = [self convertPoint:windowLocation fromView:nil];
-    NSSize cellSize = [self getCellSize];
+    NSSize cellSize = [self cellSize];
 
     size_t row = viewLocation.x / cellSize.width;
     size_t col = viewLocation.y / cellSize.height;

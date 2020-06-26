@@ -14,88 +14,6 @@
 #include <thread>
 #include "neovim.hpp"
 
-static inline MTLRenderPipelineDescriptor* defaultPipelineDescriptor() {
-    MTLRenderPipelineDescriptor *desc = [[MTLRenderPipelineDescriptor alloc] init];
-    desc.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm_sRGB;
-    desc.vertexBuffers[0].mutability = MTLMutabilityImmutable;
-    desc.fragmentBuffers[0].mutability = MTLMutabilityImmutable;
-    return desc;
-}
-
-static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
-    MTLRenderPipelineDescriptor *desc = defaultPipelineDescriptor();
-    desc.colorAttachments[0].blendingEnabled = YES;
-    desc.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
-    desc.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
-    desc.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
-    desc.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorSourceAlpha;
-    desc.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-    desc.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-    return desc;
-}
-
-@implementation NVRenderContext {
-    font_manager font_manager;
-    glyph_manager glyph_manager;
-}
-
-- (instancetype)initWithError:(NSError **)error {
-    *error = nil;
-
-    self = [super init];
-    _device = MTLCreateSystemDefaultDevice();
-    _commandQueue = [_device newCommandQueue];
-
-    id<MTLLibrary> lib = [_device newDefaultLibrary];
-
-    MTLRenderPipelineDescriptor *gridDesc = defaultPipelineDescriptor();
-    gridDesc.label = @"Grid background render pipeline";
-    gridDesc.vertexFunction = [lib newFunctionWithName:@"grid_background"];
-    gridDesc.fragmentFunction = [lib newFunctionWithName:@"fill_background"];
-    _gridRenderPipeline = [_device newRenderPipelineStateWithDescriptor:gridDesc error:error];
-
-    if (*error) return self;
-
-    MTLRenderPipelineDescriptor *glyphDesc = defaultPipelineDescriptor();
-    glyphDesc.label = @"Glyph render pipeline";
-    glyphDesc.vertexFunction = [lib newFunctionWithName:@"glyph_render"];
-    glyphDesc.fragmentFunction = [lib newFunctionWithName:@"glyph_fill"];
-    _glyphRenderPipeline = [_device newRenderPipelineStateWithDescriptor:glyphDesc error:error];
-
-    if (*error) return self;
-
-    MTLRenderPipelineDescriptor *cursorDesc = defaultPipelineDescriptor();
-    cursorDesc.label = @"Cursor render pipeline";
-    cursorDesc.vertexFunction = [lib newFunctionWithName:@"cursor_render"];
-    cursorDesc.fragmentFunction = [lib newFunctionWithName:@"fill_background"];
-    _cursorRenderPipeline = [_device newRenderPipelineStateWithDescriptor:cursorDesc error:error];
-
-    if (*error) return self;
-
-    MTLRenderPipelineDescriptor *lineDesc = blendedPipelineDescriptor();
-    lineDesc.label = @"Line render pipeline";
-    lineDesc.vertexFunction = [lib newFunctionWithName:@"line_render"];
-    lineDesc.fragmentFunction = [lib newFunctionWithName:@"fill_line"];
-    _lineRenderPipeline = [_device newRenderPipelineStateWithDescriptor:lineDesc error:error];
-
-    if (*error) return self;
-
-    glyph_manager.rasterizer = glyph_rasterizer(256, 256);
-    glyph_manager.texture_cache = glyph_texture_cache(_commandQueue, 512, 512);
-
-    return self;
-}
-
-- (glyph_manager*)glyphManager {
-    return &glyph_manager;
-}
-
-- (font_manager*)fontManager {
-    return &font_manager;
-}
-
-@end
-
 enum MouseButton {
     MouseButtonLeft,
     MouseButtonRight,
@@ -119,16 +37,16 @@ static inline std::string_view buttonName(MouseButton button) {
 }
 
 @implementation NVWindowController {
+    NVRenderContextManager *contextManager;
     NVRenderContext *renderContext;
     NVWindowController *windowIsOpen;
     NVWindowController *processIsAlive;
     NVGridView *gridView;
 
     neovim nvim;
-    font_manager *font_manager;
+    font_manager *fontManager;
     ui::ui_state *ui_controller;
 
-    dispatch_source_t blinkTimer;
     ui::grid_size lastGridSize;
     ui::grid_point lastMouseLocation[3];
     CGFloat scrollingDeltaX;
@@ -136,13 +54,12 @@ static inline std::string_view buttonName(MouseButton button) {
 
     NSPoint origin;
     WindowPosition windowPosition;
-
     uint64_t isLiveResizing;
 }
 
-- (instancetype)initWithRenderContext:(NVRenderContext *)renderContext
-                            gridWidth:(size_t)width
-                           gridHeight:(size_t)height {
+- (instancetype)initWithContextManager:(NVRenderContextManager *)contextManager
+                             gridWidth:(size_t)width
+                            gridHeight:(size_t)height {
     NSWindow *window = [[NSWindow alloc] init];
 
     [window setStyleMask:NSWindowStyleMaskTitled                |
@@ -156,8 +73,8 @@ static inline std::string_view buttonName(MouseButton button) {
     [window setWindowController:self];
 
     self = [super initWithWindow:window];
-    self->renderContext = renderContext;
-    self->font_manager = renderContext.fontManager;
+    self->contextManager = contextManager;
+    self->fontManager = contextManager.fontManager;
 
     nvim.set_controller(self);
     ui_controller = nvim.ui_state();
@@ -167,23 +84,23 @@ static inline std::string_view buttonName(MouseButton button) {
     return self;
 }
 
-- (instancetype)initWithRenderContext:(NVRenderContext *)renderContext {
+- (instancetype)initWithContextManager:(NVRenderContextManager *)contextManager {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     NSString *savedFrameString = [defaults valueForKey:@"NVWindowControllerFrameSave"];
 
     if (savedFrameString) {
         NSRect savedFrame = NSRectFromString(savedFrameString);
 
-        self = [self initWithRenderContext:renderContext
-                                 gridWidth:savedFrame.size.width
-                                gridHeight:savedFrame.size.height];
+        self = [self initWithContextManager:contextManager
+                                  gridWidth:savedFrame.size.width
+                                 gridHeight:savedFrame.size.height];
 
         origin = savedFrame.origin;
         windowPosition = WindowPositionOrigin;
     } else {
-        self = [self initWithRenderContext:renderContext
-                                 gridWidth:80
-                                gridHeight:24];
+        self = [self initWithContextManager:contextManager
+                                  gridWidth:80
+                                 gridHeight:24];
 
         windowPosition = WindowPositionCenter;
     }
@@ -192,9 +109,9 @@ static inline std::string_view buttonName(MouseButton button) {
 }
 
 - (instancetype)initWithNVWindowController:(NVWindowController *)controller {
-    self = [self initWithRenderContext:controller->renderContext
-                             gridWidth:controller->lastGridSize.width
-                            gridHeight:controller->lastGridSize.height];
+    self = [self initWithContextManager:controller->contextManager
+                              gridWidth:controller->lastGridSize.width
+                             gridHeight:controller->lastGridSize.height];
 
     NSWindow *window = [controller window];
     NSRect frame = [window frame];
@@ -205,11 +122,6 @@ static inline std::string_view buttonName(MouseButton button) {
     origin = [window cascadeTopLeftFromPoint:topLeft];
     windowPosition = WindowPositionCascade;
     return self;
-}
-
-- (void)showWindow:(id)sender {
-    [super showWindow:sender];
-    windowIsOpen = self;
 }
 
 - (void)windowWillClose:(NSNotification *)notification {
@@ -277,7 +189,6 @@ static inline std::string_view buttonName(MouseButton button) {
 
 - (void)shutdown {
     processIsAlive = nil;
-    blinkTimer = nil;
 }
 
 - (void)saveFrame {
@@ -290,12 +201,22 @@ static inline std::string_view buttonName(MouseButton button) {
     [defaults setValue:stringRect forKey:@"NVWindowControllerFrameSave"];
 }
 
+static inline NSRect visibleScreenRect(NSWindow *window) {
+    NSScreen *screen = [window screen];
+
+    if (screen && ([NSScreen screensHaveSeparateSpaces] || [[NSScreen screens] count] == 1)) {
+        return [screen visibleFrame];
+    }
+
+    return NSRect{NSPoint{-16000, -16000}, NSSize{32000, 32000}};
+}
+
 - (void)neovimDidResize {
     NSWindow *window = [self window];
 
     NSRect windowRect = [window frame];
-    NSRect screenRect = [[window screen] visibleFrame];
-    NSSize cellSize = [gridView getCellSize];
+    NSRect screenRect = visibleScreenRect(window);
+    NSSize cellSize = [gridView cellSize];
 
     CGFloat borderHeight = windowRect.size.height - window.contentView.frame.size.height;
     size_t maxGridHeight = (screenRect.size.height - borderHeight) / cellSize.height;
@@ -344,20 +265,28 @@ static inline std::string_view buttonName(MouseButton button) {
             break;
     }
 
-    [self neovimDidResize];
+    NSRect windowRect = [window frame];
+    NSRect screenRect = visibleScreenRect(window);
+
+    if (windowRect.origin.x >= screenRect.origin.x && windowRect.origin.y >= screenRect.origin.y &&
+        (windowRect.origin.x + windowRect.size.width) < (screenRect.origin.x + screenRect.size.width) &&
+        (windowRect.origin.y + windowRect.size.height) < (screenRect.origin.y + screenRect.size.height)) {
+        [self saveFrame];
+    } else {
+        [self neovimDidResize];
+    }
 }
 
 - (void)cellSizeDidChange {
     NSWindow *window = [self window];
-    NSSize cellSize = [gridView getCellSize];
+    NSSize cellSize = [gridView cellSize];
     
     [window setResizeIncrements:cellSize];
     [window setContentMinSize:CGSizeMake(cellSize.width * 12, cellSize.height * 3)];
 }
 
 static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(neovim &nvim,
-                                                                          ui::ui_state *ui_controller,
-                                                                          CGFloat scaleFactor) {
+                                                                          ui::ui_state *ui_controller) {
     std::lock_guard lock(ui_controller->option_lock);
     
     CGFloat defaultSize = [NSFont systemFontSize];
@@ -367,7 +296,7 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(neovim
         arc_ptr descriptor = font_manager::make_descriptor(name);
         
         if (descriptor) {
-            return {descriptor, size * scaleFactor};
+            return {descriptor, size};
         }
     }
     
@@ -383,39 +312,115 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(neovim
     return {};
 }
 
-- (void)redraw {
-    ui::grid *grid = ui_controller->get_global_grid();
+- (void)handleScreenChanges:(NSNotification *)notification {
+    assert([NSThread isMainThread]);
 
-    if (!gridView) {
-        lastGridSize = grid->size();
-        NSWindow *window = [self window];
-    
-        CGFloat scaleFactor = [window backingScaleFactor];
-        auto [fontDescriptor, fontSize] = getFontDescriptor(nvim, ui_controller, scaleFactor);
-        
-        if (!fontDescriptor) {
-            fontDescriptor = font_manager::default_descriptor();
-        }
-        
-        font_family font = font_manager->get(fontDescriptor.get(), fontSize);
-        
-        gridView = [[NVGridView alloc] initWithGrid:grid
-                                         fontFamily:font
-                                      renderContext:renderContext];
+    NSScreen *screen = [self.window screen];
 
-        [window setContentView:gridView];
-        [window makeFirstResponder:self];
-        [window setAnimationBehavior:NSWindowAnimationBehaviorDocumentWindow];
-        
-        [self positionWindow:window];
-        [self cellSizeDidChange];
-        [self showWindow:nil];
+    NVRenderContext *oldContext = [gridView renderContext];
+    NVRenderContext *newContext = [contextManager renderContextForScreen:screen];
 
+    if (oldContext != newContext) {
+        [gridView setRenderContext:newContext];
+    }
+
+    font_family *oldFont = gridView.font;
+    CGFloat oldScaleFactor = oldFont->scale_factor();
+    CGFloat newScaleFactor = screen.backingScaleFactor;
+
+    if (oldScaleFactor != newScaleFactor) {
+        CGFloat fontSize = oldFont->unscaled_size();
+        gridView.font = fontManager->get_resized(*oldFont, fontSize, newScaleFactor);
+    }
+}
+
+- (void)windowDidChangeScreen:(NSNotification *)notification {
+    if (!windowIsOpen) {
         return;
     }
 
-    [gridView setGrid:grid];
+    [self handleScreenChanges:notification];
+}
+
+static inline NSScreen* screenContainingPoint(NSArray<NSScreen*> *screens, NSPoint point) {
+    for (NSScreen *screen in screens) {
+        NSRect screenRect = [screen frame];
+        CGFloat endX = screenRect.origin.x + screenRect.size.width;
+        CGFloat endY = screenRect.origin.y + screenRect.size.height;
+
+        if ((point.x >= screenRect.origin.x && point.x < endX) ||
+            (point.y >= screenRect.origin.y && point.y < endY)) {
+            return screen;
+        }
+    }
+
+    return nil;
+}
+
+- (void)initialRedraw {
+    NSArray<NSScreen*> *screens = [NSScreen screens];
+    NSScreen *proposedScreen = screenContainingPoint(screens, origin);
+    CGFloat scaleFactor;
+
+    if (proposedScreen) {
+        scaleFactor = [proposedScreen backingScaleFactor];
+        renderContext = [contextManager renderContextForScreen:proposedScreen];
+    } else if ([screens count]) {
+        proposedScreen = screens[0];
+        scaleFactor = [proposedScreen backingScaleFactor];
+        renderContext = [contextManager renderContextForScreen:proposedScreen];
+        windowPosition = WindowPositionCenter;
+        origin = CGPointMake(0, 0);
+    } else {
+        scaleFactor = 1.0f;
+        renderContext = [contextManager defaultRenderContext];
+    }
+
+    auto [fontDescriptor, fontSize] = getFontDescriptor(nvim, ui_controller);
+
+    if (!fontDescriptor) {
+        fontDescriptor = font_manager::default_descriptor();
+    }
+
+    ui::grid *grid = ui_controller->get_global_grid();
+
+    gridView = [[NVGridView alloc] init];
+    gridView.grid = grid;
+    gridView.font = fontManager->get(fontDescriptor.get(), fontSize, scaleFactor);
+
+    NSWindow *window = [self window];
+    [window setContentView:gridView];
+    [window makeFirstResponder:self];
+    [window setAnimationBehavior:NSWindowAnimationBehaviorDocumentWindow];
+
+    [self positionWindow:window];
+    [self cellSizeDidChange];
+    [self showWindow:nil];
+
+    windowIsOpen = self;
+    lastGridSize = grid->size();
+
+    if ([window screen] == proposedScreen) {
+        gridView.renderContext = renderContext;
+    } else {
+        [self handleScreenChanges:nil];
+    }
+
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(handleScreenChanges:)
+                                                 name:NSApplicationDidChangeScreenParametersNotification
+                                               object:nil];
+}
+
+- (void)redraw {
+    if (!gridView) {
+        return [self initialRedraw];
+    }
+
+    ui::grid *grid = ui_controller->get_global_grid();
     ui::grid_size gridSize = grid->size();
+
+    [gridView setGrid:grid];
 
     if (gridSize != lastGridSize) {
         lastGridSize = gridSize;
@@ -774,7 +779,7 @@ static void scrollEvent(neovim &nvim, size_t count, std::string_view direction,
     ui::grid_point location = [gridView cellLocation:event.locationInWindow];
 
     if ([event hasPreciseScrollingDeltas]) {
-        CGSize cellSize = [gridView getCellSize];
+        CGSize cellSize = [gridView cellSize];
         NSEventPhase phase = [event phase];
 
         if (phase == NSEventPhaseBegan) {
@@ -1200,27 +1205,31 @@ static inline bool canSave(neovim &nvim) {
 }
 
 - (IBAction)zoomIn:(id)sender {
-    font_family *font = [gridView getFont];
-    CGFloat size = font->size() + 1;
+    font_family *font = [gridView font];
+    CGFloat size = font->unscaled_size() + 1;
     
     if (size > 72) {
         return NSBeep();
     }
-    
-    [gridView setFont:font_manager->get_resized(*font, size)];
+
+    CGFloat scaleFactor = [self.window backingScaleFactor];
+    [gridView setFont:fontManager->get_resized(*font, size, scaleFactor)];
+
     [self neovimDidResize];
     [self cellSizeDidChange];
 }
 
 - (IBAction)zoomOut:(id)sender {
-    font_family *font = [gridView getFont];
-    CGFloat size = font->size() - 1;
+    font_family *font = [gridView font];
+    CGFloat size = font->unscaled_size() - 1;
     
     if (size < 6) {
         return NSBeep();
     }
     
-    [gridView setFont:font_manager->get_resized(*font, size)];
+    CGFloat scaleFactor = [self.window backingScaleFactor];
+    [gridView setFont:fontManager->get_resized(*font, size, scaleFactor)];
+
     [self neovimDidResize];
     [self cellSizeDidChange];
 }
@@ -1241,12 +1250,12 @@ static inline bool canSave(neovim &nvim) {
     if (!windowIsOpen) {
         return;
     }
-    
-    CGFloat scaleFactor = [self.window backingScaleFactor];
-    auto [fontDescriptor, fontSize] = getFontDescriptor(nvim, ui_controller, scaleFactor);
+
+    auto [fontDescriptor, fontSize] = getFontDescriptor(nvim, ui_controller);
     
     if (fontDescriptor) {
-        font_family newfont = font_manager->get(fontDescriptor.get(), fontSize);
+        CGFloat scaleFactor = [self.window backingScaleFactor];
+        font_family newfont = fontManager->get(fontDescriptor.get(), fontSize, scaleFactor);
         
         [gridView setFont:newfont];
         [self neovimDidResize];
