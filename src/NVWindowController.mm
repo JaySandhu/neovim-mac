@@ -331,6 +331,9 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(neovim
     if (oldScaleFactor != newScaleFactor) {
         CGFloat fontSize = oldFont->unscaled_size();
         gridView.font = fontManager->get_resized(*oldFont, fontSize, newScaleFactor);
+
+        [self neovimDidResize];
+        [self cellSizeDidChange];
     }
 }
 

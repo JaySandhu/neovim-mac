@@ -249,14 +249,6 @@ public:
     return metalLayer;
 }
 
-- (void)setFrameSize:(NSSize)newSize {
-    [super setFrameSize:newSize];
-    
-    // Is this redundant?
-    NSSize scaledSize =  [self convertSizeToBacking:newSize];
-    metalLayer.drawableSize = scaledSize;
-}
-
 - (NSSize)desiredFrameSize {
     NSSize cellSize = [self cellSize];
     
@@ -367,6 +359,11 @@ static void blinkCursorToggleOn(void *context) {
     dispatch_source_set_event_handler_f(self->blinkTimer, blinkCursorToggleOff);
 }
 
+- (void)setFrameSize:(NSSize)newSize {
+    [super setFrameSize:newSize];
+    [metalLayer setDrawableSize:[self convertSizeToBacking:newSize]];
+}
+
 - (void)setFont:(font_family)font {
     font_family = font;
 
@@ -393,6 +390,8 @@ static void blinkCursorToggleOn(void *context) {
 
     strikethroughTranslate = ascent / 3;
     lineThickness = floor(font.underline_thickness() + 0.5);
+
+    [metalLayer setContentsScale:font.scale_factor()];
 }
 
 - (font_family*)font {
