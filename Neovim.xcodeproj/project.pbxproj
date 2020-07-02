@@ -20,7 +20,6 @@
 		69431234243E098B0015C0EA /* ui.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 69431232243E098B0015C0EA /* ui.cpp */; };
 		6945A1552434E593005D68ED /* neovim.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6945A1532434E593005D68ED /* neovim.cpp */; };
 		6955FE6624363AD400008191 /* NVWindowController.mm in Sources */ = {isa = PBXBuildFile; fileRef = 6955FE6524363AD400008191 /* NVWindowController.mm */; };
-		695BBE9524349ED1007CF9F5 /* spawn.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 695BBE9324349ED1007CF9F5 /* spawn.cpp */; };
 		695BBE982434BAAC007CF9F5 /* Spawn.mm in Sources */ = {isa = PBXBuildFile; fileRef = 695BBE962434BA76007CF9F5 /* Spawn.mm */; };
 		695C0ABD242E274800266D89 /* msgpack.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 695C0ABC242E274800266D89 /* msgpack.cpp */; };
 		695C0AC0242E27CC00266D89 /* Msgpack.mm in Sources */ = {isa = PBXBuildFile; fileRef = 695C0ABE242E277700266D89 /* Msgpack.mm */; };
@@ -97,8 +96,6 @@
 		6945BBDE2457282C009ADB03 /* ShaderTypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ShaderTypes.h; sourceTree = "<group>"; };
 		6955FE6424363AD400008191 /* NVWindowController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NVWindowController.h; sourceTree = "<group>"; };
 		6955FE6524363AD400008191 /* NVWindowController.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = NVWindowController.mm; sourceTree = "<group>"; };
-		695BBE9324349ED1007CF9F5 /* spawn.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = spawn.cpp; sourceTree = "<group>"; };
-		695BBE9424349ED1007CF9F5 /* spawn.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = spawn.hpp; sourceTree = "<group>"; };
 		695BBE962434BA76007CF9F5 /* Spawn.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = Spawn.mm; sourceTree = "<group>"; };
 		695C0ABB242E274800266D89 /* msgpack.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = msgpack.hpp; sourceTree = "<group>"; };
 		695C0ABC242E274800266D89 /* msgpack.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = msgpack.cpp; sourceTree = "<group>"; };
@@ -165,8 +162,6 @@
 				693550E7242CBFE500FB0A94 /* circular_buffer.cpp */,
 				695C0ABB242E274800266D89 /* msgpack.hpp */,
 				695C0ABC242E274800266D89 /* msgpack.cpp */,
-				695BBE9424349ED1007CF9F5 /* spawn.hpp */,
-				695BBE9324349ED1007CF9F5 /* spawn.cpp */,
 				695F29C224475B7E0020B613 /* font.hpp */,
 				695F29C124475B7E0020B613 /* font.mm */,
 				690A0C5B2498E0D00047E131 /* unfair_lock.hpp */,
@@ -347,7 +342,6 @@
 				69208E2B2457142600DBB860 /* NVGridView.mm in Sources */,
 				693550E9242CBFE500FB0A94 /* circular_buffer.cpp in Sources */,
 				695F29C324475B7E0020B613 /* font.mm in Sources */,
-				695BBE9524349ED1007CF9F5 /* spawn.cpp in Sources */,
 				6955FE6624363AD400008191 /* NVWindowController.mm in Sources */,
 				69431234243E098B0015C0EA /* ui.cpp in Sources */,
 				6945A1552434E593005D68ED /* neovim.cpp in Sources */,

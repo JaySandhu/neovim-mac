@@ -8,14 +8,157 @@
 //
 
 #include <unistd.h>
+#include <spawn.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <limits>
 #include <thread>
 
 #include "log.h"
-#include "spawn.hpp"
 #include "neovim.hpp"
+
+extern char **environ;
+
+/// A file descriptor with unique ownership.
+class file_descriptor {
+private:
+    int fd;
+
+public:
+    file_descriptor(): fd(-1) {}
+    file_descriptor(int fd): fd(fd) {}
+
+    file_descriptor(const file_descriptor&) = delete;
+    file_descriptor& operator=(const file_descriptor&) = delete;
+
+    file_descriptor(file_descriptor &&other) {
+        fd = other.fd;
+        other.fd = -1;
+    }
+
+    file_descriptor& operator=(file_descriptor &&other) {
+        if (fd != -1) close(fd);
+        fd = other.fd;
+        other.fd = -1;
+        return *this;
+    }
+
+    ~file_descriptor() {
+        if (fd != -1) close(fd);
+    }
+
+    void reset(int new_fildes) {
+        if (fd != -1) close(fd);
+        fd = new_fildes;
+    }
+
+    explicit operator bool() const {
+        return fd != -1;
+    }
+
+    int release() {
+        int ret = fd;
+        fd = -1;
+        return ret;
+    }
+
+    int get() const {
+        return fd;
+    }
+};
+
+/// A Unix pipe, as created by pipe().
+struct unnamed_pipe {
+    file_descriptor read_end;
+    file_descriptor write_end;
+
+    /// Opens a new pipe. The close-on-exec flag is set on both the read
+    /// and write file descriptors.
+    ///
+    /// @returns Zero on success. An Errno error code on failure.
+    int open() {
+        int fds[2];
+
+        if (pipe(fds)) {
+            return errno;
+        }
+
+        // Racey, but the best we can do.
+        fcntl(fds[0], F_SETFD, FD_CLOEXEC);
+        fcntl(fds[1], F_SETFD, FD_CLOEXEC);
+
+        read_end = file_descriptor(fds[0]);
+        write_end = file_descriptor(fds[1]);
+
+        return 0;
+    }
+};
+
+/// RAII wrapper around posix_spawn_file_actions_t
+class spawn_file_actions {
+private:
+    posix_spawn_file_actions_t actions;
+
+public:
+    spawn_file_actions() {
+        posix_spawn_file_actions_init(&actions);
+    }
+
+    spawn_file_actions(const spawn_file_actions&) = delete;
+    spawn_file_actions& operator=(const spawn_file_actions&) = delete;
+
+    ~spawn_file_actions() {
+        posix_spawn_file_actions_destroy(&actions);
+    }
+
+    int add_dup(int fd, int newfd) {
+        return posix_spawn_file_actions_adddup2(&actions, fd, newfd);
+    }
+
+    const posix_spawn_file_actions_t* get() const {
+        return &actions;
+    }
+};
+
+/// The result of spawning a new process with process_spawn.
+///
+/// @field pid      The process id of the new child process.
+/// @field error    The error code associated with the spawn operation.
+struct subprocess {
+    int pid;
+    int error;
+};
+
+/// Defines a child process's standard streams.
+struct standard_streams {
+    int input;
+    int output;
+};
+
+/// Spawns a new child process that executes a specified file.
+///
+/// @param path     Path to the executable.
+/// @param argv     Arguments passed to the new process.
+/// @param env      Environment variables passed to the new process.
+/// @param streams  The new process's standard streams.
+///
+/// Note: The argv and env arrays must be terminated by a null pointer.
+///
+/// @returns A new subprocess. If error is a non zero value, no process was
+///          created and the value of pid is undefined.
+subprocess process_spawn(const char *path, const char *argv[],
+                         char *env[], standard_streams streams) {
+    subprocess process = {};
+    spawn_file_actions actions;
+
+    if ((process.error = actions.add_dup(streams.input,  0))) return process;
+    if ((process.error = actions.add_dup(streams.output, 1))) return process;
+
+    process.error = posix_spawn(&process.pid, path, actions.get(), nullptr,
+                                const_cast<char**>(argv), env);
+
+    return process;
+}
 
 static constexpr uint32_t null_msgid = std::numeric_limits<uint32_t>::max();
 
@@ -123,9 +266,7 @@ neovim::~neovim() {
     }
 }
 
-int neovim::spawn(std::string_view path,
-                  std::vector<std::string> args,
-                  std::vector<std::string> env) {
+int neovim::spawn(const char *path, const char *argv[]) {
     unnamed_pipe read_pipe;
     unnamed_pipe write_pipe;
     
@@ -136,10 +277,7 @@ int neovim::spawn(std::string_view path,
     streams.input = write_pipe.read_end.get();
     streams.output = read_pipe.write_end.get();
 
-    subprocess process = process_spawn(std::string(path),
-                                       std::move(args),
-                                       std::move(env),
-                                       streams);
+    subprocess process = process_spawn(path, argv, environ, streams);
     
     if (process.error) {
         return process.error;

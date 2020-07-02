@@ -166,9 +166,7 @@ public:
 
     void set_controller(window_controller controller);
 
-    int spawn(std::string_view path,
-              std::vector<std::string> args,
-              std::vector<std::string> env);
+    int spawn(const char *path, const char *argv[]);
 
     int connect(std::string_view addr);
 
