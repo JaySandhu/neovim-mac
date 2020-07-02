@@ -451,8 +451,8 @@ static inline NSScreen* screenContainingPoint(NSArray<NSScreen*> *screens, NSPoi
 }
 
 - (void)spawn {
-    int error = nvim.spawn("/usr/local/bin/nvim",
-                           {"nvim", "--embed"}, {});
+    NSString *nvimExecutable = [[NSBundle mainBundle] pathForAuxiliaryExecutable:@"nvim"];
+    int error = nvim.spawn([nvimExecutable UTF8String], {"nvim", "--embed"}, {});
 
     if (error) {
         printf("Spawn error: %i: %s\n", error, strerror(error));
@@ -463,18 +463,16 @@ static inline NSScreen* screenContainingPoint(NSArray<NSScreen*> *screens, NSPoi
 }
 
 - (void)spawnOpenFiles:(NSArray<NSURL*>*)urls {
-    std::vector<std::string> args{"nvim", "--embed"};
+    std::vector<std::string> args{"nvim", "--embed", "-p"};
     
     if ([urls count]) {
         for (NSURL *url in urls) {
             args.push_back([[url path] UTF8String]);
         }
-    
-        args.push_back("-c");
-        args.push_back("tab all");
     }
-    
-    int error = nvim.spawn("/usr/local/bin/nvim", std::move(args), {});
+
+    NSString *nvimExecutable = [[NSBundle mainBundle] pathForAuxiliaryExecutable:@"nvim"];
+    int error = nvim.spawn([nvimExecutable UTF8String], std::move(args), {});
     
     if (error) {
         printf("Spawn error: %i: %s\n", error, strerror(error));
