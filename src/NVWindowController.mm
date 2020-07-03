@@ -309,7 +309,7 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(neovim
         nvim.error_writeln(error);
     }
     
-    return {};
+    return {{}, defaultSize};
 }
 
 - (void)handleScreenChanges:(NSNotification *)notification {

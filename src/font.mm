@@ -7,6 +7,7 @@
 //  See LICENSE.txt for details.
 //
 
+#import <Cocoa/Cocoa.h>
 #include <CoreText/CoreText.h>
 #include "font.hpp"
 
@@ -62,7 +63,9 @@ arc_ptr<CTFontDescriptorRef> font_manager::make_descriptor(std::string_view name
 }
 
 arc_ptr<CTFontDescriptorRef> font_manager::default_descriptor() {
-    return make_descriptor("Menlo");
+    NSFontDescriptor *system = [[NSFont systemFontOfSize:0] fontDescriptor];
+    NSFontDescriptor *monospaced = [system fontDescriptorWithDesign:NSFontDescriptorSystemDesignMonospaced];
+    return (__bridge_retained CTFontDescriptorRef)[monospaced fontDescriptorWithSymbolicTraits:0];
 }
 
 font_family font_manager::get(CTFontDescriptorRef descriptor,
