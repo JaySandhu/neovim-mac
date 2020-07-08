@@ -200,6 +200,8 @@ public:
 
     void drop_text(const std::vector<std::string_view> &text);
 
+    void open_tabs(const std::vector<std::string_view> &paths);
+    
     neovim_mode get_mode();
 
     void input_mouse(std::string_view button,

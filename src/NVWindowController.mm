@@ -919,34 +919,16 @@ static inline bool is_operator_pending(neovim_mode mode) {
     nvim.command(command);
 }
 
-static constexpr std::string_view openTabFunction =
-R"VIMSCRIPT(function! NeovimForMacTabOpen(path) abort
-    if bufnr('$') == 1 && line('$') == 1 && len(bufname(1)) == 0 && len(getline(1)) == 0
-        execute "edit " . path
-        return
-    endif
+static std::vector<std::string_view> URLPaths(NSArray<NSURL*> *urls) {
+    std::vector<std::string_view> paths;
+    paths.reserve([urls count]);
 
-    let bufnr = bufnr(a:path)
+    for (NSURL *url in urls) {
+        paths.push_back([[url path] UTF8String]);
+    }
 
-    if bufnr != -1
-        let window_ids = getbufinfo(bufnr)[0]["windows"]
-
-        if len(window_ids) == 0
-            let bufnr = -1
-        endif
-    endif
-
-    if bufnr == -1
-        execute "tabedit " . a:path
-        return
-    endif
-
-    let [tabpage, window] = win_id2tabwin(window_ids[0])
-
-    execute "tabnext " . tabpage
-    execute window . " wincmd w"
-endfunction
-)VIMSCRIPT";
+    return paths;
+}
 
 - (IBAction)openDocument:(id)sender {
     neovim_mode mode = nvim.get_mode();
@@ -955,35 +937,22 @@ endfunction
         return NSBeep();
     }
 
+    if (mode != neovim_mode::normal) {
+        nvim.feedkeys(CTRL_BACKSLASH CTRL_N);
+    }
+
     NSOpenPanel *panel = [[NSOpenPanel alloc] init];
     panel.canChooseFiles = YES;
     panel.canChooseDirectories = YES;
     panel.allowsMultipleSelection = YES;
-    
+
     NSModalResponse response = [panel runModal];
     
     if (response != NSModalResponseOK) {
         return;
     }
-        
-    std::string command;
-    command.reserve(2048);
-    command.append(openTabFunction);
-    
-    for (NSURL *url in [panel URLs]) {
-        command.append("call NeovimForMacTabOpen(\"");
-        
-        const char *file = url.path.UTF8String;
-        
-        while (char c = *file++) {
-            if (c == '"') command.push_back('\\');
-            command.push_back(c);
-        }
-        
-        command.append("\")\n");
-    }
-    
-    [self normalCommand:command];
+
+    nvim.open_tabs(URLPaths([panel URLs]));
 }
 
 static inline bool canSave(neovim &nvim) {
@@ -1143,17 +1112,6 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
     }
 
     return string;
-}
-
-static std::vector<std::string_view> URLPaths(NSArray<NSURL*> *urls) {
-    std::vector<std::string_view> paths;
-    paths.reserve([urls count]);
-
-    for (NSURL *url in urls) {
-        paths.push_back([[url path] UTF8String]);
-    }
-
-    return paths;
 }
 
 - (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {

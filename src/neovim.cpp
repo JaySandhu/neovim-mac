@@ -658,3 +658,42 @@ void neovim::drop_text(const std::vector<std::string_view> &text) {
     static constexpr auto name = function_name(drop_text_function);
     call_function(null_msgid, name, drop_text_function, text);
 }
+
+static constexpr std::string_view open_tabs_function = R"VIMSCRIPT(
+function! NeovimForMacOpenTabs(paths) abort
+    let edit = bufnr('$') == 1 && line('$') == 1 && !bufname('1') && !getline(1)
+
+    for path in a:paths
+        if edit
+            let edit = 0
+            execute "edit " . path
+            continue
+        endif
+
+        let bufnr = bufnr(path)
+
+        if bufnr != -1
+            let window_ids = getbufinfo(bufnr)[0]["windows"]
+
+            if len(window_ids) == 0
+                let bufnr = -1
+            endif
+        endif
+
+        if bufnr == -1
+            execute "tabedit " . path
+            continue
+        endif
+
+        let [tabpage, window] = win_id2tabwin(window_ids[0])
+
+        execute "tabnext " . tabpage
+        execute window . " wincmd w"
+    endfor
+endfunction
+)VIMSCRIPT";
+
+void neovim::open_tabs(const std::vector<std::string_view> &paths) {
+    static constexpr auto name = function_name(open_tabs_function);
+    call_function(null_msgid, name, open_tabs_function, paths);
+}
