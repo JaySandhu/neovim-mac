@@ -495,6 +495,40 @@ void neovim::rpc_request(uint32_t msgid,
     }
 }
 
+static constexpr std::string_view function_name(std::string_view definition) {
+    auto begin = definition.find('!') + 2;
+    auto end = definition.find('(');
+    return std::string_view(definition.data() + begin, end - begin);
+}
+
+template<typename ...Args>
+void neovim::call_function(uint32_t msgid, std::string_view function,
+                           std::string_view definition, const Args& ...args) {
+    std::lock_guard lock(write_lock);
+    size_t oldsize = packer.size();
+
+    packer.start_array(4);
+    packer.pack_uint64(0);
+    packer.pack_uint64(null_msgid);
+    packer.pack_string("nvim_command");
+    packer.start_array(1);
+    packer.pack_string(definition);
+
+    packer.start_array(4);
+    packer.pack_uint64(0);
+    packer.pack_uint64(msgid);
+    packer.pack_string("nvim_call_function");
+    packer.start_array(2);
+    packer.pack_string(function);
+    packer.start_array(sizeof...(Args));
+    (packer.pack(args), ...);
+
+    if (oldsize == 0) {
+        dispatch_resume(write_source);
+    }
+}
+
+
 void neovim::set_controller(window_controller window) {
     ui.window = window;
 }
@@ -602,4 +636,25 @@ void neovim::input_mouse(std::string_view button, std::string_view action,
                          std::string_view modifiers, size_t row, size_t col) {
     rpc_request(null_msgid, "nvim_input_mouse",
                 button, action, modifiers, 0, row, col);
+}
+
+static constexpr std::string_view drop_text_function = R"VIMSCRIPT(
+function! NeovimForMacDropText(text) abort
+    let begin = getpos(".")
+
+    if begin[2] != 1
+        let begin[2] += 1
+    endif
+
+    call nvim_put(a:text, "c", 1, 1)
+    call setpos("'<", begin)
+    call setpos("'>", getpos("."))
+
+    normal! gv
+endfunction
+)VIMSCRIPT";
+
+void neovim::drop_text(const std::vector<std::string_view> &text) {
+    static constexpr auto name = function_name(drop_text_function);
+    call_function(null_msgid, name, drop_text_function, text);
 }

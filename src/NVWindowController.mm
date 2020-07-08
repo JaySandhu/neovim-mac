@@ -72,6 +72,8 @@ static inline std::string_view buttonName(MouseButton button) {
     [window setTabbingMode:NSWindowTabbingModeDisallowed];
     [window setWindowController:self];
 
+    [window registerForDraggedTypes:[NSArray arrayWithObject:NSPasteboardTypeFileURL]];
+
     self = [super initWithWindow:window];
     self->contextManager = contextManager;
     self->fontManager = contextManager.fontManager;
@@ -1125,6 +1127,61 @@ static inline bool canSave(neovim &nvim) {
     }
     
     NSBeep();
+}
+
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
+    return NSDragOperationCopy;
+}
+
+static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
+    std::string string;
+    string.reserve(1024);
+
+    for (NSURL *url in urls) {
+        string.append([[url path] UTF8String]);
+        string.push_back(delim);
+    }
+
+    return string;
+}
+
+static std::vector<std::string_view> URLPaths(NSArray<NSURL*> *urls) {
+    std::vector<std::string_view> paths;
+    paths.reserve([urls count]);
+
+    for (NSURL *url in urls) {
+        paths.push_back([[url path] UTF8String]);
+    }
+
+    return paths;
+}
+
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
+    NSPasteboard *pasteboard = [sender draggingPasteboard];
+    NSArray<NSURL*> *urls = [pasteboard readObjectsForClasses:@[[NSURL class]] options:nil];
+
+    if (![urls count]) {
+        return NO;
+    }
+
+    neovim_mode mode = nvim.get_mode();
+
+    if (mode == neovim_mode::unknown || is_prompt(mode)) {
+        return NO;
+    }
+
+    if (mode == neovim_mode::terminal || is_command_line_mode(mode) || is_ex_mode(mode)) {
+        std::string filenames = joinURLs(urls, ' ');
+        nvim.paste(std::string_view(filenames.data(), filenames.size() - 1));
+        return YES;
+    }
+
+    if (mode != neovim_mode::normal) {
+        nvim.feedkeys(CTRL_BACKSLASH CTRL_N);
+    }
+
+    nvim.drop_text(URLPaths(urls));
+    return YES;
 }
 
 - (IBAction)paste:(id)sender {
