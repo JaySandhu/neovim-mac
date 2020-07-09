@@ -1406,10 +1406,26 @@ static inline bool all_a(const char *begin, const char *end) {
     XCTAssertEqual(msg::string(packer.data(), packer.size()), packed);
 }
 
-- (void)testPackString {
+- (void)testPackStringLiteral {
     auto packed = packed_data("\xa4\x74\x65\x73\x74");
     msg::packer packer;
     packer.pack_string("test");
+
+    XCTAssertEqual(msg::string(packer.data(), packer.size()), packed);
+}
+
+- (void)testPackStringView {
+    auto packed = packed_data("\xa4\x74\x65\x73\x74");
+    msg::packer packer;
+    packer.pack_string(std::string_view("test"));
+
+    XCTAssertEqual(msg::string(packer.data(), packer.size()), packed);
+}
+
+- (void)testPackString {
+    auto packed = packed_data("\xa4\x74\x65\x73\x74");
+    msg::packer packer;
+    packer.pack_string(std::string("test"));
 
     XCTAssertEqual(msg::string(packer.data(), packer.size()), packed);
 }
@@ -1504,6 +1520,14 @@ static inline bool all_a(const char *begin, const char *end) {
     msg::packer packer;
     packer.pack_array(std::vector{1, 2, 3, 4});
     
+    XCTAssertEqual(msg::string(packer.data(), packer.size()), packed);
+}
+
+- (void)testPackArrayTuple {
+    auto packed = packed_data("\x92\xa3\x6f\x6e\x65\x01");
+    msg::packer packer;
+    packer.pack_tuple(std::tuple<std::string, int>("one", 1));
+
     XCTAssertEqual(msg::string(packer.data(), packer.size()), packed);
 }
 
@@ -1663,19 +1687,23 @@ static inline bool all_a(const char *begin, const char *end) {
     auto packed = packed_data("\xc3\xcd\x01\xb0\xcb\x40\x09\x1e\xb8\x51"
                               "\xeb\x85\x1f\xa6\x73\x74\x72\x69\x6e\x67"
                               "\x94\x01\x02\x03\x04\x83\xa1\x30\x00\xa1"
-                              "\x31\x01\xa1\x32\x02");
+                              "\x31\x01\xa1\x32\x02\x92\xa5\x74\x75\x70"
+                              "\x6c\x65\x01");
+
     msg::packer packer;
     packer.pack(true);
     packer.pack(432);
     packer.pack(3.14);
     packer.pack("string");
     packer.pack(std::vector{1, 2, 3, 4});
-    
+
     packer.pack(std::vector{
         std::pair("0", 0),
         std::pair("1", 1),
         std::pair("2", 2)
     });
+
+    packer.pack(std::tuple<std::string, int>("tuple", 1));
     
     XCTAssertEqual(msg::string(packer.data(), packer.size()), packed);
 }

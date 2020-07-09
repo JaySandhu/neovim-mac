@@ -596,6 +596,13 @@ private:
     template <typename T, typename U>
     struct is_pair<std::pair<T, U>> : std::true_type {};
 
+    // Type trait to detect if T is a std::tuple
+    template <typename T>
+    struct is_tuple : std::false_type {};
+
+    template <typename ...Ts>
+    struct is_tuple<std::tuple<Ts...>> : std::true_type {};
+
 public:
     packer(): buffer(4096) {}
 
@@ -700,6 +707,8 @@ public:
             pack_int64(val);
         } else if constexpr (std::is_constructible_v<string, A>) {
             pack_string(val);
+        } else if constexpr (is_tuple<A>::value) {
+            pack_tuple(val);
         } else if constexpr (is_pair<typename A::value_type>::value) {
             pack_map(val);
         } else {
@@ -774,6 +783,16 @@ public:
             pack(key);
             pack(value);
         }
+    }
+
+    /// Pack a tuple as a heterogenous array.
+    template<typename ...Ts>
+    void pack_tuple(const std::tuple<Ts...> &tuple) {
+        start_array((uint32_t)sizeof...(Ts));
+
+        std::apply([this](Ts const& ...args) {
+            (pack(args), ...);
+        }, tuple);
     }
 };
 
