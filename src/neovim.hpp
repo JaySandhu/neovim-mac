@@ -154,10 +154,6 @@ private:
     template<typename ...Args>
     void rpc_request(uint32_t id, std::string_view method, const Args& ...args);
 
-    template<typename ...Args>
-    void call_function(uint32_t id, std::string_view function,
-                       std::string_view definition, const Args& ...args);
-
 public:
     neovim();
     neovim(const neovim&) = delete;

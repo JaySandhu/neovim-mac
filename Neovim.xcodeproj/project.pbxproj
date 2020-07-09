@@ -20,11 +20,11 @@
 		69431234243E098B0015C0EA /* ui.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 69431232243E098B0015C0EA /* ui.cpp */; };
 		6945A1552434E593005D68ED /* neovim.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6945A1532434E593005D68ED /* neovim.cpp */; };
 		6955FE6624363AD400008191 /* NVWindowController.mm in Sources */ = {isa = PBXBuildFile; fileRef = 6955FE6524363AD400008191 /* NVWindowController.mm */; };
-		695BBE982434BAAC007CF9F5 /* Spawn.mm in Sources */ = {isa = PBXBuildFile; fileRef = 695BBE962434BA76007CF9F5 /* Spawn.mm */; };
 		695C0ABD242E274800266D89 /* msgpack.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 695C0ABC242E274800266D89 /* msgpack.cpp */; };
 		695C0AC0242E27CC00266D89 /* Msgpack.mm in Sources */ = {isa = PBXBuildFile; fileRef = 695C0ABE242E277700266D89 /* Msgpack.mm */; };
 		695F29C324475B7E0020B613 /* font.mm in Sources */ = {isa = PBXBuildFile; fileRef = 695F29C124475B7E0020B613 /* font.mm */; };
 		696465D324AB971B0084E178 /* nvim in CopyFiles */ = {isa = PBXBuildFile; fileRef = 69CB6DF424AB96B00075229B /* nvim */; };
+		69B04DD424B76C8B000DF9C4 /* neovim_mac.vim in CopyFiles */ = {isa = PBXBuildFile; fileRef = 69B04DD224B76C10000DF9C4 /* neovim_mac.vim */; };
 		69CB6DEA24AB963B0075229B /* lib in Resources */ = {isa = PBXBuildFile; fileRef = 69CB6DE924AB963B0075229B /* lib */; };
 		69CB6DEC24AB96450075229B /* share in Resources */ = {isa = PBXBuildFile; fileRef = 69CB6DEB24AB96450075229B /* share */; };
 		69CB6DED24AB96560075229B /* lib in CopyFiles */ = {isa = PBXBuildFile; fileRef = 69CB6DE924AB963B0075229B /* lib */; };
@@ -44,6 +44,16 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		69B04DD324B76C43000DF9C4 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/share/nvim/runtime/autoload;
+			dstSubfolderSpec = 1;
+			files = (
+				69B04DD424B76C8B000DF9C4 /* neovim_mac.vim in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		69CB6DE224AB91670075229B /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -96,12 +106,12 @@
 		6945BBDE2457282C009ADB03 /* ShaderTypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ShaderTypes.h; sourceTree = "<group>"; };
 		6955FE6424363AD400008191 /* NVWindowController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NVWindowController.h; sourceTree = "<group>"; };
 		6955FE6524363AD400008191 /* NVWindowController.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = NVWindowController.mm; sourceTree = "<group>"; };
-		695BBE962434BA76007CF9F5 /* Spawn.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = Spawn.mm; sourceTree = "<group>"; };
 		695C0ABB242E274800266D89 /* msgpack.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = msgpack.hpp; sourceTree = "<group>"; };
 		695C0ABC242E274800266D89 /* msgpack.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = msgpack.cpp; sourceTree = "<group>"; };
 		695C0ABE242E277700266D89 /* Msgpack.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = Msgpack.mm; sourceTree = "<group>"; };
 		695F29C124475B7E0020B613 /* font.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = font.mm; sourceTree = "<group>"; };
 		695F29C224475B7E0020B613 /* font.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = font.hpp; sourceTree = "<group>"; };
+		69B04DD224B76C10000DF9C4 /* neovim_mac.vim */ = {isa = PBXFileReference; lastKnownFileType = text; path = neovim_mac.vim; sourceTree = "<group>"; };
 		69CB6DE924AB963B0075229B /* lib */ = {isa = PBXFileReference; lastKnownFileType = folder; path = lib; sourceTree = "<group>"; };
 		69CB6DEB24AB96450075229B /* share */ = {isa = PBXFileReference; lastKnownFileType = folder; path = share; sourceTree = "<group>"; };
 		69CB6DF424AB96B00075229B /* nvim */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = nvim; sourceTree = "<group>"; };
@@ -180,6 +190,7 @@
 				69208E2A2457142600DBB860 /* NVGridView.mm */,
 				6945BBDE2457282C009ADB03 /* ShaderTypes.h */,
 				69E15156244E023900F8AEC7 /* Shaders.metal */,
+				69B04DD224B76C10000DF9C4 /* neovim_mac.vim */,
 			);
 			path = src;
 			sourceTree = SOURCE_ROOT;
@@ -190,7 +201,6 @@
 				69240E3A242BA3B1004E0DE0 /* BumpAllocator.mm */,
 				693550EA242CBFFD00FB0A94 /* CircularBuffer.mm */,
 				695C0ABE242E277700266D89 /* Msgpack.mm */,
-				695BBE962434BA76007CF9F5 /* Spawn.mm */,
 				69240E3D242BA401004E0DE0 /* DeathTest.h */,
 				69240E3E242BA401004E0DE0 /* DeathTest.m */,
 				69240E2F242B9855004E0DE0 /* Info.plist */,
@@ -247,6 +257,7 @@
 				69240E14242B9854004E0DE0 /* Resources */,
 				69CB6DE224AB91670075229B /* CopyFiles */,
 				69CB6DEF24AB96600075229B /* CopyFiles */,
+				69B04DD324B76C43000DF9C4 /* CopyFiles */,
 			);
 			buildRules = (
 			);
@@ -358,7 +369,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				695C0AC0242E27CC00266D89 /* Msgpack.mm in Sources */,
-				695BBE982434BAAC007CF9F5 /* Spawn.mm in Sources */,
 				69240E40242BA40E004E0DE0 /* DeathTest.m in Sources */,
 				693550EB242CBFFD00FB0A94 /* CircularBuffer.mm in Sources */,
 				69240E3C242BA3DA004E0DE0 /* BumpAllocator.mm in Sources */,
