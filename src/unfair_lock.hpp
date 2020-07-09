@@ -12,6 +12,8 @@
 
 #include <os/lock.h>
 
+/// RAII wrapper for os_unfair_lock. Meets the requirements of BasicLockable.
+/// @see os_unfair_lock.
 class unfair_lock {
 private:
     os_unfair_lock os_lock;
