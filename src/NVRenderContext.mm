@@ -33,24 +33,23 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
     glyph_manager glyphManager;
 }
 
-- (instancetype)initWithOptions:(NVRenderContextOptions *)options
-                    metalDevice:(id<MTLDevice>)device
-                    fontManager:(font_manager *)fontManager
-                glyphRasterizer:(glyph_rasterizer *)rasterizer
-                          error:(NSError **)error {
+- (instancetype)initWithDevice:(id<MTLDevice>)device
+                   fontManager:(font_manager *)fontManager
+                contextOptions:(NVRenderContextOptions *)options
+               glyphRasterizer:(glyph_rasterizer *)rasterizer
+                         error:(NSError **)error {
     self = [super init];
-
     _device = device;
-    _commandQueue = [_device newCommandQueue];
+    _commandQueue = [device newCommandQueue];
     _fontManager = fontManager;
 
-    id<MTLLibrary> lib = [_device newDefaultLibrary];
+    id<MTLLibrary> lib = [device newDefaultLibrary];
 
     MTLRenderPipelineDescriptor *gridDesc = defaultPipelineDescriptor();
     gridDesc.label = @"Grid background render pipeline";
     gridDesc.vertexFunction = [lib newFunctionWithName:@"grid_background"];
     gridDesc.fragmentFunction = [lib newFunctionWithName:@"fill_background"];
-    _gridRenderPipeline = [_device newRenderPipelineStateWithDescriptor:gridDesc error:error];
+    _gridRenderPipeline = [device newRenderPipelineStateWithDescriptor:gridDesc error:error];
 
     if (*error) return self;
 
@@ -58,7 +57,7 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
     glyphDesc.label = @"Glyph render pipeline";
     glyphDesc.vertexFunction = [lib newFunctionWithName:@"glyph_render"];
     glyphDesc.fragmentFunction = [lib newFunctionWithName:@"glyph_fill"];
-    _glyphRenderPipeline = [_device newRenderPipelineStateWithDescriptor:glyphDesc error:error];
+    _glyphRenderPipeline = [device newRenderPipelineStateWithDescriptor:glyphDesc error:error];
 
     if (*error) return self;
 
@@ -66,7 +65,7 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
     cursorDesc.label = @"Cursor render pipeline";
     cursorDesc.vertexFunction = [lib newFunctionWithName:@"cursor_render"];
     cursorDesc.fragmentFunction = [lib newFunctionWithName:@"fill_background"];
-    _cursorRenderPipeline = [_device newRenderPipelineStateWithDescriptor:cursorDesc error:error];
+    _cursorRenderPipeline = [device newRenderPipelineStateWithDescriptor:cursorDesc error:error];
 
     if (*error) return self;
 
@@ -74,7 +73,7 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
     lineDesc.label = @"Line render pipeline";
     lineDesc.vertexFunction = [lib newFunctionWithName:@"line_render"];
     lineDesc.fragmentFunction = [lib newFunctionWithName:@"fill_line"];
-    _lineRenderPipeline = [_device newRenderPipelineStateWithDescriptor:lineDesc error:error];
+    _lineRenderPipeline = [device newRenderPipelineStateWithDescriptor:lineDesc error:error];
 
     if (*error) return self;
 
@@ -128,12 +127,11 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
 
     for (id<MTLDevice> device in devices) {
         NSError *error = nil;
-
-        NVRenderContext *context = [[NVRenderContext alloc] initWithOptions:&contextOptions
-                                                                metalDevice:device
-                                                                fontManager:&fontManager
-                                                            glyphRasterizer:&rasterizer
-                                                                      error:&error];
+        NVRenderContext *context = [[NVRenderContext alloc] initWithDevice:device
+                                                               fontManager:&fontManager
+                                                            contextOptions:&contextOptions
+                                                           glyphRasterizer:&rasterizer
+                                                                     error:&error];
 
         if (!error) {
             [renderContexts addObject:context];
@@ -156,40 +154,25 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
 
 - (NVRenderContext*)addMetalDevice:(id<MTLDevice>)device {
     NSError *error = nil;
-    NVRenderContext *context = [[NVRenderContext alloc] initWithOptions:&contextOptions
-                                                            metalDevice:device
-                                                            fontManager:&fontManager
-                                                        glyphRasterizer:&rasterizer
-                                                                  error:&error];
+    NVRenderContext *context = [[NVRenderContext alloc] initWithDevice:device
+                                                           fontManager:&fontManager
+                                                        contextOptions:&contextOptions
+                                                       glyphRasterizer:&rasterizer
+                                                                 error:&error];
 
-    if (!error) {
-        [renderContexts addObject:context];
-        return context;
-    } else {
+    if (error) {
         [deviceDelegate metalDeviceFailedToInitialize:[device name]];
         return nil;
     }
-}
 
-static inline long contextIndexForDevice(NSArray<NVRenderContext*> *contexts,
-                                         id<MTLDevice> device) {
-    long index = 0;
-
-    for (NVRenderContext *context in contexts) {
-        if (context.device == device) {
-            return index;
-        }
-
-        index += 1;
-    }
-
-    return -1;
+    [renderContexts addObject:context];
+    return context;
 }
 
 - (void)removeMetalDevice:(id<MTLDevice>)device {
-    long contextIndex = contextIndexForDevice(renderContexts, device);
+    NSInteger contextIndex = [renderContexts indexOfObjectIdenticalTo:device];
 
-    if (contextIndex != -1) {
+    if (contextIndex != NSNotFound) {
         [renderContexts removeObjectAtIndex:contextIndex];
 
         if (![renderContexts count]) {
@@ -198,24 +181,28 @@ static inline long contextIndexForDevice(NSArray<NVRenderContext*> *contexts,
     }
 }
 
-static inline NVRenderContext* contextForDevice(NSArray<NVRenderContext*> *contexts,
-                                                id<MTLDevice> device) {
-    for (NVRenderContext *context in contexts) {
+- (nullable NVRenderContext*)renderContextForDevice:(id<MTLDevice>)device {
+    for (NVRenderContext *context in renderContexts) {
         if (context.device == device) {
             return context;
         }
     }
 
-    return nil;
+    // We don't have a render context for this device. Make one now.
+    // This can happen if:
+    //   1. We get called before we have a chance to handle a MTLDeviceWasAddedNotification.
+    //   2. We failed to create a render context for this device the last time we tried.
+    return [self addMetalDevice:device];
 }
 
 - (void)metalNotificationForDevice:(id<MTLDevice>)device name:(MTLDeviceNotificationName)name {
-    if ([name isEqualToString:MTLDeviceWasAddedNotification] &&
-        !contextForDevice(renderContexts, device)) {
-        [self addMetalDevice:device];
-    } else if ([name isEqualToString:MTLDeviceRemovalRequestedNotification] ||
-               [name isEqualToString:MTLDeviceWasRemovedNotification]) {
-        [self removeMetalDevice:device];
+    if ([name isEqualToString:MTLDeviceWasAddedNotification]) {
+        return (void)[self renderContextForDevice:device];
+    }
+
+    if ([name isEqualToString:MTLDeviceRemovalRequestedNotification] ||
+        [name isEqualToString:MTLDeviceWasRemovedNotification]) {
+        return [self removeMetalDevice:device];
     }
 }
 
@@ -224,48 +211,34 @@ static inline NVRenderContext* contextForDevice(NSArray<NVRenderContext*> *conte
     CGDirectDisplayID displayID  = [screenNumber unsignedIntValue];
     id<MTLDevice> device = CGDirectDisplayCopyCurrentMetalDevice(displayID);
 
-    NVRenderContext *renderContext = contextForDevice(renderContexts, device);
+    NVRenderContext *renderContext = [self renderContextForDevice:device];
 
     if (renderContext) {
         return renderContext;
     }
 
-    renderContext = [self addMetalDevice:device];
-
-    if (renderContext) {
-        return renderContext;
-    }
-
-    device = MTLCreateSystemDefaultDevice();
-    renderContext = contextForDevice(renderContexts, device);
-
-    if (renderContext) {
-        return renderContext;
-    }
-
-    if ([renderContexts count]) {
-        return renderContexts[0];
-    } else {
-        [deviceDelegate metalUnavailable];
-        std::abort();
-    }
+    // We're running out of options. One last hail mary.
+    return [self defaultRenderContext];
 }
 
 - (NVRenderContext*)defaultRenderContext {
     id<MTLDevice> device = MTLCreateSystemDefaultDevice();
-    NVRenderContext *renderContext = contextForDevice(renderContexts, device);
+    NVRenderContext *renderContext = [self renderContextForDevice:device];
 
     if (renderContext) {
         return renderContext;
-    } else if ([renderContexts count]) {
-        return renderContexts[0];
-    } else {
-        [deviceDelegate metalUnavailable];
-        std::abort();
     }
+
+    // We're desperate, return anything we have.
+    if ([renderContexts count]) {
+        return renderContexts[0];
+    }
+
+    [deviceDelegate metalUnavailable];
+    std::abort();
 }
 
-- (font_manager*)fontManager {
+- (font_manager *)fontManager {
     return &fontManager;
 }
 
