@@ -42,13 +42,13 @@ static inline std::string_view buttonName(MouseButton button) {
     NVWindowController *windowIsOpen;
     NVWindowController *processIsAlive;
     NVGridView *gridView;
-
-    neovim nvim;
     font_manager *fontManager;
-    ui::ui_state *ui_controller;
 
+    nvim::process nvim;
+    ui::ui_state *ui_controller;
     ui::grid_size lastGridSize;
     ui::grid_point lastMouseLocation[3];
+
     CGFloat scrollingDeltaX;
     CGFloat scrollingDeltaY;
 
@@ -132,7 +132,7 @@ static inline std::string_view buttonName(MouseButton button) {
 }
 
 - (BOOL)windowShouldClose:(NSWindow *)sender {
-    nvim.quit(true);
+    nvim.command("quitall");
     return NO;
 }
 
@@ -287,7 +287,7 @@ static inline NSRect visibleScreenRect(NSWindow *window) {
     [window setContentMinSize:CGSizeMake(cellSize.width * 12, cellSize.height * 3)];
 }
 
-static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(neovim &nvim,
+static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(nvim::process &nvim,
                                                                           ui::ui_state *ui_controller) {
     std::lock_guard lock(ui_controller->option_lock);
     
@@ -585,7 +585,7 @@ public:
     }
 };
 
-static void namedKeyDown(neovim &nvim, NSEventModifierFlags flags, std::string_view keyname) {
+static void namedKeyDown(nvim::process &nvim, NSEventModifierFlags flags, std::string_view keyname) {
     if (!(flags & (NSEventModifierFlagShift   |
                    NSEventModifierFlagCommand |
                    NSEventModifierFlagControl |
@@ -604,7 +604,7 @@ static void namedKeyDown(neovim &nvim, NSEventModifierFlags flags, std::string_v
     nvim.input(std::string_view(inputbuff, inputsize));
 }
 
-static void keyDownIgnoreModifiers(neovim &nvim, NSEventModifierFlags flags, NSEvent *event) {
+static void keyDownIgnoreModifiers(nvim::process &nvim, NSEventModifierFlags flags, NSEvent *event) {
     NSString *nscharacters = [event charactersIgnoringModifiers];
     const char *characters = [nscharacters UTF8String];
     NSUInteger charlength = [nscharacters lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
@@ -774,7 +774,7 @@ static void keyDownIgnoreModifiers(neovim &nvim, NSEventModifierFlags flags, NSE
     [self mouseUp:event button:MouseButtonOther];
 }
 
-static void scrollEvent(neovim &nvim, size_t count, std::string_view direction,
+static void scrollEvent(nvim::process &nvim, size_t count, std::string_view direction,
                         std::string_view modifiers, ui::grid_point location) {
     for (size_t i=0; i<count; ++i) {
         nvim.input_mouse("wheel", direction, modifiers, location.row, location.column);
@@ -834,65 +834,6 @@ static bool is_error(const msg::object &error, std::string_view error_string) {
     return false;
 }
 
-std::string mode_string(neovim_mode mode) {
-    char buffer[9] = {'u', 'n'};
-    buffer[8] = 0;
-
-    memcpy(buffer, &mode, 8);
-    return std::string(buffer);
-}
-
-static inline bool is_ex_mode(neovim_mode mode) {
-    return mode == neovim_mode::ex_mode ||
-           mode == neovim_mode::ex_mode_vim;
-}
-
-static inline bool is_prompt(neovim_mode mode) {
-    const char *bytes = reinterpret_cast<const char*>(&mode);
-    return bytes[0] == 'r';
-}
-
-static inline bool is_visual_mode(neovim_mode mode) {
-    return mode == neovim_mode::visual_block ||
-           mode == neovim_mode::visual_char  ||
-           mode == neovim_mode::visual_line;
-}
-
-static inline bool is_normal_mode(neovim_mode mode) {
-    return mode == neovim_mode::normal                  ||
-           mode == neovim_mode::normal_ctrli_insert     ||
-           mode == neovim_mode::normal_ctrli_replace    ||
-           mode == neovim_mode::normal_ctrli_virtual_replace;
-}
-
-static inline bool is_select_mode(neovim_mode mode) {
-    return mode == neovim_mode::select_block ||
-           mode == neovim_mode::select_char  ||
-           mode == neovim_mode::select_line;
-}
-
-static inline bool is_insert_mode(neovim_mode mode) {
-    return mode == neovim_mode::insert            ||
-           mode == neovim_mode::insert_completion ||
-           mode == neovim_mode::insert_completion_ctrlx;
-}
-
-static inline bool is_replace_mode(neovim_mode mode) {
-    return mode == neovim_mode::replace                  ||
-           mode == neovim_mode::replace_completion       ||
-           mode == neovim_mode::replace_completion_ctrlx ||
-           mode == neovim_mode::replace_virtual;
-}
-
-static inline bool is_command_line_mode(neovim_mode mode) {
-    return mode == neovim_mode::command_line;
-}
-
-static inline bool is_operator_pending(neovim_mode mode) {
-    static constexpr char prefix[2] = {'n', 'o'};
-    return memcmp(&mode, prefix, 2) == 0;
-}
-
 #define CTRL_C "\x03"
 #define CTRL_G "\x07"
 #define CTRL_N "\x0e"
@@ -906,13 +847,13 @@ static inline bool is_operator_pending(neovim_mode mode) {
 }
 
 - (void)normalCommand:(std::string_view)command {
-    neovim_mode mode = nvim.get_mode();
+    nvim::mode mode = nvim.get_mode();
 
-    if (mode == neovim_mode::unknown || is_ex_mode(mode) || is_prompt(mode)) {
+    if (mode == nvim::mode::unknown || is_ex_mode(mode) || is_prompt(mode)) {
         return NSBeep();
     }
 
-    if (mode != neovim_mode::normal) {
+    if (mode != nvim::mode::normal) {
         nvim.feedkeys(CTRL_BACKSLASH CTRL_N);
     }
 
@@ -931,13 +872,13 @@ static std::vector<std::string_view> URLPaths(NSArray<NSURL*> *urls) {
 }
 
 - (IBAction)openDocument:(id)sender {
-    neovim_mode mode = nvim.get_mode();
+    nvim::mode mode = nvim.get_mode();
 
-    if (mode == neovim_mode::unknown || is_ex_mode(mode) || is_prompt(mode)) {
+    if (mode == nvim::mode::unknown || is_ex_mode(mode) || is_prompt(mode)) {
         return NSBeep();
     }
 
-    if (mode != neovim_mode::normal) {
+    if (mode != nvim::mode::normal) {
         nvim.feedkeys(CTRL_BACKSLASH CTRL_N);
     }
 
@@ -955,15 +896,15 @@ static std::vector<std::string_view> URLPaths(NSArray<NSURL*> *urls) {
     nvim.open_tabs(URLPaths([panel URLs]));
 }
 
-static inline bool canSave(neovim &nvim) {
-    neovim_mode mode = nvim.get_mode();
+static inline bool canSave(nvim::process &nvim) {
+    nvim::mode mode = nvim.get_mode();
     
-    if (mode == neovim_mode::unknown  || is_prompt(mode) ||
-        mode == neovim_mode::terminal || is_ex_mode(mode)) {
+    if (mode == nvim::mode::unknown  || is_prompt(mode) ||
+        mode == nvim::mode::terminal || is_ex_mode(mode)) {
         return false;
     }
 
-    if (mode == neovim_mode::command_line || is_operator_pending(mode)) {
+    if (mode == nvim::mode::command_line || is_operator_pending(mode)) {
         nvim.feedkeys(CTRL_C);
     }
     
@@ -1021,43 +962,43 @@ static inline bool canSave(neovim &nvim) {
 }
 
 - (IBAction)selectAll:(id)sender {
-    neovim_mode mode = nvim.get_mode();
+    nvim::mode mode = nvim.get_mode();
 
     switch (mode) {
-        case neovim_mode::normal:
+        case nvim::mode::normal:
             nvim.feedkeys("ggVG");
             break;
 
-        case neovim_mode::command_line:
-        case neovim_mode::operator_pending:
-        case neovim_mode::operator_pending_forced_char:
-        case neovim_mode::operator_pending_forced_line:
-        case neovim_mode::operator_pending_forced_block:
-        case neovim_mode::visual_block:
-        case neovim_mode::visual_char:
-        case neovim_mode::visual_line:
+        case nvim::mode::command_line:
+        case nvim::mode::operator_pending:
+        case nvim::mode::operator_pending_forced_char:
+        case nvim::mode::operator_pending_forced_line:
+        case nvim::mode::operator_pending_forced_block:
+        case nvim::mode::visual_block:
+        case nvim::mode::visual_char:
+        case nvim::mode::visual_line:
             nvim.feedkeys(CTRL_C "ggVG");
             break;
 
-        case neovim_mode::normal_ctrli_insert:
-        case neovim_mode::normal_ctrli_replace:
-        case neovim_mode::normal_ctrli_virtual_replace:
+        case nvim::mode::normal_ctrli_insert:
+        case nvim::mode::normal_ctrli_replace:
+        case nvim::mode::normal_ctrli_virtual_replace:
             nvim.feedkeys("gg" CTRL_O "VG");
             break;
 
-        case neovim_mode::insert:
-        case neovim_mode::insert_completion:
-        case neovim_mode::insert_completion_ctrlx:
-        case neovim_mode::replace:
-        case neovim_mode::replace_completion:
-        case neovim_mode::replace_completion_ctrlx:
-        case neovim_mode::replace_virtual:
+        case nvim::mode::insert:
+        case nvim::mode::insert_completion:
+        case nvim::mode::insert_completion_ctrlx:
+        case nvim::mode::replace:
+        case nvim::mode::replace_completion:
+        case nvim::mode::replace_completion_ctrlx:
+        case nvim::mode::replace_virtual:
             nvim.feedkeys(CTRL_O "gg" CTRL_O "VG");
             break;
 
-        case neovim_mode::select_block:
-        case neovim_mode::select_line:
-        case neovim_mode::select_char:
+        case nvim::mode::select_block:
+        case nvim::mode::select_line:
+        case nvim::mode::select_char:
             nvim.feedkeys(CTRL_C "gggH" CTRL_O "G");
 
         default:
@@ -1067,7 +1008,7 @@ static inline bool canSave(neovim &nvim) {
 }
 
 - (IBAction)cut:(id)sender {
-    neovim_mode mode = nvim.get_mode();
+    nvim::mode mode = nvim.get_mode();
 
     if (is_visual_mode(mode)) {
         nvim.feedkeys("\"+x");
@@ -1083,7 +1024,7 @@ static inline bool canSave(neovim &nvim) {
 }
 
 - (IBAction)copy:(id)sender {
-    neovim_mode mode = nvim.get_mode();
+    nvim::mode mode = nvim.get_mode();
 
     if (is_visual_mode(mode)) {
         nvim.feedkeys("\"+y");
@@ -1122,19 +1063,19 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
         return NO;
     }
 
-    neovim_mode mode = nvim.get_mode();
+    nvim::mode mode = nvim.get_mode();
 
-    if (mode == neovim_mode::unknown || is_prompt(mode)) {
+    if (mode == nvim::mode::unknown || is_prompt(mode)) {
         return NO;
     }
 
-    if (mode == neovim_mode::terminal || is_command_line_mode(mode) || is_ex_mode(mode)) {
+    if (mode == nvim::mode::terminal || is_command_line_mode(mode) || is_ex_mode(mode)) {
         std::string filenames = joinURLs(urls, ' ');
         nvim.paste(std::string_view(filenames.data(), filenames.size() - 1));
         return YES;
     }
 
-    if (mode != neovim_mode::normal) {
+    if (mode != nvim::mode::normal) {
         nvim.feedkeys(CTRL_BACKSLASH CTRL_N);
     }
 
@@ -1143,7 +1084,7 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
 }
 
 - (IBAction)paste:(id)sender {
-    neovim_mode mode = nvim.get_mode();
+    nvim::mode mode = nvim.get_mode();
 
     if (is_normal_mode(mode)) {
         nvim.feedkeys("\"+gP");
@@ -1175,7 +1116,7 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
         return;
     }
     
-    if (mode == neovim_mode::terminal) {
+    if (mode == nvim::mode::terminal) {
         nvim.feedkeys(CTRL_W "\"+");
         return;
     }
@@ -1184,7 +1125,7 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
 }
 
 - (IBAction)undo:(id)sender {
-    neovim_mode mode = nvim.get_mode();
+    nvim::mode mode = nvim.get_mode();
 
     if (is_normal_mode(mode)) {
         nvim.feedkeys("u");
@@ -1206,7 +1147,7 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
 }
 
 - (IBAction)redo:(id)sender {
-    neovim_mode mode = nvim.get_mode();
+    nvim::mode mode = nvim.get_mode();
 
     if (is_normal_mode(mode)) {
         nvim.feedkeys(CTRL_R);

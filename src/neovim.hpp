@@ -20,65 +20,131 @@
 #include "unfair_lock.hpp"
 #include "ui.hpp"
 
-using response_handler = std::function<void(const msg::object&,
-                                            const msg::object&, bool)>;
+namespace nvim {
 
-constexpr uint64_t make_mode_constant(std::string_view shortname) {
-    size_t size = std::min(shortname.size(), 8ul);
-    uint64_t val = 0;
-    uint64_t shift = 0;
+/// RPC response handler
+///
+/// @param error        Null if no error occurred, otherwise an error object.
+/// @param result       Null if an error occurred, otherwise a result object.
+/// @param timed_out    True if the request timed out, otherwise false. If the
+///                     request timed out the values of error and result
+///                     are undefined. If the request had no time out this value
+///                     can be ignored.
+using response_handler = std::function<void(const msg::object &error,
+                                            const msg::object &result,
+                                            bool timed_out)>;
 
-    for (size_t i=0; i<size; ++i) {
-        val |= ((uint64_t)shortname[i] << shift);
-        shift += 8;
-    }
-
-    return val;
-}
-
-enum class neovim_mode : uint64_t {
-    unknown                       = 0,
-    normal                        = make_mode_constant("n"),
-    normal_ctrli_insert           = make_mode_constant("niI"),
-    normal_ctrli_replace          = make_mode_constant("niR"),
-    normal_ctrli_virtual_replace  = make_mode_constant("niV"),
-    operator_pending              = make_mode_constant("no"),
-    operator_pending_forced_char  = make_mode_constant("nov"),
-    operator_pending_forced_line  = make_mode_constant("noV"),
-    operator_pending_forced_block = make_mode_constant("noCTRL-V"),
-    visual_char                   = make_mode_constant("v"),
-    visual_line                   = make_mode_constant("V"),
-    visual_block                  = make_mode_constant("CTRL-V"),
-    select_char                   = make_mode_constant("s"),
-    select_line                   = make_mode_constant("S"),
-    select_block                  = make_mode_constant("CTRL-S"),
-    insert                        = make_mode_constant("i"),
-    insert_completion             = make_mode_constant("ic"),
-    insert_completion_ctrlx       = make_mode_constant("ix"),
-    replace                       = make_mode_constant("R"),
-    replace_completion            = make_mode_constant("Rc"),
-    replace_completion_ctrlx      = make_mode_constant("Rx"),
-    replace_virtual               = make_mode_constant("Rv"),
-    command_line                  = make_mode_constant("c"),
-    ex_mode_vim                   = make_mode_constant("cv"),
-    ex_mode                       = make_mode_constant("ce"),
-    prompt_enter                  = make_mode_constant("r"),
-    prompt_more                   = make_mode_constant("rm"),
-    prompt_confirm                = make_mode_constant("r?"),
-    shell                         = make_mode_constant("!"),
-    terminal                      = make_mode_constant("t")
+/// Neovim modes. See nvim :help mode() for more information.
+enum class mode : uint64_t {
+    unknown,
+    normal,
+    normal_ctrli_insert,
+    normal_ctrli_replace,
+    normal_ctrli_virtual_replace,
+    operator_pending,
+    operator_pending_forced_char,
+    operator_pending_forced_line,
+    operator_pending_forced_block,
+    visual_char,
+    visual_line,
+    visual_block,
+    select_char,
+    select_line,
+    select_block,
+    insert,
+    insert_completion,
+    insert_completion_ctrlx,
+    replace,
+    replace_completion,
+    replace_completion_ctrlx,
+    replace_virtual,
+    command_line,
+    ex_mode_vim,
+    ex_mode,
+    prompt_enter,
+    prompt_more,
+    prompt_confirm,
+    shell,
+    terminal
 };
 
-inline neovim_mode make_neovim_mode(std::string_view shortname) {
-    uint64_t val = 0;
-    memcpy(&val, shortname.data(), std::min(shortname.size(), 8ul));
-    return static_cast<neovim_mode>(val);
+/// Returns true if mode is an ex mode, otherwise false.
+inline bool is_ex_mode(nvim::mode mode) {
+    return mode == mode::ex_mode ||
+           mode == mode::ex_mode_vim;
 }
 
-class neovim {
+/// Returns true if mode is a visual mode, otherwise false.
+inline bool is_visual_mode(nvim::mode mode) {
+    return mode == mode::visual_block ||
+           mode == mode::visual_char  ||
+           mode == mode::visual_line;
+}
+
+/// Returns true if mode is a normal mode, otherwise false.
+inline bool is_normal_mode(nvim::mode mode) {
+    return mode == mode::normal               ||
+           mode == mode::normal_ctrli_insert  ||
+           mode == mode::normal_ctrli_replace ||
+           mode == mode::normal_ctrli_virtual_replace;
+}
+
+/// Returns true if mode is a select mode, otherwise false.
+inline bool is_select_mode(nvim::mode mode) {
+    return mode == mode::select_block ||
+           mode == mode::select_char  ||
+           mode == mode::select_line;
+}
+
+/// Returns true if mode is an insert mode, otherwise false.
+inline bool is_insert_mode(nvim::mode mode) {
+    return mode == mode::insert            ||
+           mode == mode::insert_completion ||
+           mode == mode::insert_completion_ctrlx;
+}
+
+/// Returns true if mode is a replace mode, otherwise false.
+inline bool is_replace_mode(nvim::mode mode) {
+    return mode == mode::replace                  ||
+           mode == mode::replace_completion       ||
+           mode == mode::replace_completion_ctrlx ||
+           mode == mode::replace_virtual;
+}
+
+/// Returns true if mode is a command line mode, otherwise false.
+inline bool is_command_line_mode(nvim::mode mode) {
+    return mode == mode::command_line;
+}
+
+/// Returns true if an operator is currently pending, otherwise false.
+inline bool is_operator_pending(nvim::mode mode) {
+    return mode == mode::operator_pending ||
+           mode == mode::operator_pending_forced_char ||
+           mode == mode::operator_pending_forced_line ||
+           mode == mode::operator_pending_forced_block;
+}
+
+/// Returns true if mode represents a user prompt, otherwise false.
+inline bool is_prompt(nvim::mode mode) {
+    return mode == mode::prompt_enter ||
+           mode == mode::prompt_more  ||
+           mode == mode::prompt_confirm;
+}
+
+/// A Neovim RPC client. Represents a connection to a Neovim process.
+///
+/// Only one remote connection should be established per process object. That is
+/// to say only call spawn / connect once per object. Before a remote connection
+/// is made be sure to set the window_controller.
+///
+/// The lifetime of the process object should extend form the point the
+/// connection is established until the window controller receives a shutdown()
+/// message. Should the lifetime end before that, it will result in a runtime
+/// crash.
+class process {
 private:
     struct response_handler_table;
-    
+
     struct response_context {
         response_handler_table *table;
         response_handler handler;
@@ -86,49 +152,58 @@ private:
         bool has_timeout;
         bool timed_out;
     };
-    
+
     struct response_handler_table {
         unfair_lock table_lock;
         std::deque<response_context> contexts;
         std::vector<response_context*> freelist;
         std::vector<response_context*> handler_table;
         size_t last_index;
-        
+
         response_handler_table():
             handler_table(16),
             last_index(0) {}
-        
+
         response_context* alloc_context();
         uint32_t store_context(response_context *context);
-        
+
         void free_context(response_context *context) {
             freelist.push_back(context);
         }
-        
+
         void lock() {
             table_lock.lock();
         }
-        
+
         void unlock() {
             table_lock.unlock();
         }
-        
+
         bool has_handler(size_t msgid) {
             return msgid < handler_table.size() && handler_table[msgid];
         }
-        
+
         response_context* get(size_t msgid) {
             response_context *context = handler_table[msgid];
             handler_table[msgid] = nullptr;
             return context;
         }
     };
-    
+
+    /// Tracks the current state of dispatch_sources.
+    enum class dispatch_source_state {
+        resumed,
+        suspended,
+        cancelled
+    };
+
     ui::ui_state ui;
     dispatch_queue_t queue;
     dispatch_source_t read_source;
     dispatch_source_t write_source;
     dispatch_semaphore_t semaphore;
+    dispatch_source_state read_state;
+    dispatch_source_state write_state;
     int read_fd;
     int write_fd;
     char read_buffer[16384];
@@ -136,14 +211,13 @@ private:
     msg::unpacker unpacker;
     unfair_lock write_lock;
     response_handler_table *handler_table;
-    
-    int create_sources();
 
+    int  io_init(int readfd, int writefd);
     void io_can_read();
     void io_can_write();
     void io_error();
     void io_cancel();
-    
+
     uint32_t store_handler(response_handler &&handler);
     uint32_t store_handler(dispatch_time_t timeout, response_handler &&handler);
 
@@ -155,55 +229,120 @@ private:
     void rpc_request(uint32_t id, std::string_view method, const Args& ...args);
 
 public:
-    neovim();
-    neovim(const neovim&) = delete;
-    neovim& operator=(const neovim&) = delete;
-    ~neovim();
+    process();
+    process(const process&) = delete;
+    process& operator=(const process&) = delete;
+    ~process();
 
+    /// Returns the ui controller.
     ui::ui_state* ui_state() {
         return &ui;
     }
 
+    /// Set the window controller.
+    ///
+    /// The window controller receives various UI related messages.
+    /// Note: The window controller must be set before connecting to a Neovim
+    /// process. Failing to do so will result in a runtime crash.
     void set_controller(window_controller controller);
 
+    /// Spawns and connects to a new Neovim process.
+    /// @returns An errno code if an error occurred, 0 if no error occurred.
     int spawn(const char *path, const char *argv[]);
 
+    /// Connect to an existing Neovim process via a Unix pipe.
+    /// @returns An errno code if an error occurred, 0 if no error occurred.
     int connect(std::string_view addr);
 
-    void quit(bool confirm=true);
-
-    void get_api_info(response_handler handler);
-
+    /// Calls API method nvim_ui_attach.
+    /// @param width    Requested screen columns
+    /// @param height   Requested screen rows
+    /// Ext_linegrid is enabled, all other ext options are disabled.
     void ui_attach(size_t width, size_t height);
+
+    /// Calls API method nvim_try_resize. Resizes the global grid.
+    /// @param width    The new requested width
+    /// @param height   The new requested height
     void try_resize(size_t width, size_t height);
 
+    /// Calls API method nvim_input.
+    /// Used for raw keyboard input. Input should be escaped.
+    /// @param input Keyboard input.
     void input(std::string_view input);
+
+    /// Calls API method nvim_feedkeys.
+    /// Keys is assumed to contain CSI bytes. Keys are not remapped.
     void feedkeys(std::string_view keys);
 
+    /// Calls API method nvim_command. Executes an ex command.
+    /// Note: Neovim may not process this command immediately. For example,
+    /// commands are not processed while Neovim is waiting for prompt input.
     void command(std::string_view command);
-    
+
+    /// Calls API method nvim_command with a response handler.
+    /// On execution error fails with VimL error, does not update v:errmsg.
+    /// No timeout is set on the request.
     void command(std::string_view command, response_handler handler);
-    
+
+    /// Calls API method nvim_eval. Evaluates a VimL expression.
+    /// @param expr     VimL expression.
+    /// @param timeout  Request timeout.
+    /// @param handler  The response handler. Error is the VimL error. Result
+    ///                 is the evaulation result.
     void eval(std::string_view expr,
               dispatch_time_t timeout,
               response_handler handler);
-    
-    void get_buffer_info(response_handler handler);
-    
+
+    /// Calls API method nvim_paste. Pastes at cursor, in any mode.
+    /// @param data Multi-line input, may be binary and contain NUL bytes.
     void paste(std::string_view data);
 
+    /// Calls API method nvim_error_writeln.
+    /// Writes a message to the nvim error buffer. Appends a new line character
+    /// and flushes the buffer.
+    /// @param error The error string.
     void error_writeln(std::string_view error);
 
+    /// Drops text as though it was drag and dropped into Neovim.
+    ///
+    /// Replicates the native macOS behavior, that is drops the text at the
+    /// current cursor position and selects it. For best results ensure that
+    /// Neovim is in normal mode before calling this function.
+    /// @param text A list of lines.
     void drop_text(const std::vector<std::string_view> &text);
 
+    /// Opens a list of files in tabs.
+    ///
+    /// This function attempts to emulate MacVim's behavior. That is:
+    ///   - If in an untitled empty window, edit in the current buffer.
+    ///   - If the file is open in another tab, switch to the tab and make it's
+    ///     window active.
+    ///   - Other wise open the file in a new tab.
     void open_tabs(const std::vector<std::string_view> &paths);
-    
-    neovim_mode get_mode();
 
+    /// Returns the current Neovim mode.
+    ///
+    /// Synchronously calls the API method nvim_get_mode and returns the result
+    /// as a nvim::mode. On a successful call, the time taken is in the order of
+    /// nanoseconds. This call will timeout in 100ms and return mode::unknown.
+    nvim::mode get_mode();
+
+    /// Calls API method nvim_input_mouse. Used for real time mouse input.
+    ///
+    /// @param button   One of "left", "right", "middle", or "wheel".
+    /// @param action   For non wheel mouse buttons, one of "press", "drag"
+    ///                 or "release". For mouse wheel, pass the direction,
+    ///                 "left", "right", "up", or "down".
+    /// @param row      Mouse row position.
+    /// @param col      Mouse column position.
+    ///
+    /// Note: All indexes are zero based.
     void input_mouse(std::string_view button,
                      std::string_view action,
                      std::string_view modifiers,
                      size_t row, size_t col);
 };
+
+} // namesapce nvim
 
 #endif // NEOVIM_HPP
