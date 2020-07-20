@@ -45,9 +45,8 @@ static inline std::string_view buttonName(MouseButton button) {
     font_manager *fontManager;
 
     nvim::process nvim;
-    ui::ui_state *ui_controller;
-    ui::grid_size lastGridSize;
-    ui::grid_point lastMouseLocation[3];
+    nvim::grid_size lastGridSize;
+    nvim::grid_point lastMouseLocation[3];
 
     CGFloat scrollingDeltaX;
     CGFloat scrollingDeltaY;
@@ -78,8 +77,7 @@ static inline std::string_view buttonName(MouseButton button) {
     self->contextManager = contextManager;
     self->fontManager = contextManager.fontManager;
 
-    nvim.set_controller(self);
-    ui_controller = nvim.ui_state();
+    nvim.set_controller((__bridge void*)self);
 
     lastGridSize.width = width;
     lastGridSize.height = height;
@@ -287,12 +285,9 @@ static inline NSRect visibleScreenRect(NSWindow *window) {
     [window setContentMinSize:CGSizeMake(cellSize.width * 12, cellSize.height * 3)];
 }
 
-static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(nvim::process &nvim,
-                                                                          ui::ui_state *ui_controller) {
-    std::lock_guard lock(ui_controller->option_lock);
-    
+static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(nvim::process &nvim) {
     CGFloat defaultSize = [NSFont systemFontSize];
-    std::vector<ui::guifont> fonts = ui_controller->get_fonts(defaultSize);
+    std::vector<nvim::font> fonts = nvim.get_fonts(defaultSize);
     
     for (auto [name, size] : fonts) {
         arc_ptr descriptor = font_manager::make_descriptor(name);
@@ -306,7 +301,7 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(nvim::
         std::string error;
         error.reserve(512);
         error.append("Error: Invalid font(s): guifont=");
-        error.append(ui_controller->opt_guifont);
+        error.append(nvim.get_font_string());
         
         nvim.error_writeln(error);
     }
@@ -381,13 +376,13 @@ static inline NSScreen* screenContainingPoint(NSArray<NSScreen*> *screens, NSPoi
         renderContext = [contextManager defaultRenderContext];
     }
 
-    auto [fontDescriptor, fontSize] = getFontDescriptor(nvim, ui_controller);
+    auto [fontDescriptor, fontSize] = getFontDescriptor(nvim);
 
     if (!fontDescriptor) {
         fontDescriptor = font_manager::default_descriptor();
     }
 
-    ui::grid *grid = ui_controller->get_global_grid();
+    const nvim::grid *grid = nvim.get_global_grid();
 
     gridView = [[NVGridView alloc] init];
     gridView.grid = grid;
@@ -422,8 +417,8 @@ static inline NSScreen* screenContainingPoint(NSArray<NSScreen*> *screens, NSPoi
         return [self initialRedraw];
     }
 
-    ui::grid *grid = ui_controller->get_global_grid();
-    ui::grid_size gridSize = grid->size();
+    const nvim::grid *grid = nvim.get_global_grid();
+    nvim::grid_size gridSize = grid->size();
 
     [gridView setGrid:grid];
 
@@ -531,7 +526,7 @@ static inline NSScreen* screenContainingPoint(NSArray<NSScreen*> *screens, NSPoi
 
 - (void)windowDidResize:(NSNotification *)notification {
     if (isLiveResizing) {
-        ui::grid_size size = [gridView desiredGridSize];
+        nvim::grid_size size = [gridView desiredGridSize];
         nvim.try_resize(size.width, size.height);
     }
 }
@@ -713,7 +708,7 @@ static void keyDownIgnoreModifiers(nvim::process &nvim, NSEventModifierFlags fla
 }
 
 - (void)mouseDown:(NSEvent *)event button:(MouseButton)button {
-    ui::grid_point location = [gridView cellLocation:event.locationInWindow];
+    nvim::grid_point location = [gridView cellLocation:event.locationInWindow];
     input_modifiers modifiers = input_modifiers(event.modifierFlags);
 
     nvim.input_mouse(buttonName(button), "press", modifiers, location.row, location.column);
@@ -721,8 +716,8 @@ static void keyDownIgnoreModifiers(nvim::process &nvim, NSEventModifierFlags fla
 }
 
 - (void)mouseDragged:(NSEvent *)event button:(MouseButton)button {
-    ui::grid_point location = [gridView cellLocation:event.locationInWindow];
-    ui::grid_point &lastLocation = lastMouseLocation[button];
+    nvim::grid_point location = [gridView cellLocation:event.locationInWindow];
+    nvim::grid_point &lastLocation = lastMouseLocation[button];
 
     if (location != lastLocation) {
         input_modifiers modifiers = input_modifiers(event.modifierFlags);
@@ -732,7 +727,7 @@ static void keyDownIgnoreModifiers(nvim::process &nvim, NSEventModifierFlags fla
 }
 
 - (void)mouseUp:(NSEvent *)event button:(MouseButton)button {
-    ui::grid_point location = [gridView cellLocation:event.locationInWindow];
+    nvim::grid_point location = [gridView cellLocation:event.locationInWindow];
     input_modifiers modifiers = input_modifiers(event.modifierFlags);
 
     nvim.input_mouse(buttonName(button), "release", modifiers, location.row, location.column);
@@ -775,7 +770,7 @@ static void keyDownIgnoreModifiers(nvim::process &nvim, NSEventModifierFlags fla
 }
 
 static void scrollEvent(nvim::process &nvim, size_t count, std::string_view direction,
-                        std::string_view modifiers, ui::grid_point location) {
+                        std::string_view modifiers, nvim::grid_point location) {
     for (size_t i=0; i<count; ++i) {
         nvim.input_mouse("wheel", direction, modifiers, location.row, location.column);
     }
@@ -786,7 +781,7 @@ static void scrollEvent(nvim::process &nvim, size_t count, std::string_view dire
     CGFloat deltaY = [event scrollingDeltaY];
 
     input_modifiers modifiers = input_modifiers([event modifierFlags]);
-    ui::grid_point location = [gridView cellLocation:event.locationInWindow];
+    nvim::grid_point location = [gridView cellLocation:event.locationInWindow];
 
     if ([event hasPreciseScrollingDeltas]) {
         CGSize cellSize = [gridView cellSize];
@@ -1199,15 +1194,12 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
 }
 
 - (void)titleDidChange {
-    NSString *title = [=](){
-        std::lock_guard lock(ui_controller->option_lock);
+    std::string title = nvim.get_title();
+    NSString *nstitle = [[NSString alloc] initWithBytes:title.data()
+                                                 length:title.size()
+                                               encoding:NSUTF8StringEncoding];
 
-        return [[NSString alloc] initWithBytes:ui_controller->title.data()
-                                        length:ui_controller->title.size()
-                                      encoding:NSUTF8StringEncoding];
-    }();
-    
-    [[self window] setTitle:title];
+    [[self window] setTitle:nstitle];
 }
 
 - (void)fontDidChange {
@@ -1215,7 +1207,7 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
         return;
     }
 
-    auto [fontDescriptor, fontSize] = getFontDescriptor(nvim, ui_controller);
+    auto [fontDescriptor, fontSize] = getFontDescriptor(nvim);
     
     if (fontDescriptor) {
         CGFloat scaleFactor = [self.window backingScaleFactor];
@@ -1228,7 +1220,7 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
 }
 
 - (void)optionsDidChange {
-    static constexpr ui::options expected = {
+    static constexpr nvim::options expected = {
         .ext_cmdline    = false,
         .ext_hlstate    = false,
         .ext_linegrid   = true,
@@ -1239,10 +1231,7 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
         .ext_termcolors = false
     };
     
-    ui::options opts = [=](){
-        std::lock_guard lock(ui_controller->option_lock);
-        return ui_controller->opts;
-    }();
+    nvim::options opts = nvim.get_options();
     
     if (opts != expected) {
         NSAlert *alert = [[NSAlert alloc] init];
@@ -1256,3 +1245,48 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
 }
 
 @end
+
+// nvim::window_controller implementation. Declared in ui.hpp.
+namespace nvim {
+
+void window_controller::close() {
+    puts("Neovim did Exit!");
+
+    dispatch_async_f(dispatch_get_main_queue(), controller, [](void *context) {
+        [(__bridge NVWindowController*)context close];
+    });
+}
+
+void window_controller::shutdown() {
+    puts("Neovim did shutdown!");
+
+    dispatch_async_f(dispatch_get_main_queue(), controller, [](void *context) {
+        [(__bridge NVWindowController*)context shutdown];
+    });
+}
+
+void window_controller::redraw() {
+    dispatch_async_f(dispatch_get_main_queue(), controller, [](void *context) {
+        [(__bridge NVWindowController*)context redraw];
+    });
+}
+
+void window_controller::title_set() {
+    dispatch_async_f(dispatch_get_main_queue(), controller, [](void *context) {
+        [(__bridge NVWindowController*)context titleDidChange];
+    });
+}
+
+void window_controller::font_set() {
+    dispatch_async_f(dispatch_get_main_queue(), controller, [](void *context) {
+        [(__bridge NVWindowController*)context fontDidChange];
+    });
+}
+
+void window_controller::options_set() {
+    dispatch_async_f(dispatch_get_main_queue(), controller, [](void *context) {
+        [(__bridge NVWindowController*)context optionsDidChange];
+    });
+}
+
+} // namespace nvim

@@ -183,8 +183,8 @@ public:
     glyph_manager *glyph_manager;
     font_family font_family;
     mtlbuffer buffers[3];
-    ui::grid *grid;
-    ui::cursor cursor;
+    nvim::cursor cursor;
+    const nvim::grid *grid;
 
     simd_float2 cellSize;
     simd_float2 baselineTranslation;
@@ -253,16 +253,16 @@ public:
     NSSize cellSize = [self cellSize];
     
     NSSize frameSize;
-    frameSize.width = cellSize.width * grid->width;
-    frameSize.height = cellSize.height * grid->height;
+    frameSize.width = cellSize.width * grid->width();
+    frameSize.height = cellSize.height * grid->height();
     
     return frameSize;
 }
 
-- (ui::grid_size)desiredGridSize {
+- (nvim::grid_size)desiredGridSize {
     CGSize drawableSize = [metalLayer drawableSize];
     
-    ui::grid_size size;
+    nvim::grid_size size;
     size.width  = drawableSize.width / cellSize.x;
     size.height = drawableSize.height / cellSize.y;
     return size;
@@ -283,7 +283,7 @@ public:
 static void blinkCursorToggleOff(void *context);
 static void blinkCursorToggleOn(void *context);
 
-- (void)setGrid:(ui::grid *)newGrid {
+- (void)setGrid:(const nvim::grid *)newGrid {
     [self setNeedsDisplay:YES];
 
     grid = newGrid;
@@ -291,7 +291,7 @@ static void blinkCursorToggleOn(void *context);
 
     if (inactive) {
         assert(!blinkTimerActive);
-        cursor.attrs.shape = ui::cursor_shape::block_outline;
+        cursor.shape(nvim::cursor_shape::block_outline);
     } else if (cursor.blinks()) {
         auto time = dispatch_time(DISPATCH_TIME_NOW, cursor.blinkwait() * NSEC_PER_MSEC);
 
@@ -308,7 +308,7 @@ static void blinkCursorToggleOn(void *context);
     }
 }
 
-- (ui::grid *)grid {
+- (const nvim::grid *)grid {
     return grid;
 }
 
@@ -318,7 +318,7 @@ static void blinkCursorToggleOn(void *context);
     }
 
     inactive = true;
-    cursor.attrs.shape = ui::cursor_shape::block_outline;
+    cursor.shape(nvim::cursor_shape::block_outline);
 
     if (blinkTimerActive) {
         dispatch_suspend(blinkTimer);
@@ -417,7 +417,7 @@ static inline glyph_data make_glyph_data(simd_short2 grid_position,
 
 static inline line_data make_underline_data(NVGridView *view,
                                             simd_short2 grid_position,
-                                            ui::rgb_color color) {
+                                            nvim::rgb_color color) {
     line_data data;
     data.grid_position = grid_position;
     data.color = color;
@@ -430,7 +430,7 @@ static inline line_data make_underline_data(NVGridView *view,
 
 static inline line_data make_undercurl_data(NVGridView *view,
                                             simd_short2 grid_position,
-                                            ui::rgb_color color,
+                                            nvim::rgb_color color,
                                             uint16_t count) {
     line_data data;
     data.grid_position = grid_position;
@@ -445,13 +445,13 @@ static inline line_data make_undercurl_data(NVGridView *view,
 
 static inline line_data make_undercurl_data(NVGridView *view,
                                             simd_short2 grid_position,
-                                            ui::rgb_color color,
-                                            ui::cell *cell) {
+                                            nvim::rgb_color color,
+                                            const nvim::cell *cell) {
     size_t count = 0;
-    ui::cell *rowbegin = cell - grid_position.x;
+    const nvim::cell *rowbegin = cell - grid_position.x;
     
     while (cell != rowbegin) {
-        if ((--cell)->line_attributes() & ui::line_attributes::undercurl) {
+        if ((--cell)->has_undercurl()) {
             count += 1;
         }
     }
@@ -461,7 +461,7 @@ static inline line_data make_undercurl_data(NVGridView *view,
 
 static inline line_data make_strikethrough_data(NVGridView *view,
                                                 simd_short2 grid_position,
-                                                ui::rgb_color color) {
+                                                nvim::rgb_color color) {
     line_data data;
     data.grid_position = grid_position;
     data.color = color;
@@ -473,9 +473,9 @@ static inline line_data make_strikethrough_data(NVGridView *view,
 }
 
 - (void)displayLayer:(CALayer*)layer {
-    const size_t grid_width = grid->width;
-    const size_t grid_height = grid->height;
-    const size_t grid_size = grid->cells.size();
+    const size_t grid_width = grid->width();
+    const size_t grid_height = grid->height();
+    const size_t grid_size = grid->cells_size();
 
     const CGSize drawable_size = [metalLayer drawableSize];
     const uint64_t index = frameIndex % 3;
@@ -501,14 +501,14 @@ static inline line_data make_strikethrough_data(NVGridView *view,
     data.cell_size         = cellSize * pixel_size;
     data.baseline          = baselineTranslation;
     data.grid_width        = (uint32_t)grid_width;
-    data.cursor_position   = simd_make_short2(cursor.col, cursor.row);
-    data.cursor_color      = cursor.attrs.background.value;
+    data.cursor_position   = simd_make_short2(cursor.col(), cursor.row());
+    data.cursor_color      = cursor.background();
     data.cursor_line_width = 1;
-    data.cursor_cell_width = cursor.cell()->cellwidth();
+    data.cursor_cell_width = cursor.cell().width();
 
     const size_t uniform_offset = buffer.offset();
 
-    for (ui::cell &cell : grid->cells) {
+    for (const nvim::cell &cell : *grid) {
         buffer.push_back_unchecked(cell.background());
     }
 
@@ -518,20 +518,19 @@ static inline line_data make_strikethrough_data(NVGridView *view,
     size_t glyph_count = 0;
 
     for (size_t row=0; row<grid_height; ++row) {
-        ui::cell *cellrow = grid->get(row, 0);
+        const nvim::cell *cellrow = grid->get(row, 0);
         
         size_t undercurl_last = grid_width;
         uint16_t undercurl_count = 0;
         
         for (size_t col=0; col<grid_width; ++col) {
-            ui::cell *cell = cellrow + col;
-            ui::line_attributes line_attrs = cell->line_attributes();
+            const nvim::cell *cell = cellrow + col;
 
-            if (line_attrs != ui::line_attributes::none) {
+            if (cell->has_line_emphasis()) {
                 simd_short2 gridpos = simd_make_short2(row, col);
-                ui::rgb_color color = cell->special();
+                nvim::rgb_color color = cell->special();
 
-                if (line_attrs & ui::line_attributes::undercurl) {
+                if (cell->has_undercurl()) {
                     if (undercurl_last + 1 == col) {
                         undercurl_count += 1;
                     } else {
@@ -540,11 +539,11 @@ static inline line_data make_strikethrough_data(NVGridView *view,
                     
                     undercurl_last = col;
                     lines.push_back(make_undercurl_data(self, gridpos, color, undercurl_count));
-                } else if (line_attrs & ui::line_attributes::underline) {
+                } else if (cell->has_underline()) {
                     lines.push_back(make_underline_data(self, gridpos, color));
                 }
 
-                if (line_attrs & ui::line_attributes::strikethrough) {
+                if (cell->has_strikethrough()) {
                     lines.push_back(make_strikethrough_data(self, gridpos, color));
                 }
             }
@@ -552,15 +551,15 @@ static inline line_data make_strikethrough_data(NVGridView *view,
             if (!cell->empty()) {
                 cached_glyph glyph = glyph_manager->get(font_family, *cell);
                 simd_short2 gridpos = simd_make_short2(row, col);
-                glyph_data data = make_glyph_data(gridpos, glyph, cell->cellwidth());
+                glyph_data data = make_glyph_data(gridpos, glyph, cell->width());
                 buffer.push_back_unchecked(data);
                 glyph_count += 1;
             }
         }
     }
 
-    simd_short2 cursor_gridpos = simd_make_short2(cursor.row, cursor.col);
-    ui::cell *cursor_cell = cursor.cell();
+    simd_short2 cursor_gridpos = simd_make_short2(cursor.row(), cursor.col());
+    const nvim::cell *cursor_cell = &cursor.cell();
     glyph_data *cursor_glyph = &buffer.emplace_back_unchecked<glyph_data>();
     const size_t glyph_offset = buffer.offset();
 
@@ -616,8 +615,8 @@ static inline line_data make_strikethrough_data(NVGridView *view,
 
     [commandEncoder setRenderPipelineState:cursorRenderPipeline];
 
-    switch (cursor.attrs.shape) {
-        case ui::cursor_shape::vertical:
+    switch (cursor.shape()) {
+        case nvim::cursor_shape::vertical:
             [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                                vertexStart:0
                                vertexCount:4
@@ -625,7 +624,7 @@ static inline line_data make_strikethrough_data(NVGridView *view,
                               baseInstance:0];
             break;
 
-        case ui::cursor_shape::horizontal:
+        case nvim::cursor_shape::horizontal:
             [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                                vertexStart:0
                                vertexCount:4
@@ -633,7 +632,7 @@ static inline line_data make_strikethrough_data(NVGridView *view,
                               baseInstance:1];
             break;
 
-        case ui::cursor_shape::block_outline:
+        case nvim::cursor_shape::block_outline:
             [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                                vertexStart:0
                                vertexCount:4
@@ -641,7 +640,7 @@ static inline line_data make_strikethrough_data(NVGridView *view,
                               baseInstance:0];
             break;
 
-        case ui::cursor_shape::block:
+        case nvim::cursor_shape::block:
             [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                                vertexStart:0
                                vertexCount:4
@@ -652,13 +651,12 @@ static inline line_data make_strikethrough_data(NVGridView *view,
                 CTFontRef font = font_family.get(cursor_cell->font_attributes());
 
                 cached_glyph glyph = glyph_manager->get(font,
-                                                        cursor_cell->graphemes_view(),
-                                                        cursor.attrs.background,
-                                                        cursor.attrs.foreground);
+                                                        cursor.cell(),
+                                                        cursor.background(),
+                                                        cursor.foreground());
 
-                *cursor_glyph = make_glyph_data(cursor_gridpos,
-                                                glyph,
-                                                cursor_cell->cellwidth());
+                *cursor_glyph = make_glyph_data(cursor_gridpos, glyph,
+                                                cursor_cell->width());
 
                 [commandEncoder setRenderPipelineState:glyphRenderPipeline];
                 [commandEncoder setVertexBufferOffset:glyph_offset atIndex:1];
@@ -670,19 +668,19 @@ static inline line_data make_strikethrough_data(NVGridView *view,
                                   baseInstance:glyph_count];
             }
 
-            if (auto attrs = cursor_cell->line_attributes(); attrs != ui::line_attributes::none) {
+            if (cursor_cell->has_line_emphasis()) {
                 size_t count = 0;
-                ui::rgb_color color = cursor_cell->special();
+                nvim::rgb_color color = cursor_cell->special();
 
-                if (attrs & ui::line_attributes::undercurl) {
+                if (cursor_cell->has_undercurl()) {
                     *cursor_line++ = make_undercurl_data(self, cursor_gridpos, color, cursor_cell);
                     count += 1;
-                } else if (attrs & ui::line_attributes::underline) {
+                } else if (cursor_cell->has_underline()) {
                     *cursor_line++ = make_underline_data(self, cursor_gridpos, color);
                     count += 1;
                 }
 
-                if (attrs & ui::line_attributes::strikethrough) {
+                if (cursor_cell->has_strikethrough()) {
                     *cursor_line++ = make_strikethrough_data(self, cursor_gridpos, color);
                     count += 1;
                 }
@@ -716,16 +714,16 @@ static inline line_data make_strikethrough_data(NVGridView *view,
     return YES;
 }
 
-- (ui::grid_point)cellLocation:(NSPoint)windowLocation {
+- (nvim::grid_point)cellLocation:(NSPoint)windowLocation {
     NSPoint viewLocation = [self convertPoint:windowLocation fromView:nil];
     NSSize cellSize = [self cellSize];
 
     size_t row = viewLocation.x / cellSize.width;
     size_t col = viewLocation.y / cellSize.height;
 
-    ui::grid_point location;
-    location.row = std::min(col, grid->height);
-    location.column = std::min(row, grid->width);
+    nvim::grid_point location;
+    location.row = std::min(col, grid->height());
+    location.column = std::min(row, grid->width());
     
     return location;
 }

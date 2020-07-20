@@ -17,8 +17,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface NVGridView : NSView<CALayerDelegate>
 
-- (void)setGrid:(ui::grid*)grid;
-- (ui::grid*)grid;
+- (void)setGrid:(const nvim::grid*)grid;
+- (const nvim::grid*)grid;
 
 - (void)setFont:(font_family)font;
 - (font_family*)font;
@@ -30,9 +30,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (NSSize)desiredFrameSize;
 
-- (ui::grid_size)desiredGridSize;
+- (nvim::grid_size)desiredGridSize;
 
-- (ui::grid_point)cellLocation:(NSPoint)windowLocation;
+- (nvim::grid_point)cellLocation:(NSPoint)windowLocation;
 
 - (void)setInactive;
 - (void)setActive;

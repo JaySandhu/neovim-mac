@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		6904995F24377F2B002C7B95 /* window_controller.mm in Sources */ = {isa = PBXBuildFile; fileRef = 6904995D24377F2B002C7B95 /* window_controller.mm */; };
 		69208E2B2457142600DBB860 /* NVGridView.mm in Sources */ = {isa = PBXBuildFile; fileRef = 69208E2A2457142600DBB860 /* NVGridView.mm */; };
 		69240E1B242B9854004E0DE0 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 69240E1A242B9854004E0DE0 /* AppDelegate.m */; };
 		69240E1D242B9855004E0DE0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 69240E1C242B9855004E0DE0 /* Assets.xcassets */; };
@@ -80,8 +79,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		6904995D24377F2B002C7B95 /* window_controller.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = window_controller.mm; sourceTree = "<group>"; };
-		6904995E24377F2B002C7B95 /* window_controller.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = window_controller.hpp; sourceTree = "<group>"; };
 		690A0C5B2498E0D00047E131 /* unfair_lock.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = unfair_lock.hpp; sourceTree = "<group>"; };
 		69208E292457142600DBB860 /* NVGridView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NVGridView.h; sourceTree = "<group>"; };
 		69208E2A2457142600DBB860 /* NVGridView.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = NVGridView.mm; sourceTree = "<group>"; };
@@ -187,8 +184,6 @@
 				69D42C4B244611AA0006FEF3 /* log.h */,
 				6945A1542434E593005D68ED /* neovim.hpp */,
 				6945A1532434E593005D68ED /* neovim.cpp */,
-				6904995E24377F2B002C7B95 /* window_controller.hpp */,
-				6904995D24377F2B002C7B95 /* window_controller.mm */,
 				69FB837B24A0F370008CCED1 /* NVRenderContext.h */,
 				69FB837C24A0F370008CCED1 /* NVRenderContext.mm */,
 				6955FE6424363AD400008191 /* NVWindowController.h */,
@@ -369,7 +364,6 @@
 				695C0ABD242E274800266D89 /* msgpack.cpp in Sources */,
 				69E15157244E023900F8AEC7 /* Shaders.metal in Sources */,
 				69240E1B242B9854004E0DE0 /* AppDelegate.m in Sources */,
-				6904995F24377F2B002C7B95 /* window_controller.mm in Sources */,
 				69FB837D24A0F370008CCED1 /* NVRenderContext.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

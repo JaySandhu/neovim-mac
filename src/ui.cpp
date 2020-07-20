@@ -14,16 +14,58 @@
 #include "log.h"
 #include "ui.hpp"
 
-namespace ui {
+namespace nvim {
 namespace {
+
+/// A table of highlight attributes.
+/// The Neovim UI API predefines highlight groups in a table and refers to them
+/// by their index. We store the highlight table as a vector of cell_attributes.
+/// The default highlight group is stored at index 0.
+using highlight_table = std::vector<cell_attributes>;
+
+/// Returns the highlight group with the given ID.
+/// If the highlight ID is not defined, returns the default highlight group.
+inline const cell_attributes* hl_get_entry(const highlight_table &table,
+                                           size_t hlid) {
+    if (hlid < table.size()) {
+        return &table[hlid];
+    }
+
+    return &table[0];
+}
+
+/// Create new entry for the given id.
+/// If the ID has been used before, the old entry is replaced.
+/// Any gaps created in the table are filled by default initialized entries.
+/// Note: ID 0 is reserved for the default highlight group.
+inline cell_attributes* hl_new_entry(highlight_table &table, size_t hlid) {
+    const size_t table_size = table.size();
+
+    if (hlid == table_size) {
+        table.push_back(table[0]);
+        return &table.back();
+    }
+
+    if (hlid < table_size) {
+        table[hlid] = table[0];
+        return &table[hlid];
+    }
+
+    cell_attributes default_attrs = table[0];
+    table.resize(hlid, default_attrs);
+    return &table.back();
+}
 
 void log_grid_out_of_bounds(const grid *grid, const char *event,
                             size_t row, size_t col) {
     os_log_error(rpc, "Redraw error: Grid index out of bounds - "
                       "Event=%s, Grid=%zux%zu, Index=[row=%zu, col=%zu]",
-                      event, grid->width, grid->height, row, col);
+                      event, grid->width(), grid->height(), row, col);
 }
 
+/// Type checking wrapper that:
+/// Allows narrowing integer conversions.
+/// Allows msg::object pass through.
 template<typename T>
 bool is(const msg::object &object) {
     if constexpr (!std::is_same_v<T, msg::boolean> && std::is_integral_v<T>) {
@@ -35,6 +77,9 @@ bool is(const msg::object &object) {
     }
 }
 
+/// Object unwrapping wrapper that:
+/// Allows narrowing integer conversions.
+/// Allows msg::object pass through.
 template<typename T>
 T get(const msg::object &object) {
     if constexpr (!std::is_same_v<T, msg::boolean> && std::is_integral_v<T>) {
@@ -47,16 +92,19 @@ T get(const msg::object &object) {
 }
 
 template<typename ...Ts, size_t ...Indexes>
-void call(ui_state &state,
-          void(ui_state::*member_function)(Ts...),
+void call(ui_controller &controller,
+          void(ui_controller::*member_function)(Ts...),
           const msg::array &array,
           std::integer_sequence<size_t, Indexes...>) {
-    (state.*member_function)(get<Ts>(array[Indexes])...);
+    (controller.*member_function)(get<Ts>(array[Indexes])...);
 }
 
+/// Invokes member function with an array of arguments.
+/// If object is an array of objects whose types match the member function's
+/// signature, the member function is invoked. Otherwise a type error is logged.
 template<typename ...Ts>
-void apply_one(ui_state *state,
-               void(ui_state::*member_function)(Ts...),
+void apply_one(ui_controller *controller,
+               void(ui_controller::*member_function)(Ts...),
                const msg::string &name, const msg::object &object) {
     if (object.is<msg::array>()) {
         msg::array args = object.get<msg::array>();
@@ -65,7 +113,7 @@ void apply_one(ui_state *state,
         size_t index = 0;
         
         if (size <= args.size() && (is<Ts>(args[index++]) && ...)) {
-            return call(*state, member_function, args,
+            return call(*controller, member_function, args,
                         std::make_integer_sequence<size_t, size>());
         }
     }
@@ -76,37 +124,21 @@ void apply_one(ui_state *state,
                       msg::type_string(object).c_str());
 }
 
+/// Invokes member function once for each parameter tuple in array.
 template<typename ...Ts>
-void apply(ui_state *state,
-           void(ui_state::*member_function)(Ts...),
+void apply(ui_controller *controller,
+           void(ui_controller::*member_function)(Ts...),
            const msg::string &name, const msg::array &array) {
     for (const msg::object &tuple : array) {
-        apply_one(state, member_function, name, tuple);
+        apply_one(controller, member_function, name, tuple);
     }
-}
-
-inline cell make_cell(const msg::string &text, const attributes *attrs) {
-    cell ret = {};
-    ret.attrs = *attrs;
-    
-    if (text.size() == 1 && *text.data() == ' ') {
-        return ret;
-    }
-    
-    size_t limit = std::min(text.size(), sizeof(grapheme_cluster));
-    ret.size = limit;
-    
-    // TODO: Should we validate UTF-8 here?
-    for (size_t i=0; i<limit; ++i) {
-        ret.text[i] = text[i];
-    }
-    
-    return ret;
 }
 
 } // namespace
 
-grid* ui_state::get_grid(size_t index) {
+grid* ui_controller::get_grid(size_t index) {
+    // We don't support ext_multigrid, so index should always be 1.
+    // If it isn't, we don't exaclty fail gracefully.
     if (index != 1) {
         std::abort();
     }
@@ -114,54 +146,62 @@ grid* ui_state::get_grid(size_t index) {
     return writing;
 }
 
-void ui_state::redraw_event(const msg::object &event_object) {
+void ui_controller::redraw_event(const msg::object &event_object) {
     const msg::array *event = event_object.get_if<msg::array>();
     
     if (!event || !event->size() || !event->at(0).is<msg::string>()) {
         return os_log_error(rpc, "Redraw error: Event type error - Type=%s",
                             msg::type_string(event_object).c_str());
     }
-    
+
+    // Neovim update events are arrays where:
+    //  - The first element is the event name
+    //  - The remainining elements are an array of argument tuples.
     msg::string name = event->at(0).get<msg::string>();
     msg::array args = event->subarray(1);
     
     if (name == "grid_line") {
-        return apply(this, &ui_state::grid_line, name, args);
+        return apply(this, &ui_controller::grid_line, name, args);
     } else if (name == "grid_resize") {
-        return apply(this, &ui_state::grid_resize, name, args);
+        return apply(this, &ui_controller::grid_resize, name, args);
     } else if (name == "grid_scroll") {
-        return apply(this, &ui_state::grid_scroll, name, args);
+        return apply(this, &ui_controller::grid_scroll, name, args);
     } else if (name == "flush") {
-        return apply(this, &ui_state::flush, name, args);
+        return apply(this, &ui_controller::flush, name, args);
     } else if (name == "grid_clear") {
-        return apply(this, &ui_state::grid_clear, name, args);
+        return apply(this, &ui_controller::grid_clear, name, args);
     } else if (name == "hl_attr_define") {
-        return apply(this, &ui_state::hl_attr_define, name, args);
+        return apply(this, &ui_controller::hl_attr_define, name, args);
     } else if (name == "default_colors_set") {
-        return apply(this, &ui_state::default_colors_set, name, args);
+        return apply(this, &ui_controller::default_colors_set, name, args);
     } else if (name == "mode_info_set") {
-        return apply(this, &ui_state::mode_info_set, name, args);
+        return apply(this, &ui_controller::mode_info_set, name, args);
     } else if (name == "mode_change") {
-        return apply(this, &ui_state::mode_change, name, args);
+        return apply(this, &ui_controller::mode_change, name, args);
     } else if (name == "grid_cursor_goto") {
-        return apply(this, &ui_state::grid_cursor_goto, name, args);
+        return apply(this, &ui_controller::grid_cursor_goto, name, args);
     } else if (name == "set_title") {
-        return apply(this, &ui_state::set_title, name, args);
-    } else if (name == "option_set") {
+        return apply(this, &ui_controller::set_title, name, args);
+    }
+
+    // When options change, we should inform the delegate. Neovim tends to
+    // send redundant option change events, so only call the delegate if the
+    // options actually changed.
+    if (name == "option_set") {
         std::lock_guard lock(option_lock);
         options oldopts = opts;
-        apply(this, &ui_state::set_option, name, args);
+        apply(this, &ui_controller::set_option, name, args);
 
         if (opts != oldopts) {
             window.options_set();
         }
         
         return;
-    } else if (name == "mouse_on"   ||
-               name == "mouse_off"  ||
-               name == "set_icon"   ||
-               name == "hl_group_set") {
-        // ignored
+    }
+
+    // The following events are ignored for now.
+    if (name == "mouse_on" || name == "mouse_off"  ||
+        name == "set_icon" || name == "hl_group_set") {
         return;
     }
     
@@ -170,15 +210,17 @@ void ui_state::redraw_event(const msg::object &event_object) {
                 msg::to_string(args).c_str());
 }
 
-void ui_state::redraw(msg::array events) {
+void ui_controller::redraw(msg::array events) {
     for (const msg::object &event : events) {
         redraw_event(event);
     }
 }
 
-void ui_state::grid_resize(size_t grid_id, size_t width, size_t height) {
+void ui_controller::grid_resize(size_t grid_id, size_t width, size_t height) {
     grid *grid = get_grid(grid_id);
-    grid->resize(width, height);
+    grid->grid_width = width;
+    grid->grid_height = height;
+    grid->cells.resize(width * height);
 }
 
 template<typename ...Ts>
@@ -187,14 +229,19 @@ static bool type_check(const msg::array &array) {
     return array.size() == sizeof...(Ts) && (array[index++].is<Ts>() && ...);
 }
 
+/// Represents a cell update from the grid_line event.
 struct cell_update {
     msg::string text;
-    const attributes *hlattr;
+    const cell_attributes *hlattr;
     size_t repeat;
     
     cell_update(): hlattr(nullptr), repeat(0) {}
-    
-    bool set(const msg::object &object, const attribute_table &attr_table) {
+
+    /// Set the cell_update from a msg::object.
+    /// @param object   An object from the cells array in a grid_line event.
+    /// @param hltable  The highlight table.
+    /// @returns True if object type checked correctly, otherwise false.
+    bool set(const msg::object &object, const highlight_table &hltable) {
         if (!object.is<msg::array>()) {
             return false;
         }
@@ -209,14 +256,14 @@ struct cell_update {
         
         if (type_check<msg::string, msg::integer>(array)) {
             text = array[0].get<msg::string>();
-            hlattr = attr_table.get_entry(array[1].get<msg::integer>());
+            hlattr = hl_get_entry(hltable, array[1].get<msg::integer>());
             repeat = 1;
             return true;
         }
             
         if (type_check<msg::string, msg::integer, msg::integer>(array)) {
             text = array[0].get<msg::string>();
-            hlattr = attr_table.get_entry(array[1].get<msg::integer>());
+            hlattr = hl_get_entry(hltable, array[1].get<msg::integer>());
             repeat = array[2].get<msg::integer>();
             return true;
         }
@@ -225,18 +272,18 @@ struct cell_update {
     }
 };
 
-void ui_state::grid_line(size_t grid_id, size_t row,
-                         size_t col, msg::array cells) {
+void ui_controller::grid_line(size_t grid_id, size_t row,
+                              size_t col, msg::array cells) {
     grid *grid = get_grid(grid_id);
     
-    if (row >= grid->height || col >= grid->width) {
+    if (row >= grid->height() || col >= grid->width()) {
         return log_grid_out_of_bounds(grid, "grid_line", row, col);
     }
     
     cell *rowbegin = grid->get(row, 0);
     cell *cell = rowbegin + col;
     
-    size_t remaining = grid->width - col;
+    size_t remaining = grid->width() - col;
     cell_update update;
     
     for (const msg::object &object : cells) {
@@ -250,58 +297,61 @@ void ui_state::grid_line(size_t grid_id, size_t row,
             return os_log_error(rpc, "Redraw error: Row overflow - "
                                      "Event=grid_line");
         }
-        
+
+        // Empty cells are the right cell of a double width char.
         if (update.text.size() == 0) {
+            // This should never happen. We'll be defensive about it.
             if (cell == rowbegin) {
                 return;
             }
             
-            ui::cell *left = cell - 1;
+            nvim::cell *left = cell - 1;
             cell->attrs = left->attrs;
-            left->attrs.flags |= attributes::doublewidth;
-            
+            left->attrs.flags |= cell_attributes::doublewidth;
+
+            // Double width chars never repeat.
             cell += 1;
             remaining -= 1;
-            continue;
+        } else {
+            *cell = nvim::cell(update.text, update.hlattr);
+
+            for (int i=1; i<update.repeat; ++i) {
+                cell[i] = *cell;
+            }
+
+            cell += update.repeat;
+            remaining -= update.repeat;
         }
-        
-        *cell = make_cell(update.text, update.hlattr);
-        
-        for (int i=1; i<update.repeat; ++i) {
-            cell[i] = *cell;
-        }
-        
-        cell += update.repeat;
-        remaining -= update.repeat;
     }
 }
 
-void ui_state::grid_clear(size_t grid_id) {
+void ui_controller::grid_clear(size_t grid_id) {
     grid *grid = get_grid(grid_id);
-    cell empty = {};
-    empty.attrs.background = hltable.get_default()->background;
+
+    cell empty;
+    empty.attrs.background = hltable[0].background;
 
     for (cell &cell : grid->cells) {
         cell = empty;
     }
 }
 
-void ui_state::grid_cursor_goto(size_t grid_id, size_t row, size_t col) {
+void ui_controller::grid_cursor_goto(size_t grid_id, size_t row, size_t col) {
     grid *grid = get_grid(grid_id);
     
-    if (row >= grid->height || col >= grid->width) {
+    if (row >= grid->height() || col >= grid->width()) {
         return os_log_error(rpc, "Redraw error: Cursor out of bounds - "
                                  "Event=grid_cursor_goto, "
                                  "Grid=[%zu, %zu], Row=%zu, Col=%zu",
-                                 grid->width, grid->height, row, col);
+                                 grid->width(), grid->height(), row, col);
     }
     
     grid->cursor_row = row;
     grid->cursor_col = col;
 }
 
-void ui_state::grid_scroll(size_t grid_id, size_t top, size_t bottom,
-                           size_t left, size_t right, long rows) {
+void ui_controller::grid_scroll(size_t grid_id, size_t top, size_t bottom,
+                                size_t left, size_t right, long rows) {
     if (bottom < top || right < left) {
         os_log_error(rpc, "Redraw error: Invalid args - "
                           "Event=grid_scroll, "
@@ -314,7 +364,7 @@ void ui_state::grid_scroll(size_t grid_id, size_t top, size_t bottom,
     size_t height = bottom - top;
     size_t width = right - left;
     
-    if (bottom > grid->height || right > grid->width) {
+    if (bottom > grid->height() || right > grid->width()) {
         return log_grid_out_of_bounds(grid, "grid_scroll", bottom, right);
     }
     
@@ -324,15 +374,15 @@ void ui_state::grid_scroll(size_t grid_id, size_t top, size_t bottom,
     
     if (rows >= 0) {
         dest = grid->get(top, left);
-        row_width = grid->width;
+        row_width = grid->width();
         count = height - rows;
     } else {
         dest = grid->get(bottom - 1, left);
-        row_width = -grid->width;
+        row_width = -grid->width();
         count = height + rows;
     }
 
-    cell *src = dest + ((long)grid->width * rows);
+    cell *src = dest + ((long)grid->width() * rows);
     size_t copy_size = sizeof(cell) * width;
     
     for (long i=0; i<count; ++i) {
@@ -342,13 +392,7 @@ void ui_state::grid_scroll(size_t grid_id, size_t top, size_t bottom,
     }
 }
 
-void grid::resize(size_t new_width, size_t new_heigth) {
-    width = new_width;
-    height = new_heigth;
-    cells.resize(new_width * new_heigth);
-}
-
-void ui_state::flush() {
+void ui_controller::flush() {
     grid *completed = writing;
     completed->draw_tick += 1;
     
@@ -357,26 +401,9 @@ void ui_state::flush() {
     window.redraw();
 }
 
-attributes* attribute_table::new_entry(size_t hlid) {
-    const size_t table_size = table.size();
-    
-    if (hlid == table_size) {
-        table.push_back(*get_default());
-        return &table.back();
-    }
-    
-    if (hlid < table_size) {
-        table[hlid] = *get_default();
-        return &table[hlid];
-    }
-        
-    attributes default_attrs = *get_default();
-    table.resize(hlid, default_attrs);
-    return &table.back();
-}
-
-static inline void adjust_defaults(const attributes &def, attributes &attrs) {
-    bool reversed = attrs.flags & attributes::reverse;
+static inline void adjust_defaults(const cell_attributes &def,
+                                   cell_attributes &attrs) {
+    bool reversed = attrs.flags & cell_attributes::reverse;
     
     if (attrs.foreground.is_default()) {
         attrs.foreground = reversed ? def.background : def.foreground;
@@ -391,19 +418,19 @@ static inline void adjust_defaults(const attributes &def, attributes &attrs) {
     }
 }
 
-void ui_state::default_colors_set(uint32_t fg, uint32_t bg, uint32_t sp) {
-    attributes *def = hltable.get_default();
-    def->foreground = rgb_color(fg, rgb_color::default_tag);
-    def->background = rgb_color(bg, rgb_color::default_tag);;
-    def->special = rgb_color(sp, rgb_color::default_tag);;
-    def->flags = 0;
+void ui_controller::default_colors_set(uint32_t fg, uint32_t bg, uint32_t sp) {
+    cell_attributes &def = hltable[0];
+    def.foreground = rgb_color(fg, rgb_color::default_tag);
+    def.background = rgb_color(bg, rgb_color::default_tag);
+    def.special = rgb_color(sp, rgb_color::default_tag);
+    def.flags = 0;
     
-    for (attributes &attrs : hltable.table) {
-        adjust_defaults(*def, attrs);
+    for (cell_attributes &attrs : hltable) {
+        adjust_defaults(def, attrs);
     }
     
     for (cell &cell : writing->cells) {
-        adjust_defaults(*def, cell.attrs);
+        adjust_defaults(def, cell.attrs);
     }
 }
 
@@ -418,8 +445,8 @@ static inline void set_rgb_color(rgb_color &color, const msg::object &object) {
     color = rgb_color(rgb);
 }
 
-void ui_state::hl_attr_define(size_t hlid, msg::map definition) {
-    attributes *attrs = hltable.new_entry(hlid);
+void ui_controller::hl_attr_define(size_t hlid, msg::map definition) {
+    cell_attributes *attrs = hl_new_entry(hltable, hlid);
     
     for (const msg::pair &pair : definition) {
         if (!pair.first.is<msg::string>()) {
@@ -436,19 +463,19 @@ void ui_state::hl_attr_define(size_t hlid, msg::map definition) {
         } else if (name == "background") {
             set_rgb_color(attrs->background, pair.second);
         } else if (name == "underline") {
-            attrs->flags |= attributes::underline;
+            attrs->flags |= cell_attributes::underline;
         } else if (name == "bold") {
-            attrs->flags |= attributes::bold;
+            attrs->flags |= cell_attributes::bold;
         } else if (name == "italic") {
-            attrs->flags |= attributes::italic;
+            attrs->flags |= cell_attributes::italic;
         } else if (name == "strikethrough") {
-            attrs->flags |= attributes::strikethrough;
+            attrs->flags |= cell_attributes::strikethrough;
         } else if (name == "undercurl") {
-            attrs->flags |= attributes::undercurl;
+            attrs->flags |= cell_attributes::undercurl;
         } else if (name == "special") {
             set_rgb_color(attrs->special, pair.second);
         } else if (name == "reverse") {
-            attrs->flags |= attributes::reverse;
+            attrs->flags |= cell_attributes::reverse;
         } else {
             os_log_info(rpc, "Redraw info: Ignoring highlight attribute - "
                              "Event=hl_attr_define, Name=%.*s",
@@ -456,7 +483,7 @@ void ui_state::hl_attr_define(size_t hlid, msg::map definition) {
         }
     }
     
-    if (attrs->flags & attributes::reverse) {
+    if (attrs->flags & cell_attributes::reverse) {
         std::swap(attrs->background, attrs->foreground);
     }
 }
@@ -481,8 +508,8 @@ static inline cursor_shape to_cursor_shape(const msg::object &object) {
     return cursor_shape::block;
 };
 
-static inline void set_color_attrs(cursor_attributes *attrs,
-                                   const attribute_table &attr_table,
+static inline void set_color_attrs(cursor_attributes *cursor_attrs,
+                                   const highlight_table &hltable,
                                    const msg::object &object) {
     if (!object.is<msg::integer>()) {
         os_log_error(rpc, "Redraw error: Highlight id type error - "
@@ -492,15 +519,15 @@ static inline void set_color_attrs(cursor_attributes *attrs,
     }
     
     const size_t hlid = object.get<msg::integer>();
-    const attributes *hl_attrs = attr_table.get_entry(hlid);
-    attrs->special = hl_attrs->special;
+    const cell_attributes *hl_attrs = hl_get_entry(hltable, hlid);
+    cursor_attrs->special = hl_attrs->special;
     
     if (hlid != 0) {
-        attrs->foreground = hl_attrs->foreground;
-        attrs->background = hl_attrs->background;
+        cursor_attrs->foreground = hl_attrs->foreground;
+        cursor_attrs->background = hl_attrs->background;
     } else {
-        attrs->foreground = hl_attrs->background;
-        attrs->background = hl_attrs->foreground;
+        cursor_attrs->foreground = hl_attrs->background;
+        cursor_attrs->background = hl_attrs->foreground;
     }
 }
 
@@ -513,7 +540,7 @@ static inline T to(const msg::object &object) {
     return {};
 }
 
-static mode_info to_mode_info(const attribute_table &hl_table,
+static mode_info to_mode_info(const highlight_table &hl_table,
                               const msg::map &map) {
     mode_info info = {};
     
@@ -553,7 +580,7 @@ static mode_info to_mode_info(const attribute_table &hl_table,
     return info;
 }
 
-void ui_state::mode_info_set(bool enabled, msg::array property_maps) {
+void ui_controller::mode_info_set(bool enabled, msg::array property_maps) {
     mode_info_table.clear();
     mode_info_table.reserve(property_maps.size());
     current_mode = 0;
@@ -571,7 +598,7 @@ void ui_state::mode_info_set(bool enabled, msg::array property_maps) {
     }
 }
 
-void ui_state::mode_change(msg::string name, size_t index) {
+void ui_controller::mode_change(msg::string name, size_t index) {
     if (index >= mode_info_table.size()) {
         return os_log_error(rpc, "Redraw error: Mode index out of bounds - "
                                  "Event=mode_change, TableSize=%zu, Index=%zu",
@@ -581,16 +608,33 @@ void ui_state::mode_change(msg::string name, size_t index) {
     writing->cursor_attrs = mode_info_table[index].cursor_attrs;
 }
 
-void ui_state::set_title(msg::string new_title) {
+void ui_controller::set_title(msg::string new_title) {
     {
         std::lock_guard lock(option_lock);
-        title = new_title;
+        option_title = new_title;
     }
 
     window.title_set();
 }
 
-static guifont make_guifont(std::string_view fontstr, double default_size) {
+std::string ui_controller::get_title() {
+    std::lock_guard lock(option_lock);
+    return option_title;
+}
+
+std::string ui_controller::get_font_string() {
+    std::lock_guard lock(option_lock);
+    return option_guifont;
+}
+
+nvim::options ui_controller::get_options() {
+    std::lock_guard lock(option_lock);
+    return opts;
+}
+
+/// Makes a font object from a Vim font string.
+/// If size is not given in fontstr, default_size is used.
+static font make_font(std::string_view fontstr, double default_size) {
     size_t index = fontstr.size();
     size_t multiply = 1;
     size_t size = 0;
@@ -608,9 +652,9 @@ static guifont make_guifont(std::string_view fontstr, double default_size) {
     }
     
     if (size && index && fontstr[index] == 'h' && fontstr[index - 1] == ':') {
-        return guifont{fontstr.substr(0, index - 1), (double)size};
+        return font{std::string(fontstr.substr(0, index - 1)), double(size)};
     } else {
-        return guifont{fontstr, default_size};
+        return font{std::string(fontstr), default_size};
     }
 }
 
@@ -621,7 +665,9 @@ static inline size_t find_unescaped_comma(std::string_view string, size_t pos) {
         if (pos == std::string_view::npos) {
             return pos;
         }
-        
+
+        // TODO: We're probably not handling multiple backslashes properly.
+        //       Replace with a more robust solution.
         if (pos != 0 && string[pos - 1] != '\\') {
             return pos;
         }
@@ -630,14 +676,15 @@ static inline size_t find_unescaped_comma(std::string_view string, size_t pos) {
     }
 }
 
-std::vector<guifont> ui_state::get_fonts(double default_size) {
-    std::vector<guifont> fonts;
+std::vector<font> ui_controller::get_fonts(double default_size) {
+    std::lock_guard lock(option_lock);
+    std::vector<font> fonts;
     
-    if (!opt_guifont.size()) {
+    if (!option_guifont.size()) {
         return fonts;
     }
-    
-    std::string_view fontopt = opt_guifont;
+
+    std::string_view fontopt = option_guifont;
     size_t index = 0;
 
     for (;;) {
@@ -645,12 +692,12 @@ std::vector<guifont> ui_state::get_fonts(double default_size) {
 
         if (pos == std::string_view::npos) {
             auto fontstr = fontopt.substr(index);
-            fonts.push_back(make_guifont(fontstr, default_size));
+            fonts.push_back(make_font(fontstr, default_size));
             break;
         }
 
         auto fontstr = fontopt.substr(index, pos - index);
-        fonts.push_back(make_guifont(fontstr, default_size));
+        fonts.push_back(make_font(fontstr, default_size));
         
         index = fontopt.find_first_not_of(' ', pos + 1);
 
@@ -685,25 +732,25 @@ static inline void set_ext_option(bool &opt, const msg::object &value) {
     opt = value.get<msg::boolean>();
 }
 
-void ui_state::set_option(msg::string name, msg::object value) {
+void ui_controller::set_option(msg::string name, msg::object value) {
     if (name == "guifont") {
-        return set_font_option(opt_guifont, value, window);
+        set_font_option(option_guifont, value, window);
     } else if (name == "ext_cmdline")  {
-        return set_ext_option(opts.ext_cmdline, value);
+        set_ext_option(opts.ext_cmdline, value);
     } else if (name == "ext_hlstate")  {
-        return set_ext_option(opts.ext_hlstate, value);
+        set_ext_option(opts.ext_hlstate, value);
     } else if (name == "ext_linegrid")  {
-        return set_ext_option(opts.ext_linegrid, value);
+        set_ext_option(opts.ext_linegrid, value);
     } else if (name == "ext_messages")  {
-        return set_ext_option(opts.ext_messages, value);
+        set_ext_option(opts.ext_messages, value);
     } else if (name == "ext_multigrid")  {
-        return set_ext_option(opts.ext_multigrid, value);
+        set_ext_option(opts.ext_multigrid, value);
     } else if (name == "ext_popupmenu")  {
-        return set_ext_option(opts.ext_popupmenu, value);
+        set_ext_option(opts.ext_popupmenu, value);
     } else if (name == "ext_tabline")  {
-        return set_ext_option(opts.ext_tabline, value);
+        set_ext_option(opts.ext_tabline, value);
     } else if (name == "ext_termcolors")  {
-        return set_ext_option(opts.ext_termcolors, value);
+        set_ext_option(opts.ext_termcolors, value);
     }
 }
 

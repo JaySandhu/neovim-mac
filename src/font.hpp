@@ -73,7 +73,7 @@ public:
 
 class font_family {
 private:
-    arc_ptr<CTFontRef> fonts[(size_t)ui::font_attributes::bold_italic + 1];
+    arc_ptr<CTFontRef> fonts[(size_t)nvim::font_attributes::bold_italic + 1];
     CGFloat unscaled_size_;
     CGFloat scale_factor_;
 
@@ -83,22 +83,22 @@ public:
     font_family() = default;
     
     CTFontRef regular() const {
-        return fonts[(size_t)ui::font_attributes::none].get();
+        return fonts[(size_t)nvim::font_attributes::none].get();
     }
     
     CTFontRef bold() const {
-        return fonts[(size_t)ui::font_attributes::bold].get();
+        return fonts[(size_t)nvim::font_attributes::bold].get();
     }
     
     CTFontRef italic() const {
-        return fonts[(size_t)ui::font_attributes::italic].get();
+        return fonts[(size_t)nvim::font_attributes::italic].get();
     }
     
     CTFontRef bold_italic() const {
-        return fonts[(size_t)ui::font_attributes::bold_italic].get();
+        return fonts[(size_t)nvim::font_attributes::bold_italic].get();
     }
     
-    CTFontRef get(ui::font_attributes attrs) const {
+    CTFontRef get(nvim::font_attributes attrs) const {
         return fonts[(size_t)attrs].get();
     }
     
@@ -201,9 +201,9 @@ struct glyph_rasterizer {
     glyph_rasterizer(size_t width, size_t height);
         
     glyph_bitmap rasterize(CTFontRef font,
-                           ui::rgb_color background,
-                           ui::rgb_color foreground,
-                           ui::grapheme_cluster_view graphemes);
+                           nvim::rgb_color background,
+                           nvim::rgb_color foreground,
+                           std::string_view string);
     
     size_t stride() const {
         return midx * 2 * pixel_size;
@@ -254,16 +254,16 @@ struct glyph_texture_cache {
 struct glyph_manager {
     struct key_type {
         size_t hash;
-        ui::grapheme_cluster graphemes;
+        nvim::grapheme_cluster graphemes;
         uint32_t background;
         uint32_t foreground;
         CTFontRef font;
 
         key_type(CTFontRef font,
-                 ui::grapheme_cluster_view graphemes,
-                 ui::rgb_color background,
-                 ui::rgb_color foreground):
-            graphemes(graphemes.value()),
+                 const nvim::grapheme_cluster &graphemes,
+                 nvim::rgb_color background,
+                 nvim::rgb_color foreground):
+            graphemes(graphemes),
             font(font),
             background(background.opaque()),
             foreground(foreground.opaque()) {
@@ -302,10 +302,10 @@ struct glyph_manager {
     glyph_map map;
     
     cached_glyph get(CTFontRef font,
-                     ui::grapheme_cluster_view graphemes,
-                     ui::rgb_color background,
-                     ui::rgb_color foreground) {
-        key_type key(font, graphemes, background, foreground);
+                     const nvim::cell &cell,
+                     nvim::rgb_color background,
+                     nvim::rgb_color foreground) {
+        key_type key(font, cell.grapheme(), background, foreground);
         
         if (auto iter = map.find(key); iter != map.end()) {
             return iter->second;
@@ -314,7 +314,7 @@ struct glyph_manager {
         glyph_bitmap glyph = rasterizer->rasterize(font,
                                                    background,
                                                    foreground,
-                                                   graphemes);
+                                                   cell.grapheme_view());
         
         auto texture_position = texture_cache.add(glyph);
         
@@ -330,11 +330,9 @@ struct glyph_manager {
         return cached;
     }
     
-    cached_glyph get(const font_family &font_family, const ui::cell &cell) {
-        return get(font_family.get(cell.font_attributes()),
-                   cell.graphemes_view(),
-                   cell.background(),
-                   cell.foreground());
+    cached_glyph get(const font_family &font_family, const nvim::cell &cell) {
+        return get(font_family.get(cell.font_attributes()), cell,
+                   cell.background(), cell.foreground());
     }
      
     void evict();

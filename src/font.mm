@@ -78,10 +78,10 @@ font_family font_manager::get(CTFontDescriptorRef descriptor,
     arc_ptr bold_italic = CTFontDescriptorCreateCopyWithSymbolicTraits(descriptor, mask, mask);
     
     font_family family;
-    family.fonts[(size_t)ui::font_attributes::none] = get_font(descriptor, scaled_size);
-    family.fonts[(size_t)ui::font_attributes::bold] = get_font(bold.get(), scaled_size);
-    family.fonts[(size_t)ui::font_attributes::italic] = get_font(italic.get(), scaled_size);
-    family.fonts[(size_t)ui::font_attributes::bold_italic] = get_font(bold_italic.get(), scaled_size);
+    family.fonts[(size_t)nvim::font_attributes::none] = get_font(descriptor, scaled_size);
+    family.fonts[(size_t)nvim::font_attributes::bold] = get_font(bold.get(), scaled_size);
+    family.fonts[(size_t)nvim::font_attributes::italic] = get_font(italic.get(), scaled_size);
+    family.fonts[(size_t)nvim::font_attributes::bold_italic] = get_font(bold_italic.get(), scaled_size);
     family.scale_factor_ = scale_factor;
     family.unscaled_size_ = size;
 
@@ -155,8 +155,8 @@ static inline void clear_bitmap(glyph_bitmap &bitmap, uint32_t clear_pixel) {
 }
 
 static inline arc_ptr<CTLineRef> make_line(CTFontRef font,
-                                           ui::rgb_color foreground,
-                                           ui::grapheme_cluster_view string) {
+                                           nvim::rgb_color foreground,
+                                           std::string_view string) {
     arc_ptr fg_cgcolor = CGColorCreateSRGB((double)foreground.red()   / 255,
                                            (double)foreground.green() / 255,
                                            (double)foreground.blue()  / 255, 1);
@@ -184,9 +184,9 @@ static inline arc_ptr<CTLineRef> make_line(CTFontRef font,
 }
 
 glyph_bitmap glyph_rasterizer::rasterize(CTFontRef font,
-                                         ui::rgb_color background,
-                                         ui::rgb_color foreground,
-                                         ui::grapheme_cluster_view text) {
+                                         nvim::rgb_color background,
+                                         nvim::rgb_color foreground,
+                                         std::string_view text) {
     CGContextSetTextPosition(context.get(), midx, midy);
     arc_ptr line = make_line(font, foreground, text);
 
@@ -208,7 +208,7 @@ glyph_bitmap glyph_rasterizer::rasterize(CTFontRef font,
     bitmap.stride = stride();
     bitmap.buffer = buffer.get() + ((col + row) * pixel_size);
         
-    clear_bitmap(bitmap, background.value | 0xFF000000);
+    clear_bitmap(bitmap, background.opaque());
     CTLineDraw(line.get(), context.get());
     
     return bitmap;
