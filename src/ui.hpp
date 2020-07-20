@@ -273,7 +273,7 @@ inline bool operator!=(const grid_point &left, const grid_point &right) {
 /// appearance and behavior of the cursor.
 class cursor {
 private:
-    cursor_attributes attrs;
+    cursor_attributes attrs_;
     size_t row_;
     size_t col_;
     const cell *ptr_;
@@ -282,7 +282,7 @@ public:
     /// A default constructed cursor should only be assigned to or destroyed.
     /// This constructor is only provided because Objective-C++ requires C++
     /// instance variables to be default constructible.
-    cursor(): attrs(), row_(0), col_(0), ptr_(nullptr) {}
+    cursor(): attrs_(), row_(0), col_(0), ptr_(nullptr) {}
 
     /// Construct a new cursor object.
     /// @param row      The row position of the cursor.
@@ -290,19 +290,19 @@ public:
     /// @param ptr      A pointer to the cursor's underlying cell.
     /// @param attrs    The cursor's attributes.
     cursor(size_t row, size_t col, const cell *ptr, cursor_attributes attrs):
-        attrs(attrs), row_(row), col_(col), ptr_(ptr) {
-        if (attrs.background.is_default() && attrs.foreground.is_default()) {
-            attrs.background = ptr->foreground();
-            attrs.foreground = ptr->background();
+        attrs_(attrs), row_(row), col_(col), ptr_(ptr) {
+        if (attrs_.background.is_default() && attrs.foreground.is_default()) {
+            attrs_.background = ptr->foreground();
+            attrs_.foreground = ptr->background();
             return;
         }
 
-        if (attrs.background.is_default()) {
-            attrs.background = ptr->background();
+        if (attrs_.background.is_default()) {
+            attrs_.background = ptr->background();
         }
 
-        if (attrs.foreground.is_default()) {
-            attrs.foreground = ptr->foreground();
+        if (attrs_.foreground.is_default()) {
+            attrs_.foreground = ptr->foreground();
         }
     }
 
@@ -313,12 +313,12 @@ public:
 
     /// Get the cursor shape.
     cursor_shape shape() const {
-        return attrs.shape;
+        return attrs_.shape;
     }
 
     /// Set the cursor shape.
     void shape(cursor_shape new_shape) {
-        attrs.shape = new_shape;
+        attrs_.shape = new_shape;
     }
 
     /// The cursor's row in its parent grid.
@@ -333,49 +333,49 @@ public:
 
     /// The cursor's background color.
     rgb_color background() const {
-        return attrs.background;
+        return attrs_.background;
     }
 
     /// The cursor's foreground color.
     rgb_color foreground() const {
-        return attrs.foreground;
+        return attrs_.foreground;
     }
 
     /// True if the cursor should blink, false otherwise.
     bool blinks() const {
-        return attrs.blinks;
+        return attrs_.blinks;
     }
 
     /// The delay in ms before the cursor starts blinking.
     uint16_t blinkwait() const {
-        return attrs.blinkwait;
+        return attrs_.blinkwait;
     }
 
     /// The time in ms that the cursor is not shown.
     uint16_t blinkoff() const {
-        return attrs.blinkoff;
+        return attrs_.blinkoff;
     }
 
     /// The time in ms that the cursor is shown.
     uint16_t blinkon() const {
-        return attrs.blinkon;
+        return attrs_.blinkon;
     }
 
     /// Make the cursor invisible.
     /// When the cursor is invisible, shape() returns a value outside the range
     /// of the cursor_shape enum.
     void toggle_off() {
-        attrs.shape = static_cast<cursor_shape>((uint8_t)attrs.shape | 128);
+        attrs_.shape = static_cast<cursor_shape>((uint8_t)attrs_.shape | 128);
     }
 
     /// Make the cursor visible.
     void toggle_on() {
-        attrs.shape = static_cast<cursor_shape>((uint8_t)attrs.shape & 127);
+        attrs_.shape = static_cast<cursor_shape>((uint8_t)attrs_.shape & 127);
     }
 
     /// Toggles the cursor's visbility.
     void toggle() {
-        attrs.shape = static_cast<cursor_shape>((uint8_t)attrs.shape ^ 128);
+        attrs_.shape = static_cast<cursor_shape>((uint8_t)attrs_.shape ^ 128);
     }
 };
 
