@@ -14,6 +14,7 @@
 		69240E23242B9855004E0DE0 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 69240E22242B9855004E0DE0 /* main.m */; };
 		69240E3C242BA3DA004E0DE0 /* BumpAllocator.mm in Sources */ = {isa = PBXBuildFile; fileRef = 69240E3A242BA3B1004E0DE0 /* BumpAllocator.mm */; };
 		69240E40242BA40E004E0DE0 /* DeathTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 69240E3E242BA401004E0DE0 /* DeathTest.m */; };
+		693465E224C618CF0050ACEA /* Neovim-Document.icns in Resources */ = {isa = PBXBuildFile; fileRef = 693465E124C618CF0050ACEA /* Neovim-Document.icns */; };
 		693550E9242CBFE500FB0A94 /* circular_buffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 693550E7242CBFE500FB0A94 /* circular_buffer.cpp */; };
 		693550EB242CBFFD00FB0A94 /* CircularBuffer.mm in Sources */ = {isa = PBXBuildFile; fileRef = 693550EA242CBFFD00FB0A94 /* CircularBuffer.mm */; };
 		69431234243E098B0015C0EA /* ui.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 69431232243E098B0015C0EA /* ui.cpp */; };
@@ -95,6 +96,7 @@
 		69240E3A242BA3B1004E0DE0 /* BumpAllocator.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = BumpAllocator.mm; sourceTree = "<group>"; };
 		69240E3D242BA401004E0DE0 /* DeathTest.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DeathTest.h; sourceTree = "<group>"; };
 		69240E3E242BA401004E0DE0 /* DeathTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DeathTest.m; sourceTree = "<group>"; };
+		693465E124C618CF0050ACEA /* Neovim-Document.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = "Neovim-Document.icns"; sourceTree = "<group>"; };
 		693550E7242CBFE500FB0A94 /* circular_buffer.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = circular_buffer.cpp; sourceTree = "<group>"; };
 		693550E8242CBFE500FB0A94 /* circular_buffer.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = circular_buffer.hpp; sourceTree = "<group>"; };
 		693550EA242CBFFD00FB0A94 /* CircularBuffer.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = CircularBuffer.mm; sourceTree = "<group>"; };
@@ -217,6 +219,7 @@
 				69240E1E242B9855004E0DE0 /* MainMenu.xib */,
 				69240E21242B9855004E0DE0 /* Info.plist */,
 				69905F2324C4B57D00CD67F1 /* Neovim.icns */,
+				693465E124C618CF0050ACEA /* Neovim-Document.icns */,
 			);
 			path = Resources;
 			sourceTree = SOURCE_ROOT;
@@ -334,6 +337,7 @@
 				69CB6DEC24AB96450075229B /* share in Resources */,
 				69905F2424C4B57D00CD67F1 /* Neovim.icns in Resources */,
 				69CB6DEA24AB963B0075229B /* lib in Resources */,
+				693465E224C618CF0050ACEA /* Neovim-Document.icns in Resources */,
 				69240E1D242B9855004E0DE0 /* Assets.xcassets in Resources */,
 				69240E20242B9855004E0DE0 /* MainMenu.xib in Resources */,
 			);
