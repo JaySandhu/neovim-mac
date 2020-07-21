@@ -77,10 +77,10 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
 
     if (*error) return self;
 
-    glyphManager.rasterizer = rasterizer;
-    glyphManager.texture_cache = glyph_texture_cache(_commandQueue,
-                                                     options->texturePageWidth,
-                                                     options->texturePageHeight);
+    glyphManager = glyph_manager(rasterizer,
+                                 _commandQueue,
+                                 options->texturePageWidth,
+                                 options->texturePageHeight);
 
     return self;
 }

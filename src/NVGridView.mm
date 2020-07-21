@@ -403,7 +403,7 @@ static void blinkCursorToggleOn(void *context) {
 }
 
 static inline glyph_data make_glyph_data(simd_short2 grid_position,
-                                         cached_glyph glyph,
+                                         glyph_cached glyph,
                                          uint32_t cell_width) {
     glyph_data data;
     data.grid_position = grid_position;
@@ -549,7 +549,7 @@ static inline line_data make_strikethrough_data(NVGridView *view,
             }
 
             if (!cell->empty()) {
-                cached_glyph glyph = glyph_manager->get(font_family, *cell);
+                glyph_cached glyph = glyph_manager->get(font_family, *cell);
                 simd_short2 gridpos = simd_make_short2(row, col);
                 glyph_data data = make_glyph_data(gridpos, glyph, cell->width());
                 buffer.push_back_unchecked(data);
@@ -650,7 +650,7 @@ static inline line_data make_strikethrough_data(NVGridView *view,
             if (!cursor_cell->empty()) {
                 CTFontRef font = font_family.get(cursor_cell->font_attributes());
 
-                cached_glyph glyph = glyph_manager->get(font,
+                glyph_cached glyph = glyph_manager->get(font,
                                                         cursor.cell(),
                                                         cursor.background(),
                                                         cursor.foreground());

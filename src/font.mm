@@ -12,10 +12,13 @@
 #include "font.hpp"
 
 CGFloat font_family::width() const {
+    // Use a random, kinda wide, char. This shouldn't make a difference if we're
+    // using a monospaced font, which is hopefully the case. We could improve
+    // this logic to provide a better guesstimate for non monospace fonts.
     unichar mchar = 'M';
     CGGlyph mglyph;
     CTFontGetGlyphsForCharacters(regular(), &mchar, &mglyph, 1);
-    
+
     if (!mglyph) {
         CGRect rect = CTFontGetBoundingBox(regular());
         return rect.size.width;
@@ -63,6 +66,11 @@ arc_ptr<CTFontDescriptorRef> font_manager::make_descriptor(std::string_view name
 }
 
 arc_ptr<CTFontDescriptorRef> font_manager::default_descriptor() {
+    // This is our hackish way of getting a SF Mono system font descriptor.
+    // It seems to work for now, but things are pretty fragile. The call to
+    // fontDescriptorWithSymbolicTraits: might seem pointless, but its
+    // required to get a normal, resizable, restylable font descriptor. Without
+    // it CTFontDescriptorCreateCopyWithSymbolicTraits will fail.
     NSFontDescriptor *system = [[NSFont systemFontOfSize:0] fontDescriptor];
     NSFontDescriptor *monospaced = [system fontDescriptorWithDesign:NSFontDescriptorSystemDesignMonospaced];
     return (__bridge_retained CTFontDescriptorRef)[monospaced fontDescriptorWithSymbolicTraits:0];
@@ -118,7 +126,8 @@ glyph_rasterizer::glyph_rasterizer(size_t width, size_t height) {
     context = CGBitmapContextCreate(buffer.get(), width, height, 8,
                                     width * pixel_size, color_space.get(),
                                     kCGImageAlphaPremultipliedLast);
-    
+
+    // Most of this is redundant, but we'll do it anyway.
     CGContextSetAllowsAntialiasing(context.get(), true);
     CGContextSetShouldAntialias(context.get(), true);
     CGContextSetAllowsFontSmoothing(context.get(), true);
@@ -129,6 +138,7 @@ glyph_rasterizer::glyph_rasterizer(size_t width, size_t height) {
     CGContextSetShouldSubpixelQuantizeFonts(context.get(), true);
 }
 
+/// Clamps value to between limit and -limit.
 static inline CGFloat clamp_abs(CGFloat value, CGFloat limit) {
     if (value > limit) {
         return limit;
@@ -190,6 +200,8 @@ glyph_bitmap glyph_rasterizer::rasterize(CTFontRef font,
     CGContextSetTextPosition(context.get(), midx, midy);
     arc_ptr line = make_line(font, foreground, text);
 
+    // We have to pad the glyph metrics to account for anti aliasing and float
+    // to integer conversions. The numbers used were arrived at experimentally.
     CGRect bounds = CTLineGetBoundsWithOptions(line.get(), kCTLineBoundsUseGlyphPathBounds);
     CGFloat descent = bounds.origin.y - 2;
     CGFloat ascent  = bounds.size.height + bounds.origin.y + 2;
@@ -210,7 +222,6 @@ glyph_bitmap glyph_rasterizer::rasterize(CTFontRef font,
         
     clear_bitmap(bitmap, background.opaque());
     CTLineDraw(line.get(), context.get());
-    
     return bitmap;
 }
 
@@ -238,9 +249,12 @@ glyph_texture_cache::glyph_texture_cache(id<MTLCommandQueue> queue,
     texture = [device newTextureWithDescriptor:desc];
 }
 
+/// Adds a new cache page and caches the bitmap on it.
+/// Called when we have exhuasted our exisiting cache pages.
 simd_short3 glyph_texture_cache::add_new_page(const glyph_bitmap &bitmap) {
     const size_t new_page_count = page_count + 1;
-    
+
+    // Allocate an identical texture with an additional cache page.
     MTLTextureDescriptor *desc = [[MTLTextureDescriptor alloc] init];
     desc.textureType = MTLTextureType2DArray;
     desc.arrayLength = new_page_count;
@@ -251,7 +265,8 @@ simd_short3 glyph_texture_cache::add_new_page(const glyph_bitmap &bitmap) {
     
     id<MTLTexture> old_texture = texture;
     texture = [device newTextureWithDescriptor:desc];
-    
+
+    // Copy the existing cache pages to the new texture.
     id<MTLCommandBuffer> commandBuffer = [queue commandBuffer];
     id<MTLBlitCommandEncoder> blitEncoder = [commandBuffer blitCommandEncoder];
 
@@ -266,7 +281,8 @@ simd_short3 glyph_texture_cache::add_new_page(const glyph_bitmap &bitmap) {
     
     [blitEncoder endEncoding];
     [commandBuffer commit];
-    
+
+    // Finally cache the bitmap
     x_used = std::min((size_t)bitmap.width + 1, x_size);
     y_used = std::min((size_t)bitmap.height, y_size);
     row_height = y_used;
