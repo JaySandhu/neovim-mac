@@ -23,8 +23,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)shutdown;
 - (void)connect:(NSString *)addr;
 
-- (void)spawn;
-- (void)spawnOpenFiles:(NSArray<NSURL*>*)urls;
+- (int)spawn;
+- (int)spawnOpenFile:(NSString*)filename;
+- (int)spawnOpenFiles:(NSArray<NSString*>*)filenames;
+- (int)spawnOpenURLs:(NSArray<NSURL*>*)urls;
 
 - (void)redraw;
 

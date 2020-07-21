@@ -181,6 +181,10 @@ static inline std::string_view buttonName(MouseButton button) {
     return unsaved;
 }
 
++ (void)closeAll {
+
+}
+
 - (void)close {
     if (windowIsOpen) {
         [super close];
@@ -447,43 +451,52 @@ static inline NSScreen* screenContainingPoint(NSArray<NSScreen*> *screens, NSPoi
     [self attach];
 }
 
-- (void)spawn {
+- (int)spawnWithArgs:(const char**)argv {
     NSString *nvimExecutable = [[NSBundle mainBundle] pathForAuxiliaryExecutable:@"nvim"];
-
-    static const char *argv[] = {
-        "nvim", "--embed", nullptr
-    };
-
     int error = nvim.spawn([nvimExecutable UTF8String], argv);
 
     if (error) {
         printf("Spawn error: %i: %s\n", error, strerror(error));
-        return;
+        return error;
     }
 
     [self attach];
+    return 0;
 }
 
-- (void)spawnOpenFiles:(NSArray<NSURL*>*)urls {
+- (int)spawn {
+    static const char *argv[] = {
+        "nvim", "--embed", nullptr
+    };
+
+    return [self spawnWithArgs:argv];
+}
+
+- (int)spawnOpenFile:(NSString *)filename {
+    const char *argv[4] = {"nvim", "--embed", [filename UTF8String], nullptr};
+    return [self spawnWithArgs:argv];
+}
+
+- (int)spawnOpenFiles:(NSArray<NSString*> *)filenames {
     std::vector<const char*> argv{"nvim", "--embed", "-p"};
-    
-    if ([urls count]) {
-        for (NSURL *url in urls) {
-            argv.push_back([[url path] UTF8String]);
-        }
+
+    for (NSString *file in filenames) {
+        argv.push_back([file UTF8String]);
     }
 
     argv.push_back(nullptr);
+    return [self spawnWithArgs:argv.data()];
+}
 
-    NSString *nvimExecutable = [[NSBundle mainBundle] pathForAuxiliaryExecutable:@"nvim"];
-    int error = nvim.spawn([nvimExecutable UTF8String], argv.data());
-    
-    if (error) {
-        printf("Spawn error: %i: %s\n", error, strerror(error));
-        return;
+- (int)spawnOpenURLs:(NSArray<NSURL*>*)urls {
+    std::vector<const char*> argv{"nvim", "--embed", "-p"};
+
+    for (NSURL *url in urls) {
+        argv.push_back([[url path] UTF8String]);
     }
 
-    [self attach];
+    argv.push_back(nullptr);
+    return [self spawnWithArgs:argv.data()];
 }
 
 - (void)dealloc {

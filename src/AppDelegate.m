@@ -25,13 +25,11 @@ os_log_t rpc;
     NSAlert *alert = [[NSAlert alloc] init];
     alert.alertStyle = NSAlertStyleCritical;
     alert.messageText = @"This Mac does not support Metal";
-
     alert.informativeText = @"No Metal capable devices were found. "
                              "Neovim-Mac requires a Metal capable device.";
 
     [alert addButtonWithTitle:@"Quit"];
     [alert runModal];
-
     exit(1);
 }
 
@@ -76,9 +74,7 @@ os_log_t rpc;
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     [defaults setBool:YES forKey:@"NSDisabledDictationMenuItem"];
     [defaults setBool:YES forKey:@"NSDisabledCharacterPaletteMenuItem"];
-}
 
-- (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
     signal(SIGPIPE, SIG_IGN);
     rpc = os_log_create("io.github.jaysandhu.neovim-mac", "RPC");
     
@@ -89,8 +85,31 @@ os_log_t rpc;
     options.texturePageHeight = 1024;
 
     contextManager = [[NVRenderContextManager alloc] initWithOptions:options delegate:self];
+}
+
+- (BOOL)applicationOpenUntitledFile:(NSApplication *)sender {
     NVWindowController *controller = [[NVWindowController alloc] initWithContextManager:contextManager];
-    [controller connect:@"/Users/jay/pipe"];
+
+    if ([controller spawn]) {
+        return NO;
+    }
+
+    return YES;
+}
+
+- (BOOL)application:(NSApplication *)sender openFile:(NSString *)filename {
+    NVWindowController *controller = [[NVWindowController alloc] initWithContextManager:contextManager];
+
+    if ([controller spawnOpenFile:filename]) {
+        return NO;
+    }
+
+    return YES;
+}
+
+- (void)application:(NSApplication *)sender openFiles:(NSArray<NSString *> *)filenames {
+    NVWindowController *controller = [[NVWindowController alloc] initWithContextManager:contextManager];
+    [controller spawnOpenFiles:filenames];
 }
 
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender {
@@ -103,7 +122,6 @@ os_log_t rpc;
     alert.messageText = @"Quit without saving?";
     alert.informativeText = @"There are modified buffers, if you quit now "
                              "all changes will be lost. Quit anyway?";
-     
     [alert addButtonWithTitle:@"Quit"];
     [alert addButtonWithTitle:@"Cancel"];
     
@@ -143,7 +161,7 @@ os_log_t rpc;
     }
     
     NVWindowController *controller = [[NVWindowController alloc] initWithContextManager:contextManager];
-    [controller spawnOpenFiles:[panel URLs]];
+    [controller spawnOpenURLs:[panel URLs]];
 }
 
 @end
