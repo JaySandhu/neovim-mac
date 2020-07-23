@@ -398,12 +398,12 @@ private:
 public:
     grid(): grid_width(0), grid_height(0), draw_tick(0) {}
 
-    auto begin() const {
-        return cells.begin();
+    const cell* begin() const {
+        return cells.data();
     }
 
-    auto end() const {
-        return cells.end();
+    const cell* end() const {
+        return cells.data() + cells.size();
     }
 
     /// A pointer to the cell at the given row and column.
