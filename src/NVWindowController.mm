@@ -325,13 +325,13 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(nvim::
         [gridView setRenderContext:newContext];
     }
 
-    font_family *oldFont = gridView.font;
-    CGFloat oldScaleFactor = oldFont->scale_factor();
+    const font_family &oldFont = gridView.font;
+    CGFloat oldScaleFactor = oldFont.scale_factor();
     CGFloat newScaleFactor = screen.backingScaleFactor;
 
     if (oldScaleFactor != newScaleFactor) {
-        CGFloat fontSize = oldFont->unscaled_size();
-        gridView.font = fontManager->get_resized(*oldFont, fontSize, newScaleFactor);
+        CGFloat fontSize = oldFont.unscaled_size();
+        gridView.font = fontManager->get_resized(oldFont, fontSize, newScaleFactor);
 
         [self neovimDidResize];
         [self cellSizeDidChange];
@@ -722,6 +722,11 @@ static void keyDownIgnoreModifiers(nvim::process &nvim, NSEventModifierFlags fla
 
 - (void)mouseDown:(NSEvent *)event button:(MouseButton)button {
     nvim::grid_point location = [gridView cellLocation:event.locationInWindow];
+
+    if (location == NVCellNotFound) {
+        return;
+    }
+
     input_modifiers modifiers = input_modifiers(event.modifierFlags);
 
     nvim.input_mouse(buttonName(button), "press", modifiers, location.row, location.column);
@@ -732,7 +737,7 @@ static void keyDownIgnoreModifiers(nvim::process &nvim, NSEventModifierFlags fla
     nvim::grid_point location = [gridView cellLocation:event.locationInWindow];
     nvim::grid_point &lastLocation = lastMouseLocation[button];
 
-    if (location != lastLocation) {
+    if (location != lastLocation && location != NVCellNotFound) {
         input_modifiers modifiers = input_modifiers(event.modifierFlags);
         nvim.input_mouse(buttonName(button), "drag", modifiers, location.row, location.column);
         lastLocation = location;
@@ -743,7 +748,9 @@ static void keyDownIgnoreModifiers(nvim::process &nvim, NSEventModifierFlags fla
     nvim::grid_point location = [gridView cellLocation:event.locationInWindow];
     input_modifiers modifiers = input_modifiers(event.modifierFlags);
 
-    nvim.input_mouse(buttonName(button), "release", modifiers, location.row, location.column);
+    if (location != NVCellNotFound) {
+        nvim.input_mouse(buttonName(button), "release", modifiers, location.row, location.column);
+    }
 }
 
 - (void)mouseDown:(NSEvent *)event {
@@ -784,6 +791,10 @@ static void keyDownIgnoreModifiers(nvim::process &nvim, NSEventModifierFlags fla
 
 static void scrollEvent(nvim::process &nvim, size_t count, std::string_view direction,
                         std::string_view modifiers, nvim::grid_point location) {
+    if (location == NVCellNotFound) {
+        return;
+    }
+
     for (size_t i=0; i<count; ++i) {
         nvim.input_mouse("wheel", direction, modifiers, location.row, location.column);
     }
@@ -1177,30 +1188,30 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
 }
 
 - (IBAction)zoomIn:(id)sender {
-    font_family *font = [gridView font];
-    CGFloat size = font->unscaled_size() + 1;
+    const font_family &font = [gridView font];
+    CGFloat size = font.unscaled_size() + 1;
     
     if (size > 72) {
         return NSBeep();
     }
 
     CGFloat scaleFactor = [self.window backingScaleFactor];
-    [gridView setFont:fontManager->get_resized(*font, size, scaleFactor)];
+    [gridView setFont:fontManager->get_resized(font, size, scaleFactor)];
 
     [self neovimDidResize];
     [self cellSizeDidChange];
 }
 
 - (IBAction)zoomOut:(id)sender {
-    font_family *font = [gridView font];
-    CGFloat size = font->unscaled_size() - 1;
+    const font_family &font = [gridView font];
+    CGFloat size = font.unscaled_size() - 1;
     
     if (size < 6) {
         return NSBeep();
     }
     
     CGFloat scaleFactor = [self.window backingScaleFactor];
-    [gridView setFont:fontManager->get_resized(*font, size, scaleFactor)];
+    [gridView setFont:fontManager->get_resized(font, size, scaleFactor)];
 
     [self neovimDidResize];
     [self cellSizeDidChange];

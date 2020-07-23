@@ -12,162 +12,161 @@
 #import "NVGridView.h"
 #import "ShaderTypes.h"
 
+/// Utility class to help manage Metal buffers.
+/// The class provides two additional abstractions over a MTLBuffer:
+///   1. A low overhead locking mechanism.
+///   2. A means to coalesce multiple allocations into a single MTLBuffer.
 class mtlbuffer {
 private:
+    id<MTLDevice> buffer_device;
     id<MTLBuffer> buffer;
     char *ptr;
     size_t length;
     size_t capacity;
-    size_t last_offset;
     std::atomic_flag in_use;
 
     static constexpr size_t align_up(size_t val, size_t alignment) {
         return (val + alignment - 1) & -alignment;
     }
 
-    void expand(size_t new_capacity) {
-        const size_t aligned = align_up(new_capacity, 8);
-
-        id<MTLDevice> device = [buffer device];
-        MTLResourceOptions options = [buffer resourceOptions];
-
-        buffer = [device newBufferWithLength:aligned options:options];
-        ptr = static_cast<char*>([buffer contents]);
-        capacity = aligned;
-    }
-
 public:
+    /// A region of the underlying MTLBuffer's memory.
+    struct region {
+        void *ptr;      ///< Pointer to the start of the region.
+        size_t offset;  ///< The regions offset in the underlying MTLBuffer.
+    };
+
+    /// Constructs an empty mtlbuffer.
     mtlbuffer() {
+        buffer_device = nil;
         buffer = nil;
         ptr = nullptr;
         length = 0;
         capacity = 0;
-        last_offset = 0;
     }
 
-    mtlbuffer(id<MTLDevice> device, size_t init_capacity) {
-        buffer = [device newBufferWithLength:init_capacity
+    /// Creates the underlying MTLBuffer.
+    ///
+    /// @param device   The new buffers device.
+    /// @param size     The size of the buffer in bytes.
+    ///
+    /// If the existing buffer is on the same device, and is of sufficient
+    /// length, it is reused. Otherwise a new buffer is allocated and the
+    /// existing buffer is freed. Calling this function invalidates any
+    /// previously allocated memory regions.
+    void create(id<MTLDevice> device, size_t size) {
+        length = 0;
+
+        if (buffer_device != device) {
+            buffer_device = device;
+            size = std::max(1048576ul, align_up(size, 8));
+        } else if (size <= capacity) {
+            return;
+        }
+
+        buffer = [device newBufferWithLength:size
                                      options:MTLResourceStorageModeManaged |
                                              MTLResourceCPUCacheModeWriteCombined];
 
         ptr = static_cast<char*>([buffer contents]);
-        length = 0;
-        capacity = init_capacity;
-        last_offset = 0;
+        capacity = size;
     }
 
-    mtlbuffer(const mtlbuffer &&other) {
-        buffer = other.buffer;
-        ptr = other.ptr;
-        length = other.length;
-        capacity = other.capacity;
-        last_offset = other.last_offset;
-    }
-
-    mtlbuffer& operator=(const mtlbuffer &&other) {
-        buffer = other.buffer;
-        ptr = other.ptr;
-        length = other.length;
-        capacity = other.capacity;
-        last_offset = other.last_offset;
-        return *this;
-    }
-
-    void clear() {
-        length = 0;
-        last_offset = 0;
-    }
-
-    void reserve(size_t size) {
-        if (size > capacity) {
-            expand(size);
-        }
-    }
-
-    template<typename T>
-    void push_back(const T &val) {
-        const size_t new_length = length + sizeof(T);
-
-        if (new_length > capacity) {
-            expand(new_length * 2);
-        }
-
-        memcpy(ptr + length, &val, sizeof(T));
-        length = new_length;
-    }
-
-    template<typename T>
-    void push_back_unchecked(const T &val) {
-        memcpy(ptr + length, &val, sizeof(T));
-        length += sizeof(T);
+    /// Allocates a region of memory from the underlying MTLBuffer.
+    /// Assumes there is sufficient capacity to carry out the allocation.
+    /// Note: Regions are aligned to 256 byte boundaries, as such this function
+    /// can use up to size + 255 bytes.
+    region allocate(size_t size) {
+        size_t offset = length;
+        length = align_up(length + size, 256);
         assert(length <= capacity);
+        return region{ptr + offset, offset};
     }
 
-    void insert(const void *source, size_t size) {
-        const size_t new_length = length + size;
-
-        if (new_length > capacity) {
-            expand(new_length * 2);
-        }
-
-        memcpy(ptr + length, source, size);
-        length = new_length;
-    }
-
-    void insert_unchecked(const void *source, size_t size) {
-        memcpy(ptr + length, source, size);
-        length += size;
-        assert(length <= capacity);
-    }
-
-    template<typename T, typename ...Args>
-    T& emplace_back(Args &&...args) {
-        const size_t new_length = length + sizeof(T);
-
-        if (new_length > capacity) {
-            expand(new_length * 2);
-        }
-
-        T *ret = new (ptr + length) T(std::forward<Args>()...);
-        length = new_length;
-        return *ret;
-    }
-
-    template<typename T, typename ...Args>
-    T& emplace_back_unchecked(Args &&...args) {
-        T *ret = new (ptr + length) T(std::forward<Args>(args)...);
-        length += sizeof(T);
-        assert(length <= capacity);
-        return *ret;
-    }
-
+    /// Returns the underlying MTLBuffer.
     id<MTLBuffer> get() const {
         return buffer;
     }
 
-    void* offset(size_t offset) {
-        return ptr + offset;
+    /// Informs the Metal device that the given range has been modified.
+    /// @see -[MTLBuffer didModifyRange] for more information.
+    void update(size_t start, size_t length) {
+        [buffer didModifyRange:NSMakeRange(start, length)];
     }
 
-    size_t offset() {
-        size_t ret = last_offset;
-        length = align_up(length, 256);
-        last_offset = length;
-        return ret;
-    }
-
-    void update() {
-        [buffer didModifyRange:NSMakeRange(0, length)];
-    }
-
-    bool aquire() {
+    /// Try to acquire the buffers lock. Returns immediately.
+    ///
+    /// Note: Calling this function in a loop amounts to an inefficient, and
+    /// more importantly, incorrect, spinlock implementation. Don't do it.
+    ///
+    /// @returns True if the lock was acquired successfully, otherwise false.
+    bool try_lock() {
         return in_use.test_and_set() == false;
     }
 
-    void release() {
+    /// Release the buffers lock. May be called from any thread.
+    void unlock() {
         in_use.clear();
     }
 };
+
+/// Describes a lines appearance and position.
+struct LineMetrics {
+    int16_t ytranslate; ///< The lines vertical offset from the baseline.
+    uint16_t period;    ///< The dotted lines period. 0 for a solid line.
+    uint16_t thickness; ///< The lines thickness.
+};
+
+/// Make a glyph_data object.
+/// @param position The cell's grid position.
+/// @param glyph    The cached glyph.
+/// @param width    The cell's width (single or full width).
+static inline glyph_data glyphData(simd_short2 position, glyph_cached glyph, uint32_t width) {
+    glyph_data data;
+    data.grid_position = position;
+    data.texture_position = glyph.texture_position;
+    data.glyph_position = glyph.glyph_position;
+    data.glyph_size = glyph.glyph_size;
+    data.texture_index = glyph.texture_index;
+    data.cell_width = width;
+    return data;
+}
+
+/// Make a line_data object.
+/// @param gridPosition The cell's grid position.
+/// @param metrics      The metrics describing the line.
+/// @param color        The line's color.
+/// @param linePosition The cell's position in the overall line. This is
+///                     required to correctly render dotted lines. It can be
+///                     ignored for solid lines.
+static inline line_data lineData(simd_short2 gridPosition, LineMetrics metrics,
+                                 nvim::rgb_color color, uint16_t linePosition = 0) {
+    line_data data;
+    data.grid_position = gridPosition;
+    data.color = color;
+    data.period = metrics.period;
+    data.thickness = metrics.thickness;
+    data.ytranslate = metrics.ytranslate;
+    data.count = linePosition;
+    return data;
+}
+
+/// Returns the position of a cell in an undercurl line.
+/// The return value is a zero based index. For example, given the 5th cell in
+/// a row with an undercurl stretching from columns 4 to 10, this function
+/// returns 1.
+static inline int16_t getUndecurlPosition(const nvim::cell *cell, int16_t col) {
+    int16_t count = 0;
+    const nvim::cell *rowbegin = cell - col;
+
+    while (cell != rowbegin) {
+        if ((--cell)->has_undercurl()) {
+            count += 1;
+        }
+    }
+
+    return count;
+}
 
 @implementation NVGridView {
     CAMetalLayer *metalLayer;
@@ -180,27 +179,29 @@ public:
     id<MTLRenderPipelineState> cursorRenderPipeline;
     id<MTLRenderPipelineState> lineRenderPipeline;
 
-    glyph_manager *glyph_manager;
-    font_family font_family;
+    glyph_manager *glyphManager;
+    font_family fontFamily;
     mtlbuffer buffers[3];
     nvim::cursor cursor;
     const nvim::grid *grid;
 
+    NSSize backingCellSize;
     simd_float2 cellSize;
-    simd_float2 baselineTranslation;
-    int32_t lineThickness;
-    int32_t underlineTranslate;
-    int32_t strikethroughTranslate;
-    uint64_t frameIndex;
+    simd_float2 baselineTranslate;
+    LineMetrics underlineMetrics;
+    LineMetrics undercurlMetrics;
+    LineMetrics strikethroughMetrics;
+    uint32_t cursorLineThickness;
 
     dispatch_source_t blinkTimer;
     bool blinkTimerActive;
     bool inactive;
+
+    uint64_t frameIndex;
 }
 
 - (instancetype)init {
     self = [super init];
-
     self.wantsLayer = YES;
     self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawDuringViewResize;
     self.layerContentsPlacement = NSViewLayerContentsPlacementTopLeft;
@@ -209,11 +210,6 @@ public:
                                         dispatch_get_main_queue());
 
     dispatch_set_context(blinkTimer, (__bridge void*)self);
-
-    dispatch_source_set_cancel_handler_f(blinkTimer, [](void*){
-        puts("Timer cancelled");
-    });
-
     return self;
 }
 
@@ -225,13 +221,9 @@ public:
     glyphRenderPipeline  = context.glyphRenderPipeline;
     cursorRenderPipeline = context.cursorRenderPipeline;
     lineRenderPipeline   = context.lineRenderPipeline;
-    glyph_manager        = context.glyphManager;
+    glyphManager         = context.glyphManager;
 
     metalLayer.device = device;
-
-    buffers[0] = mtlbuffer(device, 524288);
-    buffers[1] = mtlbuffer(device, 524288);
-    buffers[2] = mtlbuffer(device, 524288);
 }
 
 - (NVRenderContext *)renderContext {
@@ -250,18 +242,16 @@ public:
 }
 
 - (NSSize)desiredFrameSize {
-    NSSize cellSize = [self cellSize];
-    
     NSSize frameSize;
-    frameSize.width = cellSize.width * grid->width();
-    frameSize.height = cellSize.height * grid->height();
-    
+    frameSize.width = backingCellSize.width * grid->width();
+    frameSize.height = backingCellSize.height * grid->height();
+
     return frameSize;
 }
 
 - (nvim::grid_size)desiredGridSize {
     CGSize drawableSize = [metalLayer drawableSize];
-    
+
     nvim::grid_size size;
     size.width  = drawableSize.width / cellSize.x;
     size.height = drawableSize.height / cellSize.y;
@@ -269,11 +259,7 @@ public:
 }
 
 - (NSSize)cellSize {
-    NSSize backingCellSize;
-    backingCellSize.height = cellSize.y;
-    backingCellSize.width = cellSize.x;
-
-    return [self convertSizeFromBacking:backingCellSize];
+    return backingCellSize;
 }
 
 - (void)viewDidChangeBackingProperties {
@@ -289,10 +275,16 @@ static void blinkCursorToggleOn(void *context);
     grid = newGrid;
     cursor = newGrid->cursor();
 
+    // If we're not the main window:
+    //   - The cursor blink loop should have already been stopped.
+    //   - We override the cursor shape to block_outline.
     if (inactive) {
         assert(!blinkTimerActive);
         cursor.shape(nvim::cursor_shape::block_outline);
-    } else if (cursor.blinks()) {
+        return;
+    }
+
+    if (cursor.blinks()) {
         auto time = dispatch_time(DISPATCH_TIME_NOW, cursor.blinkwait() * NSEC_PER_MSEC);
 
         dispatch_source_set_timer(blinkTimer, time, DISPATCH_TIME_FOREVER, 1 * NSEC_PER_MSEC);
@@ -320,6 +312,7 @@ static void blinkCursorToggleOn(void *context);
     inactive = true;
     cursor.shape(nvim::cursor_shape::block_outline);
 
+    // The cursor shouldn't blink in inactive windows.
     if (blinkTimerActive) {
         dispatch_suspend(blinkTimer);
         blinkTimerActive = false;
@@ -364,8 +357,8 @@ static void blinkCursorToggleOn(void *context) {
     [metalLayer setDrawableSize:[self convertSizeToBacking:newSize]];
 }
 
-- (void)setFont:(font_family)font {
-    font_family = font;
+- (void)setFont:(const font_family&)font {
+    fontFamily = font;
 
     CGFloat leading = floor(font.leading() + 0.5);
     CGFloat descent = floor(font.descent() + 0.5);
@@ -376,11 +369,14 @@ static void blinkCursorToggleOn(void *context) {
 
     cellSize.x = cellWidth;
     cellSize.y = cellHeight;
+    backingCellSize = [self convertSizeFromBacking:NSMakeSize(cellWidth, cellHeight)];
 
-    baselineTranslation.x = 0;
-    baselineTranslation.y = ascent;
+    baselineTranslate.x = 0;
+    baselineTranslate.y = ascent;
 
     CGFloat underlinePos = font.underline_position();
+    uint16_t lineThickness = floor(font.underline_thickness() + 0.5);
+    int16_t underlineTranslate;
 
     if (underlinePos >= 0) {
         underlineTranslate = floor(underlinePos + 0.5);
@@ -388,181 +384,146 @@ static void blinkCursorToggleOn(void *context) {
         underlineTranslate = floor(underlinePos - 0.5);
     }
 
-    strikethroughTranslate = ascent / 3;
-    lineThickness = floor(font.underline_thickness() + 0.5);
+    strikethroughMetrics.period = 0;
+    strikethroughMetrics.thickness = lineThickness;
+    strikethroughMetrics.ytranslate = ascent / 3;
 
+    underlineMetrics.period = 0;
+    underlineMetrics.thickness = lineThickness;
+    underlineMetrics.ytranslate = underlineTranslate;
+
+    undercurlMetrics.period = 2 * font.scale_factor();
+    undercurlMetrics.thickness = 2 * font.scale_factor();
+    undercurlMetrics.ytranslate = underlineTranslate;
+
+    cursorLineThickness = 1 * font.scale_factor();
     [metalLayer setContentsScale:font.scale_factor()];
 }
 
-- (font_family*)font {
-    return &font_family;
+- (const font_family&)font {
+    return fontFamily;
 }
 
 - (CGFloat)scaleFactor {
-    return font_family.scale_factor();
-}
-
-static inline glyph_data make_glyph_data(simd_short2 grid_position,
-                                         glyph_cached glyph,
-                                         uint32_t cell_width) {
-    glyph_data data;
-    data.grid_position = grid_position;
-    data.texture_position = glyph.texture_position;
-    data.glyph_position = glyph.glyph_position;
-    data.glyph_size = glyph.glyph_size;
-    data.texture_index = glyph.texture_index;
-    data.cell_width = cell_width;
-    return data;
-}
-
-static inline line_data make_underline_data(NVGridView *view,
-                                            simd_short2 grid_position,
-                                            nvim::rgb_color color) {
-    line_data data;
-    data.grid_position = grid_position;
-    data.color = color;
-    data.period = 0;
-    data.thickness = view->lineThickness;
-    data.ytranslate = view->underlineTranslate;
-    data.count = 0;
-    return data;
-}
-
-static inline line_data make_undercurl_data(NVGridView *view,
-                                            simd_short2 grid_position,
-                                            nvim::rgb_color color,
-                                            uint16_t count) {
-    line_data data;
-    data.grid_position = grid_position;
-    data.color = color;
-    // TODO: Fix hardcoded values.
-    data.period = 2;
-    data.thickness = 2;
-    data.ytranslate = view->underlineTranslate;
-    data.count = count;
-    return data;
-}
-
-static inline line_data make_undercurl_data(NVGridView *view,
-                                            simd_short2 grid_position,
-                                            nvim::rgb_color color,
-                                            const nvim::cell *cell) {
-    size_t count = 0;
-    const nvim::cell *rowbegin = cell - grid_position.x;
-    
-    while (cell != rowbegin) {
-        if ((--cell)->has_undercurl()) {
-            count += 1;
-        }
-    }
-    
-    return make_undercurl_data(view, grid_position, color, count);
-}
-
-static inline line_data make_strikethrough_data(NVGridView *view,
-                                                simd_short2 grid_position,
-                                                nvim::rgb_color color) {
-    line_data data;
-    data.grid_position = grid_position;
-    data.color = color;
-    data.period = 0;
-    data.thickness = view->lineThickness;
-    data.ytranslate = view->strikethroughTranslate;
-    data.count = 0;
-    return data;
+    return fontFamily.scale_factor();
 }
 
 - (void)displayLayer:(CALayer*)layer {
-    const size_t grid_width = grid->width();
-    const size_t grid_height = grid->height();
-    const size_t grid_size = grid->cells_size();
+    // This is where we render grids. Prepare for a mega long function.
+    const size_t gridWidth  = grid->width();
+    const size_t gridHeight = grid->height();
+    const size_t gridSize   = grid->cells_size();
 
-    const CGSize drawable_size = [metalLayer drawableSize];
+    const CGSize drawableSize = [metalLayer drawableSize];
     const uint64_t index = frameIndex % 3;
+
     mtlbuffer &buffer = buffers[index];
 
-    if (!buffer.aquire()) {
+    // If we fail to acquire the buffer, drop this frame and try again on the
+    // next draw loop iteration. This should be rare.
+    if (!buffer.try_lock()) {
         [self setNeedsDisplay:YES];
         return;
     }
 
-    const simd_float2 pixel_size = simd_float2{2.0, -2.0} /
-                                   simd_float2{(float)drawable_size.width,
-                                               (float)drawable_size.height};
+    // Allocate enough memory for the worst case scenario, where every cell has
+    // a glyph, an underline, and a strikethrough. We reserve an extra slot for
+    // the cursor glyph_data and line_data objects. It takes two line_data
+    // objects to handle a cell with both a strikethrough and an underline.
+    //
+    // We're using a lot of memory to handle our line data, but most grids have
+    // very few lines. Maybe this could be reworked.
+    const size_t uniformBufferSize    = sizeof(uniform_data);
+    const size_t backgroundBufferSize = gridSize * sizeof(uint32_t);
+    const size_t glyphBufferSize      = (gridSize + 1) * sizeof(glyph_data);
+    const size_t lineBufferSize       = (gridSize + 1) * sizeof(line_data) * 2;
 
-    const size_t reserve_size = grid_size * (sizeof(uint32_t) + sizeof(glyph_data)) + 1024;
+    // Pad by 1024 to account for over allocations caused by alignment.
+    const size_t bufferSize = 1024 + uniformBufferSize +
+                                     backgroundBufferSize +
+                                     glyphBufferSize +
+                                     lineBufferSize;
 
-    buffer.clear();
-    buffer.reserve(reserve_size);
+    buffer.create(device, bufferSize);
+    auto uniformBuffer    = buffer.allocate(uniformBufferSize);
+    auto backgroundBuffer = buffer.allocate(backgroundBufferSize);
+    auto glyphBuffer      = buffer.allocate(glyphBufferSize);
+    auto lineBuffer       = buffer.allocate(lineBufferSize);
 
-    uniform_data &data     = buffer.emplace_back_unchecked<uniform_data>();
-    data.pixel_size        = pixel_size;
-    data.cell_pixel_size   = cellSize;
-    data.cell_size         = cellSize * pixel_size;
-    data.baseline          = baselineTranslation;
-    data.grid_width        = (uint32_t)grid_width;
-    data.cursor_position   = simd_make_short2(cursor.col(), cursor.row());
-    data.cursor_color      = cursor.background();
-    data.cursor_line_width = 1;
-    data.cursor_cell_width = cursor.cell().width();
+    auto uniforms    = static_cast<uniform_data*>(uniformBuffer.ptr);
+    auto backgrounds = static_cast<uint32_t*>(backgroundBuffer.ptr);
+    auto glyphs      = static_cast<glyph_data*>(glyphBuffer.ptr);
+    auto lines       = static_cast<line_data*>(lineBuffer.ptr);
 
-    const size_t uniform_offset = buffer.offset();
+    const nvim::cell &cursorCell = cursor.cell();
+    simd_short2 cursorPosition = simd_make_short2(cursor.row(), cursor.col());
 
-    for (const nvim::cell &cell : *grid) {
-        buffer.push_back_unchecked(cell.background());
-    }
+    const simd_float2 pixelSize = simd_make_float2(2.0, -2.0) /
+                                  simd_make_float2(drawableSize.width, drawableSize.height);
 
-    const size_t grid_offset = buffer.offset();
+    // Set our uniform data.
+    uniforms->pixel_size        = pixelSize;
+    uniforms->cell_pixel_size   = cellSize;
+    uniforms->cell_size         = cellSize * pixelSize;
+    uniforms->baseline          = baselineTranslate;
+    uniforms->grid_width        = static_cast<uint32_t>(gridWidth);
+    uniforms->cursor_position   = simd_make_short2(cursor.col(), cursor.row());
+    uniforms->cursor_color      = cursor.background();
+    uniforms->cursor_line_width = cursorLineThickness;
+    uniforms->cursor_cell_width = cursorCell.width();
 
-    std::vector<line_data> lines;
-    size_t glyph_count = 0;
+    const nvim::cell *cell = grid->begin();
+    glyph_data *glyphsBegin = glyphs;
+    line_data *linesBegin = lines;
 
-    for (size_t row=0; row<grid_height; ++row) {
-        const nvim::cell *cellrow = grid->get(row, 0);
-        
-        size_t undercurl_last = grid_width;
-        uint16_t undercurl_count = 0;
-        
-        for (size_t col=0; col<grid_width; ++col) {
-            const nvim::cell *cell = cellrow + col;
+    // Loop through the grid and set our frame data.
+    for (size_t row=0; row<gridHeight; ++row) {
+        size_t undercurlLast = gridWidth;
+        uint16_t undercurlPosition = 0;
+
+        for (size_t col=0; col<gridWidth; ++col, ++cell) {
+            *backgrounds++ = cell->background();
 
             if (cell->has_line_emphasis()) {
                 simd_short2 gridpos = simd_make_short2(row, col);
                 nvim::rgb_color color = cell->special();
 
+                // Undercurls and underlines are mutually exclusive. We'll make
+                // undercurls take priority, they usually represent errors,
+                // so users won't appreciate them being hidden.
                 if (cell->has_undercurl()) {
-                    if (undercurl_last + 1 == col) {
-                        undercurl_count += 1;
+                    // If this cell is adjacent to the last undercurl we saw,
+                    // it represents a continuation, bump the position index.
+                    // Else, this is a new line, start the position index at 0.
+                    if (undercurlLast + 1 == col) {
+                        undercurlPosition += 1;
                     } else {
-                        undercurl_count = 0;
+                        undercurlPosition = 0;
                     }
-                    
-                    undercurl_last = col;
-                    lines.push_back(make_undercurl_data(self, gridpos, color, undercurl_count));
+
+                    undercurlLast = col;
+                    *lines++ = lineData(gridpos, undercurlMetrics, color, undercurlPosition);
                 } else if (cell->has_underline()) {
-                    lines.push_back(make_underline_data(self, gridpos, color));
+                    *lines++ = lineData(gridpos, underlineMetrics, color);
                 }
 
                 if (cell->has_strikethrough()) {
-                    lines.push_back(make_strikethrough_data(self, gridpos, color));
+                    *lines++ = lineData(gridpos, strikethroughMetrics, color);
                 }
             }
 
             if (!cell->empty()) {
-                glyph_cached glyph = glyph_manager->get(font_family, *cell);
+                glyph_cached glyph = glyphManager->get(fontFamily, *cell);
                 simd_short2 gridpos = simd_make_short2(row, col);
-                glyph_data data = make_glyph_data(gridpos, glyph, cell->width());
-                buffer.push_back_unchecked(data);
-                glyph_count += 1;
+                *glyphs++ = glyphData(gridpos, glyph, cell->width());
             }
         }
     }
 
-    simd_short2 cursor_gridpos = simd_make_short2(cursor.row(), cursor.col());
-    const nvim::cell *cursor_cell = &cursor.cell();
-    glyph_data *cursor_glyph = &buffer.emplace_back_unchecked<glyph_data>();
-    const size_t glyph_offset = buffer.offset();
+    size_t glyphsCount = glyphs - glyphsBegin;
+    size_t linesCount = lines - linesBegin;
 
+    // We're ready to start our render pass.
     id<CAMetalDrawable> drawable = [metalLayer nextDrawable];
     MTLRenderPassDescriptor *desc = [MTLRenderPassDescriptor renderPassDescriptor];
     desc.colorAttachments[0].texture = drawable.texture;
@@ -573,46 +534,37 @@ static inline line_data make_strikethrough_data(NVGridView *view,
     id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
     id<MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:desc];
 
+    // Draw the grid background.
     [commandEncoder setRenderPipelineState:gridRenderPipeline];
-    [commandEncoder setVertexBuffer:buffer.get() offset:uniform_offset atIndex:0];
-    [commandEncoder setVertexBuffer:buffer.get() offset:grid_offset atIndex:1];
-
+    [commandEncoder setVertexBuffer:buffer.get() offset:uniformBuffer.offset atIndex:0];
+    [commandEncoder setVertexBuffer:buffer.get() offset:backgroundBuffer.offset atIndex:1];
     [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                        vertexStart:0
                        vertexCount:4
-                     instanceCount:grid_size];
+                     instanceCount:gridSize];
 
-    if (glyph_count) {
+    // Draw glyphs if we have any.
+    if (glyphsCount) {
         [commandEncoder setRenderPipelineState:glyphRenderPipeline];
-        [commandEncoder setVertexBufferOffset:glyph_offset atIndex:1];
-        [commandEncoder setFragmentTexture:glyph_manager->texture() atIndex:0];
-
+        [commandEncoder setVertexBufferOffset:glyphBuffer.offset atIndex:1];
+        [commandEncoder setFragmentTexture:glyphManager->texture() atIndex:0];
         [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                            vertexStart:0
                            vertexCount:4
-                         instanceCount:glyph_count];
+                         instanceCount:glyphsCount];
     }
 
-    size_t line_offset = 0;
-    line_data *cursor_line = nullptr;
-
-    if (lines.size()) {
-        buffer.insert(lines.data(), lines.size() * sizeof(line_data));
-
-        cursor_line = &buffer.emplace_back<line_data>();
-        buffer.emplace_back<line_data>();
-
-        line_offset = buffer.offset();
-
+    // Draw lines if we have any.
+    if (linesCount) {
         [commandEncoder setRenderPipelineState:lineRenderPipeline];
-        [commandEncoder setVertexBufferOffset:line_offset atIndex:1];
-
+        [commandEncoder setVertexBufferOffset:lineBuffer.offset atIndex:1];
         [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                            vertexStart:0
                            vertexCount:4
-                         instanceCount:lines.size()];
+                         instanceCount:linesCount];
     }
 
+    // Finally draw the cursor.
     [commandEncoder setRenderPipelineState:cursorRenderPipeline];
 
     switch (cursor.shape()) {
@@ -647,66 +599,79 @@ static inline line_data make_strikethrough_data(NVGridView *view,
                              instanceCount:1
                               baseInstance:4];
 
-            if (!cursor_cell->empty()) {
-                CTFontRef font = font_family.get(cursor_cell->font_attributes());
+            // We've just drawn over the cursor cell with a block. We've gotta
+            // redraw any glyphs and lines we may have covered.
+            if (!cursorCell.empty()) {
+                CTFontRef font = fontFamily.get(cursorCell.font_attributes());
 
-                glyph_cached glyph = glyph_manager->get(font,
-                                                        cursor.cell(),
-                                                        cursor.background(),
-                                                        cursor.foreground());
+                glyph_cached glyph = glyphManager->get(font,
+                                                       cursor.cell(),
+                                                       cursor.background(),
+                                                       cursor.foreground());
 
-                *cursor_glyph = make_glyph_data(cursor_gridpos, glyph,
-                                                cursor_cell->width());
+                *glyphs = glyphData(cursorPosition, glyph, cursorCell.width());
 
                 [commandEncoder setRenderPipelineState:glyphRenderPipeline];
-                [commandEncoder setVertexBufferOffset:glyph_offset atIndex:1];
+                [commandEncoder setVertexBufferOffset:glyphBuffer.offset atIndex:1];
 
                 [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                                    vertexStart:0
                                    vertexCount:4
                                  instanceCount:1
-                                  baseInstance:glyph_count];
+                                  baseInstance:glyphsCount];
+
+                glyphsCount += 1;
             }
 
-            if (cursor_cell->has_line_emphasis()) {
+            if (cursorCell.has_line_emphasis()) {
                 size_t count = 0;
-                nvim::rgb_color color = cursor_cell->special();
+                nvim::rgb_color color = cursorCell.special();
 
-                if (cursor_cell->has_undercurl()) {
-                    *cursor_line++ = make_undercurl_data(self, cursor_gridpos, color, cursor_cell);
+                if (cursorCell.has_undercurl()) {
+                    *lines++ = lineData(cursorPosition, undercurlMetrics, color,
+                                        getUndecurlPosition(&cursorCell, cursor.col()));
                     count += 1;
-                } else if (cursor_cell->has_underline()) {
-                    *cursor_line++ = make_underline_data(self, cursor_gridpos, color);
+                } else if (cursorCell.has_underline()) {
+                    *lines++ = lineData(cursorPosition, underlineMetrics, color);
                     count += 1;
                 }
 
-                if (cursor_cell->has_strikethrough()) {
-                    *cursor_line++ = make_strikethrough_data(self, cursor_gridpos, color);
+                if (cursorCell.has_strikethrough()) {
+                    *lines++ = lineData(cursorPosition, strikethroughMetrics, color);
                     count += 1;
                 }
 
                 [commandEncoder setRenderPipelineState:lineRenderPipeline];
-                [commandEncoder setVertexBufferOffset:line_offset atIndex:1];
+                [commandEncoder setVertexBufferOffset:lineBuffer.offset atIndex:1];
 
                 [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                                    vertexStart:0
                                    vertexCount:4
                                  instanceCount:count
-                                  baseInstance:lines.size()];
+                                  baseInstance:linesCount];
+
+                linesCount += count;
             }
     }
 
-    [commandEncoder endEncoding];
+    // Update our Metal buffers.
+    buffer.update(0, glyphBuffer.offset + (sizeof(glyph_data) * glyphsCount));
 
+    if (linesCount) {
+        buffer.update(lineBuffer.offset, sizeof(line_data) * linesCount);
+    }
+
+    [commandEncoder endEncoding];
     [commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> commandBuffer) {
-        self->buffers[index].release();
+        // Release the buffer once the frame is rendered.
+        self->buffers[index].unlock();
     }];
 
-    buffer.update();
     [commandBuffer commit];
     [commandBuffer waitUntilScheduled];
     [drawable present];
 
+    // We're done! Bump the frame index.
     frameIndex += 1;
 }
 
@@ -716,15 +681,18 @@ static inline line_data make_strikethrough_data(NVGridView *view,
 
 - (nvim::grid_point)cellLocation:(NSPoint)windowLocation {
     NSPoint viewLocation = [self convertPoint:windowLocation fromView:nil];
-    NSSize cellSize = [self cellSize];
 
-    size_t row = viewLocation.x / cellSize.width;
-    size_t col = viewLocation.y / cellSize.height;
+    if (viewLocation.x < 0 || viewLocation.y < 0) {
+        return NVCellNotFound;
+    }
+
+    size_t row = viewLocation.x / backingCellSize.width;
+    size_t col = viewLocation.y / backingCellSize.height;
 
     nvim::grid_point location;
     location.row = std::min(col, grid->height());
     location.column = std::min(row, grid->width());
-    
+
     return location;
 }
 
