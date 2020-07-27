@@ -10,7 +10,7 @@
 #import <QuartzCore/CAMetalLayer.h>
 #import <Metal/Metal.h>
 #import "NVGridView.h"
-#import "ShaderTypes.h"
+#include "shader_types.hpp"
 
 /// Utility class to help manage Metal buffers.
 /// The class provides two additional abstractions over a MTLBuffer:
@@ -110,47 +110,6 @@ public:
     }
 };
 
-/// Describes a lines appearance and position.
-struct LineMetrics {
-    int16_t ytranslate; ///< The lines vertical offset from the baseline.
-    uint16_t period;    ///< The dotted lines period. 0 for a solid line.
-    uint16_t thickness; ///< The lines thickness.
-};
-
-/// Make a glyph_data object.
-/// @param position The cell's grid position.
-/// @param glyph    The cached glyph.
-/// @param width    The cell's width (single or full width).
-static inline glyph_data glyphData(simd_short2 position, glyph_cached glyph, uint32_t width) {
-    glyph_data data;
-    data.grid_position = position;
-    data.texture_position = glyph.texture_position;
-    data.glyph_position = glyph.glyph_position;
-    data.glyph_size = glyph.glyph_size;
-    data.texture_index = glyph.texture_index;
-    data.cell_width = width;
-    return data;
-}
-
-/// Make a line_data object.
-/// @param gridPosition The cell's grid position.
-/// @param metrics      The metrics describing the line.
-/// @param color        The line's color.
-/// @param linePosition The cell's position in the overall line. This is
-///                     required to correctly render dotted lines. It can be
-///                     ignored for solid lines.
-static inline line_data lineData(simd_short2 gridPosition, LineMetrics metrics,
-                                 nvim::rgb_color color, uint16_t linePosition = 0) {
-    line_data data;
-    data.grid_position = gridPosition;
-    data.color = color;
-    data.period = metrics.period;
-    data.thickness = metrics.thickness;
-    data.ytranslate = metrics.ytranslate;
-    data.count = linePosition;
-    return data;
-}
-
 /// Returns the position of a cell in an undercurl line.
 /// The return value is a zero based index. For example, given the 5th cell in
 /// a row with an undercurl stretching from columns 4 to 10, this function
@@ -174,7 +133,7 @@ static inline int16_t getUndecurlPosition(const nvim::cell *cell, int16_t col) {
     NVRenderContext *renderContext;
     id<MTLDevice> device;
     id<MTLCommandQueue> commandQueue;
-    id<MTLRenderPipelineState> gridRenderPipeline;
+    id<MTLRenderPipelineState> backgroundRenderPipeline;
     id<MTLRenderPipelineState> glyphRenderPipeline;
     id<MTLRenderPipelineState> cursorRenderPipeline;
     id<MTLRenderPipelineState> lineRenderPipeline;
@@ -188,10 +147,10 @@ static inline int16_t getUndecurlPosition(const nvim::cell *cell, int16_t col) {
     NSSize backingCellSize;
     simd_float2 cellSize;
     simd_float2 baselineTranslate;
-    LineMetrics underlineMetrics;
-    LineMetrics undercurlMetrics;
-    LineMetrics strikethroughMetrics;
     uint32_t cursorLineThickness;
+    line_metrics underline;
+    line_metrics undercurl;
+    line_metrics strikethrough;
 
     dispatch_source_t blinkTimer;
     bool blinkTimerActive;
@@ -214,14 +173,14 @@ static inline int16_t getUndecurlPosition(const nvim::cell *cell, int16_t col) {
 }
 
 - (void)setRenderContext:(NVRenderContext *)context {
-    renderContext        = context;
-    device               = context.device;
-    commandQueue         = context.commandQueue;
-    gridRenderPipeline   = context.gridRenderPipeline;
-    glyphRenderPipeline  = context.glyphRenderPipeline;
-    cursorRenderPipeline = context.cursorRenderPipeline;
-    lineRenderPipeline   = context.lineRenderPipeline;
-    glyphManager         = context.glyphManager;
+    renderContext            = context;
+    device                   = context.device;
+    commandQueue             = context.commandQueue;
+    backgroundRenderPipeline = context.backgroundRenderPipeline;
+    glyphRenderPipeline      = context.glyphRenderPipeline;
+    cursorRenderPipeline     = context.cursorRenderPipeline;
+    lineRenderPipeline       = context.lineRenderPipeline;
+    glyphManager             = context.glyphManager;
 
     metalLayer.device = device;
 }
@@ -384,17 +343,17 @@ static void blinkCursorToggleOn(void *context) {
         underlineTranslate = floor(underlinePos - 0.5);
     }
 
-    strikethroughMetrics.period = 0;
-    strikethroughMetrics.thickness = lineThickness;
-    strikethroughMetrics.ytranslate = ascent / 3;
+    strikethrough.period = 0;
+    strikethrough.thickness = lineThickness;
+    strikethrough.ytranslate = ascent / 3;
 
-    underlineMetrics.period = 0;
-    underlineMetrics.thickness = lineThickness;
-    underlineMetrics.ytranslate = underlineTranslate;
+    underline.period = 0;
+    underline.thickness = lineThickness;
+    underline.ytranslate = underlineTranslate;
 
-    undercurlMetrics.period = 2 * font.scale_factor();
-    undercurlMetrics.thickness = 2 * font.scale_factor();
-    undercurlMetrics.ytranslate = underlineTranslate;
+    undercurl.period = 2 * font.scale_factor();
+    undercurl.thickness = 2 * font.scale_factor();
+    undercurl.ytranslate = underlineTranslate;
 
     cursorLineThickness = 1 * font.scale_factor();
     [metalLayer setContentsScale:font.scale_factor()];
@@ -402,10 +361,6 @@ static void blinkCursorToggleOn(void *context) {
 
 - (const font_family&)font {
     return fontFamily;
-}
-
-- (CGFloat)scaleFactor {
-    return fontFamily.scale_factor();
 }
 
 - (void)displayLayer:(CALayer*)layer {
@@ -438,7 +393,7 @@ static void blinkCursorToggleOn(void *context) {
     const size_t glyphBufferSize      = (gridSize + 1) * sizeof(glyph_data);
     const size_t lineBufferSize       = (gridSize + 1) * sizeof(line_data) * 2;
 
-    // Pad by 1024 to account for over allocations caused by alignment.
+    // Pad by (256 * 4) to account for over allocations caused by alignment.
     const size_t bufferSize = 1024 + uniformBufferSize +
                                      backgroundBufferSize +
                                      glyphBufferSize +
@@ -456,12 +411,12 @@ static void blinkCursorToggleOn(void *context) {
     auto lines       = static_cast<line_data*>(lineBuffer.ptr);
 
     const nvim::cell &cursorCell = cursor.cell();
-    simd_short2 cursorPosition = simd_make_short2(cursor.row(), cursor.col());
+    simd_short2 cursorPosition = simd_make_short2(cursor.col(), cursor.row());
 
     const simd_float2 pixelSize = simd_make_float2(2.0, -2.0) /
                                   simd_make_float2(drawableSize.width, drawableSize.height);
 
-    // Set our uniform data.
+    // Set the uniform data.
     uniforms->pixel_size        = pixelSize;
     uniforms->cell_pixel_size   = cellSize;
     uniforms->cell_size         = cellSize * pixelSize;
@@ -476,7 +431,7 @@ static void blinkCursorToggleOn(void *context) {
     glyph_data *glyphsBegin = glyphs;
     line_data *linesBegin = lines;
 
-    // Loop through the grid and set our frame data.
+    // Loop through the grid and set the frame data.
     for (size_t row=0; row<gridHeight; ++row) {
         size_t undercurlLast = gridWidth;
         uint16_t undercurlPosition = 0;
@@ -485,7 +440,7 @@ static void blinkCursorToggleOn(void *context) {
             *backgrounds++ = cell->background();
 
             if (cell->has_line_emphasis()) {
-                simd_short2 gridpos = simd_make_short2(row, col);
+                simd_short2 gridpos = simd_make_short2(col, row);
                 nvim::rgb_color color = cell->special();
 
                 // Undercurls and underlines are mutually exclusive. We'll make
@@ -502,20 +457,20 @@ static void blinkCursorToggleOn(void *context) {
                     }
 
                     undercurlLast = col;
-                    *lines++ = lineData(gridpos, undercurlMetrics, color, undercurlPosition);
+                    *lines++ = line_data(gridpos, color, undercurl, undercurlPosition);
                 } else if (cell->has_underline()) {
-                    *lines++ = lineData(gridpos, underlineMetrics, color);
+                    *lines++ = line_data(gridpos, color, underline);
                 }
 
                 if (cell->has_strikethrough()) {
-                    *lines++ = lineData(gridpos, strikethroughMetrics, color);
+                    *lines++ = line_data(gridpos, color, strikethrough);
                 }
             }
 
             if (!cell->empty()) {
-                glyph_cached glyph = glyphManager->get(fontFamily, *cell);
-                simd_short2 gridpos = simd_make_short2(row, col);
-                *glyphs++ = glyphData(gridpos, glyph, cell->width());
+                glyph_rect glyph = glyphManager->get(fontFamily, *cell);
+                simd_short2 gridpos = simd_make_short2(col, row);
+                *glyphs++ = glyph_data(gridpos, cell->width(), glyph);
             }
         }
     }
@@ -526,7 +481,7 @@ static void blinkCursorToggleOn(void *context) {
     // We're ready to start our render pass.
     id<CAMetalDrawable> drawable = [metalLayer nextDrawable];
     MTLRenderPassDescriptor *desc = [MTLRenderPassDescriptor renderPassDescriptor];
-    desc.colorAttachments[0].texture = drawable.texture;
+    desc.colorAttachments[0].texture = [drawable texture];
     desc.colorAttachments[0].clearColor = MTLClearColorMake(1.0, 1.0, 1.0, 1.0);
     desc.colorAttachments[0].loadAction = MTLLoadActionClear;
     desc.colorAttachments[0].storeAction = MTLStoreActionDontCare;
@@ -535,7 +490,7 @@ static void blinkCursorToggleOn(void *context) {
     id<MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:desc];
 
     // Draw the grid background.
-    [commandEncoder setRenderPipelineState:gridRenderPipeline];
+    [commandEncoder setRenderPipelineState:backgroundRenderPipeline];
     [commandEncoder setVertexBuffer:buffer.get() offset:uniformBuffer.offset atIndex:0];
     [commandEncoder setVertexBuffer:buffer.get() offset:backgroundBuffer.offset atIndex:1];
     [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
@@ -603,17 +558,15 @@ static void blinkCursorToggleOn(void *context) {
             // redraw any glyphs and lines we may have covered.
             if (!cursorCell.empty()) {
                 CTFontRef font = fontFamily.get(cursorCell.font_attributes());
+                glyph_rect glyph = glyphManager->get(font,
+                                                     cursor.cell(),
+                                                     cursor.background(),
+                                                     cursor.foreground());
 
-                glyph_cached glyph = glyphManager->get(font,
-                                                       cursor.cell(),
-                                                       cursor.background(),
-                                                       cursor.foreground());
-
-                *glyphs = glyphData(cursorPosition, glyph, cursorCell.width());
+                *glyphs = glyph_data(cursorPosition, cursorCell.width(), glyph);
 
                 [commandEncoder setRenderPipelineState:glyphRenderPipeline];
                 [commandEncoder setVertexBufferOffset:glyphBuffer.offset atIndex:1];
-
                 [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                                    vertexStart:0
                                    vertexCount:4
@@ -624,26 +577,25 @@ static void blinkCursorToggleOn(void *context) {
             }
 
             if (cursorCell.has_line_emphasis()) {
-                size_t count = 0;
                 nvim::rgb_color color = cursorCell.special();
+                size_t count = 0;
 
                 if (cursorCell.has_undercurl()) {
-                    *lines++ = lineData(cursorPosition, undercurlMetrics, color,
-                                        getUndecurlPosition(&cursorCell, cursor.col()));
+                    uint16_t position = getUndecurlPosition(&cursorCell, cursor.col());
+                    *lines++ = line_data(cursorPosition, color, undercurl, position);
                     count += 1;
                 } else if (cursorCell.has_underline()) {
-                    *lines++ = lineData(cursorPosition, underlineMetrics, color);
+                    *lines++ = line_data(cursorPosition, color, underline);
                     count += 1;
                 }
 
                 if (cursorCell.has_strikethrough()) {
-                    *lines++ = lineData(cursorPosition, strikethroughMetrics, color);
+                    *lines++ = line_data(cursorPosition, color, strikethrough);
                     count += 1;
                 }
 
                 [commandEncoder setRenderPipelineState:lineRenderPipeline];
                 [commandEncoder setVertexBufferOffset:lineBuffer.offset atIndex:1];
-
                 [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                                    vertexStart:0
                                    vertexCount:4

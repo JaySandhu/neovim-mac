@@ -31,19 +31,19 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) id<MTLCommandQueue> commandQueue;
 
 /// The background rendering pipeline.
-/// See Shaders.metal for more information.
-@property (nonatomic, readonly) id<MTLRenderPipelineState> gridRenderPipeline;
+/// See shaders.metal for more information.
+@property (nonatomic, readonly) id<MTLRenderPipelineState> backgroundRenderPipeline;
 
 /// The glyph rendering pipeline.
-/// See Shaders.metal for more information.
+/// See shaders.metal for more information.
 @property (nonatomic, readonly) id<MTLRenderPipelineState> glyphRenderPipeline;
 
 /// The cursor rendering pipeline.
-/// See Shaders.metal for more information.
+/// See shaders.metal for more information.
 @property (nonatomic, readonly) id<MTLRenderPipelineState> cursorRenderPipeline;
 
 /// The line (underlines, undercurls, strikethroughs) rendering pipeline.
-/// See Shaders.metal for more information.
+/// See shaders.metal for more information.
 @property (nonatomic, readonly) id<MTLRenderPipelineState> lineRenderPipeline;
 
 /// The glyph manager for this render context.

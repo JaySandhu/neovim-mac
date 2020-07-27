@@ -45,11 +45,11 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
 
     id<MTLLibrary> lib = [device newDefaultLibrary];
 
-    MTLRenderPipelineDescriptor *gridDesc = defaultPipelineDescriptor();
-    gridDesc.label = @"Grid background render pipeline";
-    gridDesc.vertexFunction = [lib newFunctionWithName:@"grid_background"];
-    gridDesc.fragmentFunction = [lib newFunctionWithName:@"fill_background"];
-    _gridRenderPipeline = [device newRenderPipelineStateWithDescriptor:gridDesc error:error];
+    MTLRenderPipelineDescriptor *backgroundDesc = defaultPipelineDescriptor();
+    backgroundDesc.label = @"Grid background render pipeline";
+    backgroundDesc.vertexFunction = [lib newFunctionWithName:@"background_render"];
+    backgroundDesc.fragmentFunction = [lib newFunctionWithName:@"background_fill"];
+    _backgroundRenderPipeline = [device newRenderPipelineStateWithDescriptor:backgroundDesc error:error];
 
     if (*error) return self;
 
@@ -64,7 +64,7 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
     MTLRenderPipelineDescriptor *cursorDesc = defaultPipelineDescriptor();
     cursorDesc.label = @"Cursor render pipeline";
     cursorDesc.vertexFunction = [lib newFunctionWithName:@"cursor_render"];
-    cursorDesc.fragmentFunction = [lib newFunctionWithName:@"fill_background"];
+    cursorDesc.fragmentFunction = [lib newFunctionWithName:@"background_fill"];
     _cursorRenderPipeline = [device newRenderPipelineStateWithDescriptor:cursorDesc error:error];
 
     if (*error) return self;
@@ -72,7 +72,7 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
     MTLRenderPipelineDescriptor *lineDesc = blendedPipelineDescriptor();
     lineDesc.label = @"Line render pipeline";
     lineDesc.vertexFunction = [lib newFunctionWithName:@"line_render"];
-    lineDesc.fragmentFunction = [lib newFunctionWithName:@"fill_line"];
+    lineDesc.fragmentFunction = [lib newFunctionWithName:@"line_fill"];
     _lineRenderPipeline = [device newRenderPipelineStateWithDescriptor:lineDesc error:error];
 
     if (*error) return self;

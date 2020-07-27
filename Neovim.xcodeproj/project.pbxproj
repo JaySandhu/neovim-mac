@@ -31,7 +31,7 @@
 		69CB6DEC24AB96450075229B /* share in Resources */ = {isa = PBXBuildFile; fileRef = 69CB6DEB24AB96450075229B /* share */; };
 		69CB6DED24AB96560075229B /* lib in CopyFiles */ = {isa = PBXBuildFile; fileRef = 69CB6DE924AB963B0075229B /* lib */; };
 		69CB6DEE24AB965A0075229B /* share in CopyFiles */ = {isa = PBXBuildFile; fileRef = 69CB6DEB24AB96450075229B /* share */; };
-		69E15157244E023900F8AEC7 /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 69E15156244E023900F8AEC7 /* Shaders.metal */; };
+		69E15157244E023900F8AEC7 /* shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 69E15156244E023900F8AEC7 /* shaders.metal */; };
 		69FB837D24A0F370008CCED1 /* NVRenderContext.mm in Sources */ = {isa = PBXBuildFile; fileRef = 69FB837C24A0F370008CCED1 /* NVRenderContext.mm */; };
 /* End PBXBuildFile section */
 
@@ -104,7 +104,7 @@
 		69431233243E098B0015C0EA /* ui.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = ui.hpp; sourceTree = "<group>"; };
 		6945A1532434E593005D68ED /* neovim.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = neovim.cpp; sourceTree = "<group>"; };
 		6945A1542434E593005D68ED /* neovim.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = neovim.hpp; sourceTree = "<group>"; };
-		6945BBDE2457282C009ADB03 /* ShaderTypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ShaderTypes.h; sourceTree = "<group>"; };
+		6945BBDE2457282C009ADB03 /* shader_types.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = shader_types.hpp; sourceTree = "<group>"; };
 		6955FE6424363AD400008191 /* NVWindowController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NVWindowController.h; sourceTree = "<group>"; };
 		6955FE6524363AD400008191 /* NVWindowController.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = NVWindowController.mm; sourceTree = "<group>"; };
 		695C0ABB242E274800266D89 /* msgpack.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = msgpack.hpp; sourceTree = "<group>"; };
@@ -121,7 +121,7 @@
 		69CB6DF424AB96B00075229B /* nvim */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = nvim; sourceTree = "<group>"; };
 		69D42C4B244611AA0006FEF3 /* log.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = log.h; sourceTree = "<group>"; };
 		69E15154244DFE3400F8AEC7 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
-		69E15156244E023900F8AEC7 /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
+		69E15156244E023900F8AEC7 /* shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = shaders.metal; sourceTree = "<group>"; };
 		69FB837B24A0F370008CCED1 /* NVRenderContext.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NVRenderContext.h; sourceTree = "<group>"; };
 		69FB837C24A0F370008CCED1 /* NVRenderContext.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = NVRenderContext.mm; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -192,8 +192,8 @@
 				6955FE6524363AD400008191 /* NVWindowController.mm */,
 				69208E292457142600DBB860 /* NVGridView.h */,
 				69208E2A2457142600DBB860 /* NVGridView.mm */,
-				6945BBDE2457282C009ADB03 /* ShaderTypes.h */,
-				69E15156244E023900F8AEC7 /* Shaders.metal */,
+				6945BBDE2457282C009ADB03 /* shader_types.hpp */,
+				69E15156244E023900F8AEC7 /* shaders.metal */,
 				69B04DD224B76C10000DF9C4 /* neovim_mac.vim */,
 			);
 			path = src;
@@ -366,7 +366,7 @@
 				6993FAD624BCCECB0022682E /* spawn.cpp in Sources */,
 				6945A1552434E593005D68ED /* neovim.cpp in Sources */,
 				695C0ABD242E274800266D89 /* msgpack.cpp in Sources */,
-				69E15157244E023900F8AEC7 /* Shaders.metal in Sources */,
+				69E15157244E023900F8AEC7 /* shaders.metal in Sources */,
 				69240E1B242B9854004E0DE0 /* AppDelegate.m in Sources */,
 				69FB837D24A0F370008CCED1 /* NVRenderContext.mm in Sources */,
 			);

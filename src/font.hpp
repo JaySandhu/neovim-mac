@@ -16,6 +16,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include "shader_types.hpp"
 #include "ui.hpp"
 
 /// A smart pointer that manages CoreFoundation objects.
@@ -337,15 +338,6 @@ public:
     simd_short3 add(const glyph_bitmap &bitmap);
 };
 
-/// A glyph cached by a glyph_manager.
-/// Holds the glyph metrics and texture position required for rendering.
-struct glyph_cached {
-    simd_short2 glyph_position;     ///< X, Y glpyh offsets from the baseline.
-    simd_short2 glyph_size;         ///< Size of the glpyh bounding box.
-    simd_short2 texture_position;   ///< X, Y position in the cache page.
-    uint32_t texture_index;         ///< The index of the cache page.
-};
-
 /// Rasterizes and caches glyphs.
 /// Glyph managers rasterize text on demand and cache the resulting bitmaps in
 /// glyph_texture_caches. A glyph manager will always ensure every glyph
@@ -393,7 +385,7 @@ private:
     };
     
     using glyph_map = std::unordered_map<key_type,
-                                         glyph_cached,
+                                         glyph_rect,
                                          key_hash,
                                          key_equal>;
     
@@ -424,10 +416,10 @@ public:
     /// @param cell         The cell form which the text is obtained from.
     /// @param background   The background color.
     /// @param foreground   The foreground color.
-    glyph_cached get(CTFontRef font,
-                     const nvim::cell &cell,
-                     nvim::rgb_color background,
-                     nvim::rgb_color foreground) {
+    glyph_rect get(CTFontRef font,
+                   const nvim::cell &cell,
+                   nvim::rgb_color background,
+                   nvim::rgb_color foreground) {
         key_type key(font, cell.grapheme(), background, foreground);
         
         if (auto iter = map.find(key); iter != map.end()) {
@@ -441,20 +433,19 @@ public:
         
         auto texture_position = texture_cache.add(glyph);
         
-        glyph_cached cached;
-        cached.texture_position  = texture_position.xy;
-        cached.texture_index = texture_position.z;
-        cached.glyph_position.x = glyph.left_bearing;
-        cached.glyph_position.y = -glyph.ascent;
-        cached.glyph_size.x = glyph.width;
-        cached.glyph_size.y = glyph.height;
+        glyph_rect cached;
+        cached.texture_origin = texture_position;
+        cached.position.x = glyph.left_bearing;
+        cached.position.y = -glyph.ascent;
+        cached.size.x = glyph.width;
+        cached.size.y = glyph.height;
 
         map.emplace(key, cached);
         return cached;
     }
     
     /// Calls get using the background and foreground colors of cell.
-    glyph_cached get(const font_family &font_family, const nvim::cell &cell) {
+    glyph_rect get(const font_family &font_family, const nvim::cell &cell) {
         CTFontRef font = font_family.get(cell.font_attributes());
         return get(font, cell, cell.background(), cell.foreground());
     }
