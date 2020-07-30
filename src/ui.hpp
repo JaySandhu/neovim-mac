@@ -238,6 +238,17 @@ public:
     uint32_t width() const {
         return (bool)(attrs.flags & cell_attributes::doublewidth) + 1;
     }
+
+    /// Returns a newly constructed cell with the given color attributes.
+    cell recolored(rgb_color foreground,
+                   rgb_color background,
+                   rgb_color special) const {
+        nvim::cell ret = *this;
+        ret.attrs.foreground = foreground;
+        ret.attrs.background = background;
+        ret.attrs.special = special;
+        return ret;
+    }
 };
 
 struct grid_size {
@@ -291,13 +302,17 @@ public:
     /// @param attrs    The cursor's attributes.
     cursor(size_t row, size_t col, const cell *ptr, cursor_attributes attrs):
         attrs_(attrs), row_(row), col_(col), ptr_(ptr) {
-        if (attrs_.background.is_default() && attrs.foreground.is_default()) {
-            attrs_.background = ptr->foreground();
-            attrs_.foreground = ptr->background();
-            return;
+        if (attrs_.special.is_default()) {
+            attrs_.special = ptr->special();
         }
 
         if (attrs_.background.is_default()) {
+            if (attrs_.foreground.is_default()) {
+                attrs_.background = ptr->foreground();
+                attrs_.foreground = ptr->background();
+                return;
+            }
+
             attrs_.background = ptr->background();
         }
 
@@ -309,6 +324,11 @@ public:
     /// A reference to the underlying cell.
     const nvim::cell& cell() const {
         return *ptr_;
+    }
+
+    /// The width of the underlying cell.
+    uint32_t width() const {
+        return ptr_->width();
     }
 
     /// Get the cursor shape.
@@ -339,6 +359,11 @@ public:
     /// The cursor's foreground color.
     rgb_color foreground() const {
         return attrs_.foreground;
+    }
+
+    /// The cursor's underline, undercurl, and strikethrough color.
+    rgb_color special() const {
+        return attrs_.special;
     }
 
     /// True if the cursor should blink, false otherwise.

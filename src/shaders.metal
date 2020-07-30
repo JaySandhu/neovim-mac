@@ -45,7 +45,6 @@ constant float2 cursor_transforms[5][4] = {
     {{ 0, -1}, { 0,  0}, { 0, -1}, { 0,  0}},
     {{ 0,  0}, { 0,  1}, { 0,  0}, { 0,  1}},
     {{-1,  0}, {-1,  0}, { 0,  0}, { 0,  0}},
-    {{ 0,  0}, { 0,  0}, { 0,  0}, { 0,  0}}
 };
 
 vertex extern grid_rasterizer_data background_render(uint vertex_id [[vertex_id]],
@@ -64,6 +63,13 @@ vertex extern grid_rasterizer_data background_render(uint vertex_id [[vertex_id]
     return data;
 }
 
+/// Renders the cursor.
+/// The cursor shape is controlled by the instance_id where:
+///   1. A right anchored vertical bar.
+///   2. A bottom anchored horizontal bar.
+///   3. A left anchored vertical bar.
+///   4. A top anchored horizontal bar.
+/// Draw all four instances to create a block outline.
 vertex extern grid_rasterizer_data cursor_render(uint vertex_id [[vertex_id]],
                                                  uint instance_id [[instance_id]],
                                                  constant uniform_data &uniforms [[buffer(0)]]) {

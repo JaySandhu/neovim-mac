@@ -110,22 +110,106 @@ public:
     }
 };
 
-/// Returns the position of a cell in an undercurl line.
-/// The return value is a zero based index. For example, given the 5th cell in
-/// a row with an undercurl stretching from columns 4 to 10, this function
-/// returns 1.
-static inline int16_t getUndecurlPosition(const nvim::cell *cell, int16_t col) {
-    int16_t count = 0;
-    const nvim::cell *rowbegin = cell - col;
+/// Adjusts the color attributes of cells under a block cursor.
+class AdjustedGrid {
+private:
+    struct Range {
+        const nvim::cell *begin;
+        int16_t rowBegin;
+        int16_t rowEnd;
+        int16_t colBegin;
+        int16_t colEnd;
+    };
 
-    while (cell != rowbegin) {
-        if ((--cell)->has_undercurl()) {
-            count += 1;
+    nvim::cell adjustedCells[2];
+    Range ranges[4];
+    size_t rangesCount;
+
+public:
+    AdjustedGrid(const nvim::grid *grid, const nvim::cursor &cursor) {
+        ranges[0].begin = grid->begin();
+        ranges[0].rowBegin = 0;
+        ranges[0].colBegin = 0;
+
+        // If we're not dealing with a block cursor, no adjusments need to be
+        // made. We can iterate the grid in one swoop.
+        if (cursor.shape() != nvim::cursor_shape::block) {
+            rangesCount = 1;
+            ranges[0].rowEnd = grid->height();
+            ranges[0].colEnd = grid->width();
+            return;
         }
+
+        // We need to adjust the cursor cells.
+        // Grid's are immutable, so we make a copy of the adjusted cells.
+        const nvim::cell *cursorCell = &cursor.cell();
+        size_t cursorWidth = cursor.width();
+
+        adjustedCells[0] = cursorCell[0].recolored(cursor.foreground(),
+                                                   cursor.background(),
+                                                   cursor.special());
+
+        if (cursorWidth == 2) {
+            adjustedCells[1] = cursorCell[1].recolored(cursor.foreground(),
+                                                       cursor.background(),
+                                                       cursor.special());
+        }
+
+        // When iterating over the grid, we need to swap out cursor cells with
+        // our adjusted cells. The iteration order required to do that is
+        // stored in an array of four Range objects.
+        rangesCount = 4;
+
+        // Start with full rows up until the cursor row.
+        ranges[0].rowEnd = cursor.row();
+        ranges[0].colEnd = grid->width();
+
+        // Iterate from the start over the cursor row till the cursor column.
+        ranges[1].begin    = cursorCell - cursor.col();
+        ranges[1].rowBegin = cursor.row();
+        ranges[1].rowEnd   = cursor.row() + 1;
+        ranges[1].colBegin = 0;
+        ranges[1].colEnd   = cursor.col();
+
+        // We're at the cursor cells. Iterate over the adjusted cells instead.
+        ranges[2].begin    = adjustedCells;
+        ranges[2].rowBegin = cursor.row();
+        ranges[2].rowEnd   = cursor.row() + 1;
+        ranges[2].colBegin = cursor.col();
+        ranges[2].colEnd   = cursor.col() + cursorWidth;
+
+        // Start from after the cursor cells and finish off the grid.
+        ranges[3].begin    = cursorCell + cursorWidth;
+        ranges[3].rowBegin = cursor.row();
+        ranges[3].rowEnd   = grid->height();
+        ranges[3].colBegin = cursor.col() + cursorWidth;
+        ranges[3].colEnd   = grid->width();
     }
 
-    return count;
-}
+    /// Iterate over the cursor adjusted grid.
+    /// Calls the function object callback once for every cell in ascending
+    /// order. The callback is invoked with three arguments:
+    ///   1. The cell's row (int16_t).
+    ///   2. The cell's column (int16_t).
+    ///   3. A const pointer to the cell (const nvim::cell*).
+    /// The return value of the callback is ignored.
+    template<typename Callable>
+    void forEach(Callable callback) {
+        for (size_t i=0; i<rangesCount; ++i) {
+            const Range &range = ranges[i];
+            const nvim::cell *cell = range.begin;
+            int16_t col = range.colBegin;
+
+            for (int16_t row = range.rowBegin; row < range.rowEnd; ++row) {
+                for (; col < range.colEnd; ++col, ++cell) {
+                    callback(row, col, cell);
+                }
+
+                col = 0;
+            }
+        }
+    }
+};
 
 @implementation NVGridView {
     CAMetalLayer *metalLayer;
@@ -364,14 +448,8 @@ static void blinkCursorToggleOn(void *context) {
 }
 
 - (void)displayLayer:(CALayer*)layer {
-    // This is where we render grids. Prepare for a mega long function.
-    const size_t gridWidth  = grid->width();
-    const size_t gridHeight = grid->height();
-    const size_t gridSize   = grid->cells_size();
-
     const CGSize drawableSize = [metalLayer drawableSize];
     const uint64_t index = frameIndex % 3;
-
     mtlbuffer &buffer = buffers[index];
 
     // If we fail to acquire the buffer, drop this frame and try again on the
@@ -382,22 +460,23 @@ static void blinkCursorToggleOn(void *context) {
     }
 
     // Allocate enough memory for the worst case scenario, where every cell has
-    // a glyph, an underline, and a strikethrough. We reserve an extra slot for
-    // the cursor glyph_data and line_data objects. It takes two line_data
-    // objects to handle a cell with both a strikethrough and an underline.
+    // a glyph, a strikethrough, and an underline / undercurl. It takes two
+    // line_data objects to handle a cell with both a strikethrough and an
+    // underline / undercurl.
     //
     // We're using a lot of memory to handle our line data, but most grids have
     // very few lines. Maybe this could be reworked.
+    const size_t gridSize = grid->cells_size();
     const size_t uniformBufferSize    = sizeof(uniform_data);
     const size_t backgroundBufferSize = gridSize * sizeof(uint32_t);
-    const size_t glyphBufferSize      = (gridSize + 1) * sizeof(glyph_data);
-    const size_t lineBufferSize       = (gridSize + 1) * sizeof(line_data) * 2;
+    const size_t glyphBufferSize      = gridSize * sizeof(glyph_data);
+    const size_t lineBufferSize       = gridSize * sizeof(line_data) * 2;
 
-    // Pad by (256 * 4) to account for over allocations caused by alignment.
-    const size_t bufferSize = 1024 + uniformBufferSize +
-                                     backgroundBufferSize +
-                                     glyphBufferSize +
-                                     lineBufferSize;
+    // Pad to account for over allocations caused by alignment.
+    const size_t bufferSize = (256 * 4) + uniformBufferSize
+                                        + backgroundBufferSize
+                                        + glyphBufferSize
+                                        + lineBufferSize;
 
     buffer.create(device, bufferSize);
     auto uniformBuffer    = buffer.allocate(uniformBufferSize);
@@ -410,75 +489,62 @@ static void blinkCursorToggleOn(void *context) {
     auto glyphs      = static_cast<glyph_data*>(glyphBuffer.ptr);
     auto lines       = static_cast<line_data*>(lineBuffer.ptr);
 
-    const nvim::cell &cursorCell = cursor.cell();
-    simd_short2 cursorPosition = simd_make_short2(cursor.col(), cursor.row());
-
     const simd_float2 pixelSize = simd_make_float2(2.0, -2.0) /
                                   simd_make_float2(drawableSize.width, drawableSize.height);
 
-    // Set the uniform data.
     uniforms->pixel_size        = pixelSize;
     uniforms->cell_pixel_size   = cellSize;
     uniforms->cell_size         = cellSize * pixelSize;
     uniforms->baseline          = baselineTranslate;
-    uniforms->grid_width        = static_cast<uint32_t>(gridWidth);
+    uniforms->grid_width        = static_cast<uint32_t>(grid->width());
     uniforms->cursor_position   = simd_make_short2(cursor.col(), cursor.row());
     uniforms->cursor_color      = cursor.background();
     uniforms->cursor_line_width = cursorLineThickness;
-    uniforms->cursor_cell_width = cursorCell.width();
+    uniforms->cursor_cell_width = cursor.width();
 
-    const nvim::cell *cell = grid->begin();
     glyph_data *glyphsBegin = glyphs;
     line_data *linesBegin = lines;
+    simd_short2 undercurlNext = simd_make_short2(-1, -1);
+    uint16_t undercurlPosition = 0;
 
-    // Loop through the grid and set the frame data.
-    for (size_t row=0; row<gridHeight; ++row) {
-        size_t undercurlLast = gridWidth;
-        uint16_t undercurlPosition = 0;
+    AdjustedGrid(grid, cursor).forEach([&](int16_t row, int16_t col, const nvim::cell *cell) {
+        simd_short2 gridpos = simd_make_short2(col, row);
+        *backgrounds++ = cell->background();
 
-        for (size_t col=0; col<gridWidth; ++col, ++cell) {
-            *backgrounds++ = cell->background();
+        if (cell->has_line_emphasis()) {
+            nvim::rgb_color color = cell->special();
 
-            if (cell->has_line_emphasis()) {
-                simd_short2 gridpos = simd_make_short2(col, row);
-                nvim::rgb_color color = cell->special();
-
-                // Undercurls and underlines are mutually exclusive. We'll make
-                // undercurls take priority, they usually represent errors,
-                // so users won't appreciate them being hidden.
-                if (cell->has_undercurl()) {
-                    // If this cell is adjacent to the last undercurl we saw,
-                    // it represents a continuation, bump the position index.
-                    // Else, this is a new line, start the position index at 0.
-                    if (undercurlLast + 1 == col) {
-                        undercurlPosition += 1;
-                    } else {
-                        undercurlPosition = 0;
-                    }
-
-                    undercurlLast = col;
-                    *lines++ = line_data(gridpos, color, undercurl, undercurlPosition);
-                } else if (cell->has_underline()) {
-                    *lines++ = line_data(gridpos, color, underline);
+            // Undercurls and underlines are mutually exclusive. We'll make
+            // undercurls take priority, they usually represent errors,
+            // so users won't appreciate them being hidden.
+            if (cell->has_undercurl()) {
+                if (simd_equal(undercurlNext, gridpos)) {
+                    undercurlPosition += 1;
+                } else {
+                    undercurlPosition = 0;
                 }
 
-                if (cell->has_strikethrough()) {
-                    *lines++ = line_data(gridpos, color, strikethrough);
-                }
+                undercurlNext = simd_make_short2(col + 1, row);
+                *lines++ = line_data(gridpos, color, undercurl, undercurlPosition);
+            } else if (cell->has_underline()) {
+                *lines++ = line_data(gridpos, color, underline);
             }
 
-            if (!cell->empty()) {
-                glyph_rect glyph = glyphManager->get(fontFamily, *cell);
-                simd_short2 gridpos = simd_make_short2(col, row);
-                *glyphs++ = glyph_data(gridpos, cell->width(), glyph);
+            if (cell->has_strikethrough()) {
+                *lines++ = line_data(gridpos, color, strikethrough);
             }
         }
-    }
+
+        if (!cell->empty()) {
+            glyph_rect glyph = glyphManager->get(fontFamily, *cell);
+            *glyphs++ = glyph_data(gridpos, cell->width(), glyph);
+        }
+    });
 
     size_t glyphsCount = glyphs - glyphsBegin;
     size_t linesCount = lines - linesBegin;
+    buffer.update(0, glyphBuffer.offset + (sizeof(glyph_data) * glyphsCount));
 
-    // We're ready to start our render pass.
     id<CAMetalDrawable> drawable = [metalLayer nextDrawable];
     MTLRenderPassDescriptor *desc = [MTLRenderPassDescriptor renderPassDescriptor];
     desc.colorAttachments[0].texture = [drawable texture];
@@ -489,7 +555,6 @@ static void blinkCursorToggleOn(void *context) {
     id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
     id<MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:desc];
 
-    // Draw the grid background.
     [commandEncoder setRenderPipelineState:backgroundRenderPipeline];
     [commandEncoder setVertexBuffer:buffer.get() offset:uniformBuffer.offset atIndex:0];
     [commandEncoder setVertexBuffer:buffer.get() offset:backgroundBuffer.offset atIndex:1];
@@ -498,7 +563,6 @@ static void blinkCursorToggleOn(void *context) {
                        vertexCount:4
                      instanceCount:gridSize];
 
-    // Draw glyphs if we have any.
     if (glyphsCount) {
         [commandEncoder setRenderPipelineState:glyphRenderPipeline];
         [commandEncoder setVertexBufferOffset:glyphBuffer.offset atIndex:1];
@@ -509,8 +573,9 @@ static void blinkCursorToggleOn(void *context) {
                          instanceCount:glyphsCount];
     }
 
-    // Draw lines if we have any.
     if (linesCount) {
+        buffer.update(lineBuffer.offset, sizeof(line_data) * linesCount);
+
         [commandEncoder setRenderPipelineState:lineRenderPipeline];
         [commandEncoder setVertexBufferOffset:lineBuffer.offset atIndex:1];
         [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
@@ -519,11 +584,9 @@ static void blinkCursorToggleOn(void *context) {
                          instanceCount:linesCount];
     }
 
-    // Finally draw the cursor.
-    [commandEncoder setRenderPipelineState:cursorRenderPipeline];
-
     switch (cursor.shape()) {
         case nvim::cursor_shape::vertical:
+            [commandEncoder setRenderPipelineState:cursorRenderPipeline];
             [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                                vertexStart:0
                                vertexCount:4
@@ -532,6 +595,7 @@ static void blinkCursorToggleOn(void *context) {
             break;
 
         case nvim::cursor_shape::horizontal:
+            [commandEncoder setRenderPipelineState:cursorRenderPipeline];
             [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                                vertexStart:0
                                vertexCount:4
@@ -540,6 +604,7 @@ static void blinkCursorToggleOn(void *context) {
             break;
 
         case nvim::cursor_shape::block_outline:
+            [commandEncoder setRenderPipelineState:cursorRenderPipeline];
             [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                                vertexStart:0
                                vertexCount:4
@@ -548,82 +613,17 @@ static void blinkCursorToggleOn(void *context) {
             break;
 
         case nvim::cursor_shape::block:
-            [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                               vertexStart:0
-                               vertexCount:4
-                             instanceCount:1
-                              baseInstance:4];
-
-            // We've just drawn over the cursor cell with a block. We've gotta
-            // redraw any glyphs and lines we may have covered.
-            if (!cursorCell.empty()) {
-                CTFontRef font = fontFamily.get(cursorCell.font_attributes());
-                glyph_rect glyph = glyphManager->get(font,
-                                                     cursor.cell(),
-                                                     cursor.background(),
-                                                     cursor.foreground());
-
-                *glyphs = glyph_data(cursorPosition, cursorCell.width(), glyph);
-
-                [commandEncoder setRenderPipelineState:glyphRenderPipeline];
-                [commandEncoder setVertexBufferOffset:glyphBuffer.offset atIndex:1];
-                [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                                   vertexStart:0
-                                   vertexCount:4
-                                 instanceCount:1
-                                  baseInstance:glyphsCount];
-
-                glyphsCount += 1;
-            }
-
-            if (cursorCell.has_line_emphasis()) {
-                nvim::rgb_color color = cursorCell.special();
-                size_t count = 0;
-
-                if (cursorCell.has_undercurl()) {
-                    uint16_t position = getUndecurlPosition(&cursorCell, cursor.col());
-                    *lines++ = line_data(cursorPosition, color, undercurl, position);
-                    count += 1;
-                } else if (cursorCell.has_underline()) {
-                    *lines++ = line_data(cursorPosition, color, underline);
-                    count += 1;
-                }
-
-                if (cursorCell.has_strikethrough()) {
-                    *lines++ = line_data(cursorPosition, color, strikethrough);
-                    count += 1;
-                }
-
-                [commandEncoder setRenderPipelineState:lineRenderPipeline];
-                [commandEncoder setVertexBufferOffset:lineBuffer.offset atIndex:1];
-                [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                                   vertexStart:0
-                                   vertexCount:4
-                                 instanceCount:count
-                                  baseInstance:linesCount];
-
-                linesCount += count;
-            }
-    }
-
-    // Update our Metal buffers.
-    buffer.update(0, glyphBuffer.offset + (sizeof(glyph_data) * glyphsCount));
-
-    if (linesCount) {
-        buffer.update(lineBuffer.offset, sizeof(line_data) * linesCount);
+            break; // Block cursors are handled with AdjustedGrids.
     }
 
     [commandEncoder endEncoding];
     [commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> commandBuffer) {
-        // Release the buffer once the frame is rendered.
         self->buffers[index].unlock();
     }];
 
     [commandBuffer commit];
     [commandBuffer waitUntilScheduled];
     [drawable present];
-
-    // We're done! Bump the frame index.
     frameIndex += 1;
 }
 
