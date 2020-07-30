@@ -10,6 +10,7 @@
 #ifndef UI_HPP
 #define UI_HPP
 
+#include <dispatch/dispatch.h>
 #include <atomic>
 #include "msgpack.hpp"
 #include "unfair_lock.hpp"
@@ -535,6 +536,7 @@ public:
 /// related options, and communicates with the delegate.
 class ui_controller {
 private:
+    dispatch_semaphore_t flush_wait;
     std::vector<cell_attributes> hltable;
     std::vector<mode_info> mode_info_table;
     size_t current_mode;
@@ -588,7 +590,7 @@ private:
 public:
     window_controller window;
 
-    ui_controller(): hltable(1) {
+    ui_controller(): flush_wait(nullptr), hltable(1) {
         complete = &triple_buffered[0];
         writing  = &triple_buffered[1];
         drawing  = &triple_buffered[2];
@@ -610,6 +612,12 @@ public:
                 return drawing;
             }
         }
+    }
+
+    /// Signals semaphore on the next redraw event.
+    /// Note: window.redraw() is not called when a waiter is signaled.
+    void signal_on_flush(dispatch_semaphore_t waiting) {
+        flush_wait = waiting;
     }
 
     /// Get the current Neovim options.

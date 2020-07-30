@@ -398,7 +398,13 @@ void ui_controller::flush() {
     
     writing = complete.exchange(completed);
     *writing = *completed;
-    window.redraw();
+
+    if (flush_wait) {
+        dispatch_semaphore_signal(flush_wait);
+        flush_wait = nullptr;
+    } else {
+        window.redraw();
+    }
 }
 
 static inline void adjust_defaults(const cell_attributes &def,

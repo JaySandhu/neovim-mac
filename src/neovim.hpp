@@ -277,15 +277,17 @@ public:
     /// @returns An errno code if an error occurred, 0 if no error occurred.
     int connect(std::string_view addr);
 
-    /// Calls API method nvim_ui_attach.
-    /// @param width    Requested screen columns
-    /// @param height   Requested screen rows
-    /// Ext_linegrid is enabled, all other ext options are disabled.
+    /// Synchronously attaches to the remote UI process.
+    /// @param width    Requested screen columns.
+    /// @param height   Requested screen rows.
+    /// Once this function returns, the first grid is ready to be drawn.
+    /// Attaches using the API method nvim_ui_attach with ext_linegrid enabled
+    /// and all other ext options disabled. 
     void ui_attach(size_t width, size_t height);
 
     /// Calls API method nvim_try_resize. Resizes the global grid.
-    /// @param width    The new requested width
-    /// @param height   The new requested height
+    /// @param width    The new requested width.
+    /// @param height   The new requested height.
     void try_resize(size_t width, size_t height);
 
     /// Calls API method nvim_input.

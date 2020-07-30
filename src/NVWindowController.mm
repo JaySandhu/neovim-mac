@@ -417,10 +417,6 @@ static inline NSScreen* screenContainingPoint(NSArray<NSScreen*> *screens, NSPoi
 }
 
 - (void)redraw {
-    if (!gridView) {
-        return [self initialRedraw];
-    }
-
     const nvim::grid *grid = nvim.get_global_grid();
     nvim::grid_size gridSize = grid->size();
 
@@ -436,8 +432,9 @@ static inline NSScreen* screenContainingPoint(NSArray<NSScreen*> *screens, NSPoi
 }
 
 - (void)attach {
-    processIsAlive = self;
     nvim.ui_attach(lastGridSize.width, lastGridSize.height);
+    processIsAlive = self;
+    [self initialRedraw];
 }
 
 - (void)connect:(NSString *)addr {

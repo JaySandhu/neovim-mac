@@ -543,11 +543,14 @@ void process::set_controller(window_controller window) {
 }
 
 void process::ui_attach(size_t width, size_t height) {
-    std::vector<std::pair<msg::string, bool>> map{
+    std::array<std::pair<msg::string, bool>, 1> map{{
         {"ext_linegrid", true}
-    };
+    }};
 
     rpc_request(null_msgid, "nvim_ui_attach", width, height, map);
+
+    ui.signal_on_flush(semaphore);
+    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
 }
 
 void process::try_resize(size_t width, size_t height) {
