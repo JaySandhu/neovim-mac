@@ -587,9 +587,16 @@ static mode_info to_mode_info(const highlight_table &hl_table,
 }
 
 void ui_controller::mode_info_set(bool enabled, msg::array property_maps) {
+    std::string current_mode_name = [&](){
+        if (current_mode < mode_info_table.size()) {
+            return std::move(mode_info_table[current_mode].mode_name);
+        } else {
+            return std::string();
+        }
+    }();
+
     mode_info_table.clear();
     mode_info_table.reserve(property_maps.size());
-    current_mode = 0;
     
     for (const msg::object &object : property_maps) {
         if (!object.is<msg::map>()) {
@@ -600,7 +607,14 @@ void ui_controller::mode_info_set(bool enabled, msg::array property_maps) {
         }
         
         msg::map map = object.get<msg::map>();
-        mode_info_table.push_back(to_mode_info(hltable, map));
+        mode_info info = to_mode_info(hltable, map);
+
+        if (info.mode_name == current_mode_name) {
+            current_mode = mode_info_table.size();
+            writing->cursor_attrs = info.cursor_attrs;
+        }
+
+        mode_info_table.push_back(std::move(info));
     }
 }
 

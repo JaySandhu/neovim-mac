@@ -590,7 +590,7 @@ private:
 public:
     window_controller window;
 
-    ui_controller(): flush_wait(nullptr), hltable(1) {
+    ui_controller(): flush_wait(nullptr), hltable(1), current_mode(0) {
         complete = &triple_buffered[0];
         writing  = &triple_buffered[1];
         drawing  = &triple_buffered[2];
