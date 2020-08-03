@@ -624,8 +624,9 @@ void ui_controller::mode_change(msg::string name, size_t index) {
                                  "Event=mode_change, TableSize=%zu, Index=%zu",
                                  mode_info_table.size(), index);
     }
-    
+
     writing->cursor_attrs = mode_info_table[index].cursor_attrs;
+    current_mode = index;
 }
 
 void ui_controller::set_title(msg::string new_title) {
