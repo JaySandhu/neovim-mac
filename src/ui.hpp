@@ -96,15 +96,11 @@ struct cursor_attributes {
     rgb_color special;
     cursor_shape shape;
     bool blinks;
+    uint16_t shortname;
     uint16_t percentage;
     uint16_t blinkwait;
     uint16_t blinkon;
     uint16_t blinkoff;
-};
-
-struct mode_info {
-    cursor_attributes cursor_attrs;
-    std::string mode_name;
 };
 
 struct cell_attributes {
@@ -537,9 +533,8 @@ public:
 class ui_controller {
 private:
     dispatch_semaphore_t flush_wait;
-    std::vector<cell_attributes> hltable;
-    std::vector<mode_info> mode_info_table;
-    size_t current_mode;
+    std::vector<cell_attributes> hl_table;
+    std::vector<cursor_attributes> mode_table;
 
     // We use a multi buffering scheme with our grid objects.
     //   * complete - The most recent complete grid.
@@ -590,7 +585,7 @@ private:
 public:
     window_controller window;
 
-    ui_controller(): flush_wait(nullptr), hltable(1), current_mode(0) {
+    ui_controller(): flush_wait(nullptr), hl_table(1) {
         complete = &triple_buffered[0];
         writing  = &triple_buffered[1];
         drawing  = &triple_buffered[2];

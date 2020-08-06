@@ -1,9 +1,10 @@
 //
+//  Neovim Mac
 //  ui.cpp
-//  Neovim
 //
-//  Created by Jay Sandhu on 4/8/20.
 //  Copyright © 2020 Jay Sandhu. All rights reserved.
+//  This file is distributed under the MIT License.
+//  See LICENSE.txt for details.
 //
 
 #include <algorithm>
@@ -239,9 +240,9 @@ struct cell_update {
 
     /// Set the cell_update from a msg::object.
     /// @param object   An object from the cells array in a grid_line event.
-    /// @param hltable  The highlight table.
+    /// @param hl_table  The highlight table.
     /// @returns True if object type checked correctly, otherwise false.
-    bool set(const msg::object &object, const highlight_table &hltable) {
+    bool set(const msg::object &object, const highlight_table &hl_table) {
         if (!object.is<msg::array>()) {
             return false;
         }
@@ -256,14 +257,14 @@ struct cell_update {
         
         if (type_check<msg::string, msg::integer>(array)) {
             text = array[0].get<msg::string>();
-            hlattr = hl_get_entry(hltable, array[1].get<msg::integer>());
+            hlattr = hl_get_entry(hl_table, array[1].get<msg::integer>());
             repeat = 1;
             return true;
         }
             
         if (type_check<msg::string, msg::integer, msg::integer>(array)) {
             text = array[0].get<msg::string>();
-            hlattr = hl_get_entry(hltable, array[1].get<msg::integer>());
+            hlattr = hl_get_entry(hl_table, array[1].get<msg::integer>());
             repeat = array[2].get<msg::integer>();
             return true;
         }
@@ -287,7 +288,7 @@ void ui_controller::grid_line(size_t grid_id, size_t row,
     cell_update update;
     
     for (const msg::object &object : cells) {
-        if (!update.set(object, hltable)) {
+        if (!update.set(object, hl_table)) {
             return os_log_error(rpc, "Redraw error: Cell update type error - "
                                      "Event=grid_line, Type=%s",
                                      msg::type_string(object).c_str());
@@ -329,7 +330,7 @@ void ui_controller::grid_clear(size_t grid_id) {
     grid *grid = get_grid(grid_id);
 
     cell empty;
-    empty.attrs.background = hltable[0].background;
+    empty.attrs.background = hl_table[0].background;
 
     for (cell &cell : grid->cells) {
         cell = empty;
@@ -425,13 +426,13 @@ static inline void adjust_defaults(const cell_attributes &def,
 }
 
 void ui_controller::default_colors_set(uint32_t fg, uint32_t bg, uint32_t sp) {
-    cell_attributes &def = hltable[0];
+    cell_attributes &def = hl_table[0];
     def.foreground = rgb_color(fg, rgb_color::default_tag);
     def.background = rgb_color(bg, rgb_color::default_tag);
     def.special = rgb_color(sp, rgb_color::default_tag);
     def.flags = 0;
     
-    for (cell_attributes &attrs : hltable) {
+    for (cell_attributes &attrs : hl_table) {
         adjust_defaults(def, attrs);
     }
     
@@ -452,22 +453,23 @@ static inline void set_rgb_color(rgb_color &color, const msg::object &object) {
 }
 
 void ui_controller::hl_attr_define(size_t hlid, msg::map definition) {
-    cell_attributes *attrs = hl_new_entry(hltable, hlid);
+    cell_attributes *attrs = hl_new_entry(hl_table, hlid);
     
-    for (const msg::pair &pair : definition) {
-        if (!pair.first.is<msg::string>()) {
+    for (const auto& [key, value] : definition) {
+        if (!key.is<msg::string>()) {
             os_log_error(rpc, "Redraw error: Map key type error - "
-                              "Event=hl_attr_define, Type=%s",
-                              msg::type_string(pair.first).c_str());
+                              "Event=hl_attr_define, KeyType=%s, Key=%s",
+                              msg::type_string(key).c_str(),
+                              msg::to_string(key).c_str());
             continue;
         }
 
-        msg::string name = pair.first.get<msg::string>();
+        msg::string name = key.get<msg::string>();
 
         if (name == "foreground") {
-            set_rgb_color(attrs->foreground, pair.second);
+            set_rgb_color(attrs->foreground, value);
         } else if (name == "background") {
-            set_rgb_color(attrs->background, pair.second);
+            set_rgb_color(attrs->background, value);
         } else if (name == "underline") {
             attrs->flags |= cell_attributes::underline;
         } else if (name == "bold") {
@@ -479,7 +481,7 @@ void ui_controller::hl_attr_define(size_t hlid, msg::map definition) {
         } else if (name == "undercurl") {
             attrs->flags |= cell_attributes::undercurl;
         } else if (name == "special") {
-            set_rgb_color(attrs->special, pair.second);
+            set_rgb_color(attrs->special, value);
         } else if (name == "reverse") {
             attrs->flags |= cell_attributes::reverse;
         } else {
@@ -494,38 +496,26 @@ void ui_controller::hl_attr_define(size_t hlid, msg::map definition) {
     }
 }
 
-static inline cursor_shape to_cursor_shape(const msg::object &object) {
-    if (object.is<msg::string>()) {
-        msg::string name = object.get<msg::string>();
-        
-        if (name == "block") {
-            return cursor_shape::block;
-        } else if (name == "vertical") {
-            return cursor_shape::vertical;
-        } else if (name == "horizontal") {
-            return cursor_shape::horizontal;
-        }
+static inline cursor_shape to_cursor_shape(msg::string name) {
+    if (name == "block") {
+        return cursor_shape::block;
+    } else if (name == "vertical") {
+        return cursor_shape::vertical;
+    } else if (name == "horizontal") {
+        return cursor_shape::horizontal;
     }
-    
+
     os_log_error(rpc, "Redraw error: Unknown cursor shape - "
-                      "Event=mode_info_set CursorShape=%s",
-                      msg::to_string(object).c_str());
+                      "Event=mode_info_set CursorShape=%.*s",
+                      (int)name.size(), name.data());
 
     return cursor_shape::block;
 };
 
 static inline void set_color_attrs(cursor_attributes *cursor_attrs,
-                                   const highlight_table &hltable,
-                                   const msg::object &object) {
-    if (!object.is<msg::integer>()) {
-        os_log_error(rpc, "Redraw error: Highlight id type error - "
-                          "Event=mode_info_set, Type=%s",
-                          msg::type_string(object).c_str());
-        return;
-    }
-    
-    const size_t hlid = object.get<msg::integer>();
-    const cell_attributes *hl_attrs = hl_get_entry(hltable, hlid);
+                                   const highlight_table &hl_table,
+                                   size_t hlid) {
+    const cell_attributes *hl_attrs = hl_get_entry(hl_table, hlid);
     cursor_attrs->special = hl_attrs->special;
     
     if (hlid != 0) {
@@ -538,95 +528,93 @@ static inline void set_color_attrs(cursor_attributes *cursor_attrs,
 }
 
 template<typename T>
-static inline T to(const msg::object &object) {
-    if (is<T>(object)) {
-        return get<T>(object);
+bool match(std::string_view name, msg::string key, const msg::object &value) {
+    if (key == name) {
+        if (is<T>(value)) {
+            return true;
+        }
+
+        os_log_error(rpc, "Redraw error: Map value type error - "
+                          "Event=mode_info_set, Key=%s, ValueType=%s, Value=%s",
+                          name.data(), msg::type_string(key).c_str(),
+                          msg::to_string(value).c_str());
     }
-    
-    return {};
+
+    return false;
 }
 
-static mode_info to_mode_info(const highlight_table &hl_table,
-                              const msg::map &map) {
-    mode_info info = {};
+static cursor_attributes to_cursor_attributes(const highlight_table &hl_table,
+                                              const msg::map &map) {
+    cursor_attributes attrs = {};
     
-    for (const msg::pair &pair : map) {
-        if (!pair.first.is<msg::string>()) {
+    for (const auto& [key, value] : map) {
+        if (!key.is<msg::string>()) {
             os_log_error(rpc, "Redraw error: Map key type error - "
-                              "Event=mode_info_set, Type=%s",
-                              msg::type_string(pair.first).c_str());
+                              "Event=mode_info_set, KeyType=%s, Key=%s",
+                              msg::type_string(key).c_str(),
+                              msg::to_string(key).c_str());
             continue;
         }
-        
-        msg::string name = pair.first.get<msg::string>();
-        
-        if (name == "cursor_shape") {
-            info.cursor_attrs.shape = to_cursor_shape(pair.second);
-        } else if (name == "cell_percentage") {
-            info.cursor_attrs.percentage = to<uint16_t>(pair.second);
-        } else if (name == "blinkwait") {
-            info.cursor_attrs.blinkwait = to<uint16_t>(pair.second);
-        } else if (name == "blinkon") {
-            info.cursor_attrs.blinkon = to<uint16_t>(pair.second);
-        } else if (name == "blinkoff") {
-            info.cursor_attrs.blinkoff = to<uint16_t>(pair.second);
-        } else if (name == "name") {
-            info.mode_name = to<msg::string>(pair.second);
-        } else if (name == "attr_id") {
-            set_color_attrs(&info.cursor_attrs, hl_table, pair.second);
+
+        msg::string name = key.get<msg::string>();
+
+        if (match<msg::integer>("cell_percentage", name, value)) {
+            attrs.percentage = get<uint16_t>(value);
+        } else if (match<msg::integer>("blinkwait", name, value)) {
+            attrs.blinkwait = get<uint16_t>(value);
+        } else if (match<msg::integer>("blinkon", name, value)) {
+            attrs.blinkon = get<uint16_t>(value);
+        } else if (match<msg::integer>("blinkoff", name, value)) {
+            attrs.blinkoff = get<uint16_t>(value);
+        } else if (match<msg::string>("cursor_shape", name, value)) {
+            attrs.shape = to_cursor_shape(value.get<msg::string>());
+        } else if (match<msg::integer>("attr_id", name, value)) {
+            set_color_attrs(&attrs, hl_table, get<size_t>(value));
+        } else if (match<msg::string>("short_name", name, value)) {
+            msg::string shortname = value.get<msg::string>();
+            memcpy(&attrs.shortname, shortname.data(),
+                   std::min(sizeof(attrs.shortname), shortname.size()));
         }
     }
 
-    if (info.cursor_attrs.blinkwait &&
-        info.cursor_attrs.blinkoff  &&
-        info.cursor_attrs.blinkon) {
-        info.cursor_attrs.blinks = true;
+    if (attrs.blinkwait && attrs.blinkoff  && attrs.blinkon) {
+        attrs.blinks = true;
     }
     
-    return info;
+    return attrs;
 }
 
 void ui_controller::mode_info_set(bool enabled, msg::array property_maps) {
-    std::string current_mode_name = [&](){
-        if (current_mode < mode_info_table.size()) {
-            return std::move(mode_info_table[current_mode].mode_name);
-        } else {
-            return std::string();
-        }
-    }();
-
-    mode_info_table.clear();
-    mode_info_table.reserve(property_maps.size());
+    uint16_t current_mode_name = writing->cursor_attrs.shortname;
+    mode_table.clear();
+    mode_table.reserve(property_maps.size());
     
     for (const msg::object &object : property_maps) {
         if (!object.is<msg::map>()) {
             os_log_error(rpc, "Redraw error: Cursor property map type error - "
                               "Event=mode_info_set, Type=%s",
                               msg::type_string(object).c_str());
-            continue;
-        }
-        
-        msg::map map = object.get<msg::map>();
-        mode_info info = to_mode_info(hltable, map);
+        } else {
+            msg::map map = object.get<msg::map>();
+            cursor_attributes attrs = to_cursor_attributes(hl_table, map);
 
-        if (info.mode_name == current_mode_name) {
-            current_mode = mode_info_table.size();
-            writing->cursor_attrs = info.cursor_attrs;
-        }
+            if (attrs.shortname == current_mode_name) {
+                writing->cursor_attrs = attrs;
+            }
 
-        mode_info_table.push_back(std::move(info));
+            mode_table.push_back(attrs);
+        }
     }
 }
 
 void ui_controller::mode_change(msg::string name, size_t index) {
-    if (index >= mode_info_table.size()) {
+    if (index >= mode_table.size()) {
         return os_log_error(rpc, "Redraw error: Mode index out of bounds - "
                                  "Event=mode_change, TableSize=%zu, Index=%zu",
-                                 mode_info_table.size(), index);
+                                 mode_table.size(), index);
     }
 
-    writing->cursor_attrs = mode_info_table[index].cursor_attrs;
-    current_mode = index;
+    writing->cursor_attrs = mode_table[index];
 }
 
 void ui_controller::set_title(msg::string new_title) {
