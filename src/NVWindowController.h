@@ -10,6 +10,7 @@
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
 #import "NVRenderContext.h"
+#include "neovim.hpp"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -20,6 +21,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (instancetype)initWithContextManager:(NVRenderContextManager *)contextManager;
 
+- (nvim::process *)process;
+
+- (void)forceQuit;
 - (void)shutdown;
 - (void)connect:(NSString *)addr;
 

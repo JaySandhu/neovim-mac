@@ -604,4 +604,11 @@ void process::open_tabs(const std::vector<std::string_view> &paths) {
                 std::tuple<const std::vector<std::string_view>&>(paths));
 }
 
+void process::open_count(const std::vector<std::string_view> &paths,
+                         dispatch_time_t timeout, response_handler handler) {
+    auto msgid = store_handler(timeout, std::move(handler));
+    rpc_request(msgid, "nvim_call_function", "neovim_mac#OpenCount",
+                std::tuple<const std::vector<std::string_view>&>(paths));
+}
+
 } // namespace nvim

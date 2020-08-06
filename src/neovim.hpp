@@ -366,6 +366,14 @@ public:
                      std::string_view action,
                      std::string_view modifiers,
                      size_t row, size_t col);
+
+    /// Tests how many of the given files are currently open.
+    /// @param paths    Absolute paths of the files to consider.
+    /// @param timeout  The timeout for the request.
+    /// @param handler  The response handler. On success the result object is
+    ///                 an msg::integer representing the number of open files.
+    void open_count(const std::vector<std::string_view> &paths,
+                    dispatch_time_t timeout, response_handler handler);
 };
 
 } // namesapce nvim

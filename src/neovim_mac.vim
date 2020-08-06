@@ -1,3 +1,15 @@
+"
+" Neovim Mac
+" neovim_mac.vim
+"
+" Copyright © 2020 Jay Sandhu. All rights reserved.
+" This file is distributed under the MIT License.
+" See LICENSE.txt for details.
+"
+" Utility functions that to help implement GUI features.
+" This file is added to the Neovim runtime directory.
+"
+
 function! neovim_mac#DropText(text) abort
     let begin = getpos(".")
 
@@ -25,7 +37,7 @@ function! neovim_mac#OpenTabs(paths) abort
             continue
         endif
 
-        let bufnr = bufnr(path)
+        let bufnr = bufnr("^" . path . "$")
 
         if bufnr != -1
             let window_ids = getbufinfo(bufnr)[0]["windows"]
@@ -45,4 +57,14 @@ function! neovim_mac#OpenTabs(paths) abort
         execute "tabnext " . tabpage
         execute window . " wincmd w"
     endfor
+endfunction
+
+function! neovim_mac#OpenCount(paths) abort
+    let open = 0
+
+    for path in a:paths
+        let open += (bufnr("^" . path . "$") != -1)
+    endfor
+
+    return open
 endfunction

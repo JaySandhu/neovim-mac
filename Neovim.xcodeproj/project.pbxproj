@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		69208E2B2457142600DBB860 /* NVGridView.mm in Sources */ = {isa = PBXBuildFile; fileRef = 69208E2A2457142600DBB860 /* NVGridView.mm */; };
-		69240E1B242B9854004E0DE0 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 69240E1A242B9854004E0DE0 /* AppDelegate.m */; };
+		69240E1B242B9854004E0DE0 /* AppDelegate.mm in Sources */ = {isa = PBXBuildFile; fileRef = 69240E1A242B9854004E0DE0 /* AppDelegate.mm */; };
 		69240E1D242B9855004E0DE0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 69240E1C242B9855004E0DE0 /* Assets.xcassets */; };
 		69240E20242B9855004E0DE0 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 69240E1E242B9855004E0DE0 /* MainMenu.xib */; };
 		69240E23242B9855004E0DE0 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 69240E22242B9855004E0DE0 /* main.m */; };
@@ -85,7 +85,7 @@
 		69208E2A2457142600DBB860 /* NVGridView.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = NVGridView.mm; sourceTree = "<group>"; };
 		69240E16242B9854004E0DE0 /* Neovim.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Neovim.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		69240E19242B9854004E0DE0 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
-		69240E1A242B9854004E0DE0 /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
+		69240E1A242B9854004E0DE0 /* AppDelegate.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = AppDelegate.mm; sourceTree = "<group>"; };
 		69240E1C242B9855004E0DE0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		69240E1F242B9855004E0DE0 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/MainMenu.xib; sourceTree = "<group>"; };
 		69240E21242B9855004E0DE0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -170,7 +170,7 @@
 			children = (
 				69240E22242B9855004E0DE0 /* main.m */,
 				69240E19242B9854004E0DE0 /* AppDelegate.h */,
-				69240E1A242B9854004E0DE0 /* AppDelegate.m */,
+				69240E1A242B9854004E0DE0 /* AppDelegate.mm */,
 				69240E39242BA280004E0DE0 /* bump_allocator.hpp */,
 				693550E8242CBFE500FB0A94 /* circular_buffer.hpp */,
 				693550E7242CBFE500FB0A94 /* circular_buffer.cpp */,
@@ -367,7 +367,7 @@
 				6945A1552434E593005D68ED /* neovim.cpp in Sources */,
 				695C0ABD242E274800266D89 /* msgpack.cpp in Sources */,
 				69E15157244E023900F8AEC7 /* shaders.metal in Sources */,
-				69240E1B242B9854004E0DE0 /* AppDelegate.m in Sources */,
+				69240E1B242B9854004E0DE0 /* AppDelegate.mm in Sources */,
 				69FB837D24A0F370008CCED1 /* NVRenderContext.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

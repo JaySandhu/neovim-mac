@@ -151,6 +151,10 @@ static inline std::string_view buttonName(MouseButton button) {
     return neovimWindows;
 }
 
+- (nvim::process*)process {
+    return &nvim;
+}
+
 + (BOOL)modifiedBuffers {
     NSArray<NVWindowController*> *windows = [NVWindowController windows];
     NSUInteger windowsCount = [windows count];
@@ -179,10 +183,6 @@ static inline std::string_view buttonName(MouseButton button) {
     
     dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
     return unsaved;
-}
-
-+ (void)closeAll {
-
 }
 
 - (void)close {
@@ -912,6 +912,10 @@ static std::vector<std::string_view> URLPaths(NSArray<NSURL*> *urls) {
     nvim.open_tabs(URLPaths([panel URLs]));
 }
 
+- (void)openTabs:(const std::vector<std::string_view> *)paths {
+    nvim.open_tabs(*paths);
+}
+
 static inline bool canSave(nvim::process &nvim) {
     nvim::mode mode = nvim.get_mode();
     
@@ -963,6 +967,10 @@ static inline bool canSave(nvim::process &nvim) {
         
         self->nvim.command(command);
     }];
+}
+
+- (void)forceQuit {
+    [self normalCommand:"quitall!"];
 }
 
 - (IBAction)newTab:(id)sender {
