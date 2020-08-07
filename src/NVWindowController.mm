@@ -798,10 +798,10 @@ static void scrollEvent(nvim::process &nvim, size_t count, std::string_view dire
 }
 
 - (void)scrollWheel:(NSEvent *)event {
+    NSEventModifierFlags modifierFlags = [event modifierFlags];
     CGFloat deltaX = [event scrollingDeltaX];
     CGFloat deltaY = [event scrollingDeltaY];
 
-    input_modifiers modifiers = input_modifiers([event modifierFlags]);
     nvim::grid_point location = [gridView cellLocation:event.locationInWindow];
 
     if ([event hasPreciseScrollingDeltas]) {
@@ -821,7 +821,23 @@ static void scrollEvent(nvim::process &nvim, size_t count, std::string_view dire
 
         deltaX = floor(scrollingDeltaX / cellSize.width);
         scrollingDeltaX -= (deltaX * cellSize.width);
+    } else {
+        modifierFlags = modifierFlags & ~NSEventModifierFlagShift;
+
+        if (deltaY > 0) {
+            deltaY = 1;
+        } else if (deltaY < 0) {
+            deltaY = -1;
+        }
+
+        if (deltaX > 0) {
+            deltaX = 1;
+        } else if (deltaX < 0) {
+            deltaX = -1;
+        }
     }
+
+    input_modifiers modifiers = input_modifiers(modifierFlags);
 
     if (deltaY > 0) {
         scrollEvent(nvim, deltaY, "up", modifiers, location);
