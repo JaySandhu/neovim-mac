@@ -152,8 +152,12 @@ static NVWindowController* openWith(NSArray<NVWindowController*> *windows,
     NVRenderContextOptions options;
     options.rasterizerWidth = 512;
     options.rasterizerHeight = 512;
-    options.texturePageWidth = 1024;
-    options.texturePageHeight = 1024;
+    options.cachePageWidth = 1024;
+    options.cachePageHeight = 1024;
+    options.cacheGrowthFactor = 1.5;
+    options.cacheInitialCapacity = 1;
+    options.cacheEvictionThreshold = 8;
+    options.cacheEvictionPreserve = 2;
 
     contextManager = [[NVRenderContextManager alloc] initWithOptions:options delegate:self];
 }

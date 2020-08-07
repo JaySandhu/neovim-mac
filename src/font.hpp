@@ -1,6 +1,6 @@
 //
 //  Neovim Mac
-//  Font.hpp
+//  font.hpp
 //
 //  Copyright © 2020 Jay Sandhu. All rights reserved.
 //  This file is distributed under the MIT License.
@@ -32,8 +32,8 @@ public:
     arc_ptr(): ptr(nullptr) {}
 
     /// Assumes ownership of a retained pointer.
-    /// @param ptr A pointer to a the reference counted object. Calling this 
-    ///            constructor with nullptr is equivalent to calling the 
+    /// @param ptr A pointer to a the reference counted object. Calling this
+    ///            constructor with nullptr is equivalent to calling the
     ///            default constructor.
     arc_ptr(T ptr): ptr(ptr) {}
 
@@ -71,7 +71,7 @@ public:
             ptr = nullptr;
         };
     }
-    
+
     explicit operator bool() const {
         return ptr;
     }
@@ -83,49 +83,49 @@ public:
 
 /// A set of fonts of the same typeface in different variations.
 /// Stores fonts in regular, bold, italic, and bold italic variations.
-/// Font families should not be created directly. Instead use a font_manager. 
+/// Font families should not be created directly. Instead use a font_manager.
 class font_family {
 private:
     arc_ptr<CTFontRef> fonts[(size_t)nvim::font_attributes::bold_italic + 1];
     CGFloat unscaled_size_;
     CGFloat scale_factor_;
-    
+
     friend class font_manager;
 
 public:
-    /// Default constructed objects should only be assigned to or destroyed. 
+    /// Default constructed objects should only be assigned to or destroyed.
     /// This constructor is only provided because Objective-C++ requires C++
-    /// instance variables to be default constructible. Use a font_manager to 
+    /// instance variables to be default constructible. Use a font_manager to
     /// create font_family objects.
     font_family() = default;
-    
+
     /// Returns the regular font.
     CTFontRef regular() const {
         return fonts[(size_t)nvim::font_attributes::none].get();
     }
-    
+
     /// Returns the bold font.
     CTFontRef bold() const {
         return fonts[(size_t)nvim::font_attributes::bold].get();
     }
-    
+
     /// Returns the italic font.
     CTFontRef italic() const {
         return fonts[(size_t)nvim::font_attributes::italic].get();
     }
-    
+
     /// Returns the bold italic font.
     CTFontRef bold_italic() const {
         return fonts[(size_t)nvim::font_attributes::bold_italic].get();
     }
-    
+
     /// Returns the font matching the given font_attributes.
-    /// @param attrs The font attributes. Passing a value out of the range of 
+    /// @param attrs The font attributes. Passing a value out of the range of
     ///              the font_attributes enum is undefined.
     CTFontRef get(nvim::font_attributes attrs) const {
         return fonts[(size_t)attrs].get();
     }
-    
+
     /// Returns the scaled font size. Equal to unscaled_size() * scale_factor().
     CGFloat size() const {
         return CTFontGetSize(regular());
@@ -140,27 +140,27 @@ public:
     CGFloat scale_factor() const {
         return scale_factor_;
     }
-    
+
     /// Returns the regular font's leading metric.
     CGFloat leading() const {
         return CTFontGetLeading(regular());
     }
-    
+
     /// Returns the regular font's ascent metric.
     CGFloat ascent() const {
         return CTFontGetAscent(regular());
     }
-    
+
     /// Returns the regular font's descent metric.
     CGFloat descent() const {
         return CTFontGetDescent(regular());
     }
-    
+
     /// Returns the regular font's underline position.
     CGFloat underline_position() const {
         return CTFontGetUnderlinePosition(regular());
     }
-    
+
     /// Returns the regular font's underline thickness.
     CGFloat underline_thickness() const {
         return CTFontGetUnderlineThickness(regular());
@@ -174,31 +174,31 @@ public:
 
 /// Creates CTFontDescriptor and font_family objects.
 ///
-/// Font managers always use the same CTFont object for equivalent fonts, thus 
-/// fonts can be uniquely identified by their address (for hashing and equality 
-/// purposes). Ensuring fonts are cheap to compare and hash is the reason we 
-/// use a font manager. CTFonts created by font managers are retained for the 
-/// lifetime of the manager object.  
+/// Font managers always use the same CTFont object for equivalent fonts, thus
+/// fonts can be uniquely identified by their address (for hashing and equality
+/// purposes). Ensuring fonts are cheap to compare and hash is the reason we
+/// use a font manager. CTFonts created by font managers are retained for the
+/// lifetime of the manager object.
 class font_manager {
 private:
     struct font_entry {
         arc_ptr<CTFontRef> font;
         arc_ptr<CFStringRef> name;
         CGFloat size;
-        
+
         font_entry(arc_ptr<CTFontRef> font,
                    arc_ptr<CFStringRef> name,
                    CGFloat size): font(font), name(name), size(size) {}
     };
-    
+
     std::vector<font_entry> used_fonts;
-    
+
     arc_ptr<CTFontRef> get_font(CTFontDescriptorRef descriptor, CGFloat size);
 
 public:
     /// Returns a default font descriptor.
     static arc_ptr<CTFontDescriptorRef> default_descriptor();
-    
+
     /// Returns a matching font descriptor.
     /// If no matching font descriptor is available, returns nullptr.
     static arc_ptr<CTFontDescriptorRef> make_descriptor(std::string_view name);
@@ -219,7 +219,7 @@ public:
                             CGFloat new_size, CGFloat scale_factor);
 };
 
-/// A rasterized glyph. 
+/// A rasterized glyph.
 /// Consists of a pixel buffer and glyph metrics. The pixel format is the same
 /// as the glyph_rasterizer that created it.
 struct glyph_bitmap {
@@ -229,7 +229,7 @@ struct glyph_bitmap {
     int16_t ascent;        ///< The glyphs ascent metric.
     int16_t width;         ///< The width of the pixel buffer.
     int16_t height;        ///< The height of the pixel buffer.
-    
+
     /// Returns the glyphs descent.
     int16_t descent() const {
         return ascent - height;
@@ -238,6 +238,21 @@ struct glyph_bitmap {
 
 /// Rasterizes text into glyph_bitmaps.
 /// Uses the sRGB colorspace and the RGBA premultiplied alpha pixel format.
+///
+/// Note that we rasterize Unicode strings (usually a single grapheme cluster),
+/// not individual Unicode code points, so rasterizers also handle
+/// Unicode shaping.
+///
+/// A note on why we're not using alpha masks:
+/// CoreText applies varying levels of font dilation / stem darkening depending
+/// on the text foreground and background colors. This is done because we
+/// perceive dark-on-light text to be bolder than light-on-dark text, CoreText
+/// compensates for this difference in perception in its output. This means
+/// we would need a separate alpha mask for every foreground / background color
+/// combination. We could still save on GPU memory by using alpha only textures,
+/// unfortunately, that's not possible either. When rendering to an alpha only
+/// CGContext, CoreText only considers the text foreground color, so we have no
+/// way of obtaining accurate, correctly dilated, alpha masks.
 class glyph_rasterizer {
 private:
     arc_ptr<CGContextRef> context;
@@ -249,18 +264,18 @@ private:
 public:
     static constexpr size_t pixel_size = 4;
 
-    /// Default constructed objects should only be assigned to or destroyed. 
+    /// Default constructed objects should only be assigned to or destroyed.
     /// This constructor is only provided because Objective-C++ requires C++
     /// instance variables to be default constructible.
     glyph_rasterizer() = default;
 
     /// Construct a glyph_rasterizer with the given canvas size.
-    /// The glyph rasterizer canvas extends from -width to width along the x 
+    /// The glyph rasterizer canvas extends from -width to width along the x
     /// axis, and from -height to height along the y axis. Glyphs are rasterized
-    /// at the origin (0, 0). Thus the maximum glyph size is double the width 
-    /// and height paramters. 
+    /// at the origin (0, 0). Thus the maximum glyph size is double the width
+    /// and height paramters.
     glyph_rasterizer(size_t width, size_t height);
-        
+
     /// Rasterize a string.
     /// @param font         The font to use.
     /// @param background   The glyph background color.
@@ -271,7 +286,7 @@ public:
                            nvim::rgb_color background,
                            nvim::rgb_color foreground,
                            std::string_view text);
-    
+
     /// The stride value for glyph_bitmaps produced by this rasterizer.
     size_t stride() const {
         return midx * 2 * pixel_size;
@@ -279,13 +294,15 @@ public:
 };
 
 /// Caches glyphs in a Metal texture.
-/// Glyphs are cached in an array of 2d textures. Each texture in the texture 
-/// array is a cache page. Cache pages are added and evicted as needed. 
+/// Glyphs are cached in an array of 2d textures. Each texture in the texture
+/// array is a cache page. Cache pages are added and evicted as needed. The
+/// texture cache uses a FIFO cache eviction scheme.
 class glyph_texture_cache {
 private:
     id<MTLDevice> device;
     id<MTLCommandQueue> queue;
     id<MTLTexture> texture;
+    double growth_factor;
     size_t page_count;
     size_t page_index;
     size_t x_size;
@@ -296,36 +313,52 @@ private:
 
     simd_short3 add_new_page(const glyph_bitmap &bitmap);
 
+    void realloc(size_t new_page_count, size_t begin, size_t count);
+
 public:
     /// Default constructed objects should only be assigned to or destroyed.
     /// This constructor is only provided because Objective-C++ requires C++
     /// instance variables to be default constructible.
     glyph_texture_cache() = default;
 
-    /// Construct a new texture cache using the given queue and page size.
-    /// @param queue        The Metal command queue.
-    /// @param page_width   The cache's page width.
-    /// @param page_height  The cache's page height.
+    /// Construct a new texture cache.
+    /// @param queue            The Metal command queue.
+    /// @param page_width       The width of a cache page in pixels.
+    /// @param page_height      The height of a cache page in pixels.
+    /// @param init_capacity    The initial size of the cache page array.
+    /// @param growth_factor    The factor to grow the page array by on expand.
     glyph_texture_cache(id<MTLCommandQueue> queue,
                         size_t page_width,
-                        size_t page_height);
+                        size_t page_height,
+                        size_t init_capacity,
+                        double growth_factor);
 
     /// Returns the cache's page width.
     size_t width() const {
         return x_size;
     }
-    
+
     /// Returns the cache's page height.
     size_t height() const {
         return y_size;
     }
-    
+
+    /// Returns the capacity of the cache page array.
+    size_t pages_capacity() {
+        return page_count;
+    }
+
+    /// Returns the number of cache pages currently in use.
+    size_t pages_size() {
+        return page_index;
+    }
+
     /// Returns the pixel format for the cache's Metal texture.
     MTLPixelFormat pixel_format() const {
         return [texture pixelFormat];
     }
 
-    /// Returns the Metal texture.
+    /// Returns the underlying Metal texture.
     id<MTLTexture> metal_texture() const {
         return texture;
     }
@@ -334,14 +367,29 @@ public:
     /// @returns A vector representing the position the bitmap was stored:
     ///          x - The x coordinate of the bitmap's top right corner.
     ///          y - The y coordinate of the bitmap's top right corner.
-    ///          z - The cache page the bitmap was stored in. 
+    ///          z - The cache page the bitmap was stored in.
     simd_short3 add(const glyph_bitmap &bitmap);
+
+    /// Evicts all but the newest n cache pages.
+    /// Eviction is done by copying the contents of the page array to a new
+    /// smaller MTLTexture. The existing MTLTexture is released, but it is not
+    /// mutated, other references to it remain valid.
+    ///
+    /// @param preserve The maximum number of cache pages to preserve. The
+    /// newest cache pages are preserved, starting with the one currently
+    /// in use.
+    ///
+    /// @returns If preserve is a non zero value, returns the number of used
+    /// cache pages that were evicted. If preserve is 0, returns 0.
+    size_t evict(size_t preserve);
 };
 
 /// Rasterizes and caches glyphs.
 /// Glyph managers rasterize text on demand and cache the resulting bitmaps in
 /// glyph_texture_caches. A glyph manager will always ensure every glyph
-/// required to render a frame is in GPU memory.
+/// required to render a frame is in GPU memory. Once a frame has been
+/// committed, you should call evict() on the glyph_manager object to give it
+/// a chance to cull old cache pages.
 class glyph_manager {
 private:
     struct key_type {
@@ -359,39 +407,43 @@ private:
             font(font),
             background(background.opaque()),
             foreground(foreground.opaque()) {
-                            
+
             simd_ulong4 jumbled;
             memcpy(&jumbled, graphemes.data(), graphemes.size());
-                
+
             jumbled *= simd_ulong4{41099511628211,
                                    41099511628211,
                                    41099511628211};
-                
+
             jumbled.w = ((uintptr_t)font >> 3) ^ foreground ^ background;
             hash = jumbled.x ^ jumbled.y ^ jumbled.z ^ jumbled.w;
         }
     };
-    
+
     struct key_hash {
         size_t operator()(const key_type &key) const {
             return key.hash;
         }
     };
-    
+
     struct key_equal {
         bool operator()(const key_type &left, const key_type &right) const {
             return memcmp(&left, &right, sizeof(key_type)) == 0;
         }
     };
-    
+
     using glyph_map = std::unordered_map<key_type,
                                          glyph_rect,
                                          key_hash,
                                          key_equal>;
-    
+
+    size_t evict_threshold;
+    size_t evict_preserve;
     glyph_rasterizer *rasterizer;
     glyph_texture_cache texture_cache;
     glyph_map map;
+
+    void do_evict();
 
 public:
     /// Default constructed objects should only be assigned to or destroyed.
@@ -400,28 +452,33 @@ public:
     glyph_manager() = default;
 
     /// Constructs a glyph manager.
-    /// @param rasterizer   The shared glyph rasterizer to use.
-    /// @param queue        The command queue used by the texture cache.
-    /// @param page_width   The page width of the texture cache.
-    /// @param page_height  The page height of the texture cache.
+    /// @param rasterizer       The shared glyph rasterizer to use.
+    /// @param texture_cache    The texture cache to use.
+    /// @param evict_threshold  The cache eviction threshold.
+    /// @param evict_preserve   The number of texture cache pages preserved
+    ///                         on eviction. This number should be less than
+    ///                         evict_threshold.
     glyph_manager(glyph_rasterizer *rasterizer,
-                  id<MTLCommandQueue> queue,
-                  size_t page_width,
-                  size_t page_height):
+                  glyph_texture_cache texture_cache,
+                  size_t evict_threshold,
+                  size_t evict_preserve):
         rasterizer(rasterizer),
-        texture_cache(queue, page_width, page_height) {}
+        texture_cache(std::move(texture_cache)),
+        evict_threshold(evict_threshold),
+        evict_preserve(evict_preserve) {}
 
     /// Returns a cached glyph with the given attributes.
     /// @param font         The font.
-    /// @param cell         The cell form which the text is obtained from.
+    /// @param cell         The cell form which the text is obtained.
     /// @param background   The background color.
     /// @param foreground   The foreground color.
+    /// @returns A cached glyph.
     glyph_rect get(CTFontRef font,
                    const nvim::cell &cell,
                    nvim::rgb_color background,
                    nvim::rgb_color foreground) {
         key_type key(font, cell.grapheme(), background, foreground);
-        
+
         if (auto iter = map.find(key); iter != map.end()) {
             return iter->second;
         }
@@ -430,9 +487,9 @@ public:
                                                    background,
                                                    foreground,
                                                    cell.grapheme_view());
-        
+
         auto texture_position = texture_cache.add(glyph);
-        
+
         glyph_rect cached;
         cached.texture_origin = texture_position;
         cached.position.x = glyph.left_bearing;
@@ -443,16 +500,26 @@ public:
         map.emplace(key, cached);
         return cached;
     }
-    
+
     /// Calls get using the background and foreground colors of cell.
     glyph_rect get(const font_family &font_family, const nvim::cell &cell) {
         CTFontRef font = font_family.get(cell.font_attributes());
         return get(font, cell, cell.background(), cell.foreground());
     }
-    
+
     /// Returns the Metal texture containing the cached glyphs.
     id<MTLTexture> texture() const {
         return texture_cache.metal_texture();
+    }
+
+    /// Evicts old cache pages if necessary.
+    /// The cache is evicted if the number of allocated cache pages exceeds the
+    /// cache eviction threshold. The newest n cache pages are preserved, where
+    /// n is the evict_preserve value passed to the constructor.
+    void evict() {
+        if (texture_cache.pages_capacity() > evict_threshold) {
+            do_evict();
+        }
     }
 };
 

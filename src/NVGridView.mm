@@ -624,7 +624,9 @@ static void blinkCursorToggleOn(void *context) {
     [commandBuffer commit];
     [commandBuffer waitUntilScheduled];
     [drawable present];
+
     frameIndex += 1;
+    glyphManager->evict();
 }
 
 - (BOOL)isFlipped {

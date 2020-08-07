@@ -1,6 +1,6 @@
 //
 //  Neovim Mac
-//  Font.mm
+//  font.mm
 //
 //  Copyright © 2020 Jay Sandhu. All rights reserved.
 //  This file is distributed under the MIT License.
@@ -225,69 +225,101 @@ glyph_bitmap glyph_rasterizer::rasterize(CTFontRef font,
     return bitmap;
 }
 
-glyph_texture_cache::glyph_texture_cache(id<MTLCommandQueue> queue,
-                                         size_t width,
-                                         size_t height): queue(queue) {
-    device = [queue device];
-    
-    x_used = 0;
-    y_used = 0;
-    row_height = 0;
-    page_index = 0;
-    page_count = 1;
-    x_size = width;
-    y_size = height;
-    
+static id<MTLTexture> alloc_texture(id<MTLDevice> device, size_t width,
+                                    size_t height, size_t length) {
     MTLTextureDescriptor *desc = [[MTLTextureDescriptor alloc] init];
     desc.textureType = MTLTextureType2DArray;
-    desc.arrayLength = 1;
+    desc.arrayLength = length;
     desc.pixelFormat = MTLPixelFormatRGBA8Unorm_sRGB;
     desc.width = width;
     desc.height = height;
     desc.mipmapLevelCount = 1;
-    
-    texture = [device newTextureWithDescriptor:desc];
+    return [device newTextureWithDescriptor:desc];
 }
 
-/// Adds a new cache page and caches the bitmap on it.
-/// Called when we have exhuasted our exisiting cache pages.
-simd_short3 glyph_texture_cache::add_new_page(const glyph_bitmap &bitmap) {
-    const size_t new_page_count = page_count + 1;
+glyph_texture_cache::glyph_texture_cache(id<MTLCommandQueue> queue, size_t width,
+                                         size_t height, size_t init_capacity,
+                                         double growth_factor):
+    device(queue.device),
+    queue(queue),
+    growth_factor(growth_factor) {
+    x_used = 0;
+    y_used = 0;
+    x_size = width;
+    y_size = height;
+    row_height = 0;
+    page_index = 0;
+    page_count = std::max(1ul, init_capacity);
+    texture = alloc_texture(device, width, height, page_count);
+}
 
-    // Allocate an identical texture with an additional cache page.
-    MTLTextureDescriptor *desc = [[MTLTextureDescriptor alloc] init];
-    desc.textureType = MTLTextureType2DArray;
-    desc.arrayLength = new_page_count;
-    desc.pixelFormat = MTLPixelFormatRGBA8Unorm_sRGB;
-    desc.width = x_size;
-    desc.height = y_size;
-    desc.mipmapLevelCount = 1;
-    
-    id<MTLTexture> old_texture = texture;
-    texture = [device newTextureWithDescriptor:desc];
-
-    // Copy the existing cache pages to the new texture.
+/// Resizes the cache page array.
+/// @param new_page_count   The new size of the cache page array.
+/// @param begin The cache page index to begin copying from.
+///              Precondition: begin < page_count.
+/// @param count The number of cache pages to copy.
+///              Precondition: count > 0 && count < new_page_count.
+///              To resize the cache page array without copying, allocate
+///              a new texture instead.
+void glyph_texture_cache::realloc(size_t new_page_count, size_t begin, size_t count) {
+    id<MTLTexture> new_texture = alloc_texture(device, x_size, y_size, new_page_count);
     id<MTLCommandBuffer> commandBuffer = [queue commandBuffer];
     id<MTLBlitCommandEncoder> blitEncoder = [commandBuffer blitCommandEncoder];
 
-    [blitEncoder copyFromTexture:old_texture
-                     sourceSlice:0
+    [blitEncoder copyFromTexture:texture
+                     sourceSlice:begin
                      sourceLevel:0
-                       toTexture:texture
+                       toTexture:new_texture
                 destinationSlice:0
                 destinationLevel:0
-                      sliceCount:page_count
+                      sliceCount:count
                       levelCount:1];
-    
+
     [blitEncoder endEncoding];
     [commandBuffer commit];
 
-    // Finally cache the bitmap
+    texture = new_texture;
+    page_count = new_page_count;
+}
+
+size_t glyph_texture_cache::evict(size_t preserve) {
+    if (preserve == 0) {
+        texture = alloc_texture(device, x_size, y_size, 1);
+        page_count = 1;
+        page_index = 0;
+        x_used = 0;
+        y_used = 0;
+        return 0;
+    }
+
+    if (preserve < page_index) {
+        size_t begin = page_index - preserve + 1;
+        realloc(preserve, begin, preserve);
+        page_index = preserve - 1;
+        return begin;
+    }
+
+    if (preserve > page_index) {
+        realloc(page_index, 0, page_index);
+        return 0;
+    }
+
+    return 0;
+}
+
+/// Add the bitmap to the cache on a new cache page.
+/// Resizes the underlying Metal texture if needed.
+simd_short3 glyph_texture_cache::add_new_page(const glyph_bitmap &bitmap) {
+    page_index += 1;
+
+    if (page_index >= page_count) {
+        size_t new_page_count = ceil((double)page_count * growth_factor);
+        realloc(std::max(page_index, new_page_count), 0, page_count);
+    }
+
     x_used = std::min((size_t)bitmap.width + 1, x_size);
     y_used = std::min((size_t)bitmap.height, y_size);
     row_height = y_used;
-    page_count = new_page_count;
-    page_index += 1;
     
     [texture replaceRegion:MTLRegionMake2D(0, 0, x_used, y_used)
                mipmapLevel:0
@@ -334,4 +366,29 @@ simd_short3 glyph_texture_cache::add(const glyph_bitmap &bitmap) {
             return add_new_page(bitmap);
         }
     }
+}
+
+void glyph_manager::do_evict() {
+    size_t evicted = texture_cache.evict(evict_preserve);
+
+    if (evicted == 0) {
+        if (evict_preserve == 0) {
+            map.clear();
+        }
+
+        return;
+    }
+
+    glyph_map new_map;
+    new_map.reserve(map.size());
+
+    for (const auto& [key, value] : map) {
+        if (value.texture_origin.z >= evicted) {
+            auto shifted = value;
+            shifted.texture_origin.z -= evicted;
+            new_map.emplace(key, shifted);
+        }
+    }
+
+    map = std::move(new_map);
 }

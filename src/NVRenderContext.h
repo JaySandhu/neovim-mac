@@ -1,9 +1,10 @@
 //
+//  Neovim Mac
 //  NVRenderContext.h
-//  Neovim
 //
-//  Created by Jay Sandhu on 6/22/20.
 //  Copyright © 2020 Jay Sandhu. All rights reserved.
+//  This file is distributed under the MIT License.
+//  See LICENSE.txt for details.
 //
 
 #import <Cocoa/Cocoa.h>
@@ -56,17 +57,33 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
-/// @struct NVRenderContextOptions
-/// @abstract Controls the behaviour of NVRenderContexts.
+/// Controls the parameters of a NVRenderContexts and the objects it creates.
 struct NVRenderContextOptions {
     /// The glyph_rasterizer height.
     size_t rasterizerHeight;
+
     /// The glyph_rasterizer width.
     size_t rasterizerWidth;
+
     /// The glyph_texture_cache page height.
-    size_t texturePageHeight;
+    size_t cachePageHeight;
+
     /// The glyph_texture_cache page width.
-    size_t texturePageWidth;
+    size_t cachePageWidth;
+
+    /// The glyph_texture_cache initial capacity.
+    size_t cacheInitialCapacity;
+
+    /// The glyph_texture_cache growth factor.
+    double cacheGrowthFactor;
+
+    /// For a given glyph_texture_cache, when the number of allocated cache
+    /// pages exceeds this threshold, the texture cache is evicted.
+    size_t cacheEvictionThreshold;
+
+    /// The number of cache pages to preserve when a texture cache is evicted.
+    /// This number should be less than cacheEvictionThreshold.
+    size_t cacheEvictionPreserve;
 };
 
 /// @protocol NVMetalDeviceDelegate

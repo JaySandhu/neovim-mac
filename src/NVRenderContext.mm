@@ -1,9 +1,10 @@
 //
-//  NVRenderContext.m
-//  Neovim
+//  Neovim Mac
+//  NVRenderContext.mm
 //
-//  Created by Jay Sandhu on 6/22/20.
 //  Copyright © 2020 Jay Sandhu. All rights reserved.
+//  This file is distributed under the MIT License.
+//  See LICENSE.txt for details.
 //
 
 #import "NVRenderContext.h"
@@ -77,10 +78,16 @@ static inline MTLRenderPipelineDescriptor* blendedPipelineDescriptor() {
 
     if (*error) return self;
 
+    glyph_texture_cache textureCache(_commandQueue,
+                                     options->cachePageWidth,
+                                     options->cachePageHeight,
+                                     options->cacheInitialCapacity,
+                                     options->cacheGrowthFactor);
+
     glyphManager = glyph_manager(rasterizer,
-                                 _commandQueue,
-                                 options->texturePageWidth,
-                                 options->texturePageHeight);
+                                 std::move(textureCache),
+                                 options->cacheEvictionThreshold,
+                                 options->cacheEvictionPreserve);
 
     return self;
 }
