@@ -17,6 +17,8 @@
 
 @implementation testBumpAllocator
 
+#if __has_feature(address_sanitizer)
+
 - (void)testDeallocAllPoisions {
     bump_allocator allocator(512);
     char *ptr = static_cast<char*>(allocator.alloc(24));
@@ -24,6 +26,41 @@
     
     AssertDies(*(ptr + 5) = 'x');
 }
+
+- (void)testDestructorPoisions {
+    char *ptr;
+
+    {
+        bump_allocator allocator(512);
+        ptr = static_cast<char*>(allocator.alloc(24));
+    }
+
+    AssertDies(*(ptr + 5) = 'x');
+}
+
+- (void)testMoveAssigmentPoisions {
+    bump_allocator allocator(512);
+    char *ptr = static_cast<char*>(allocator.alloc(24));
+    allocator = bump_allocator();
+
+    AssertDies(*(ptr + 5) = 'x');
+}
+
+- (void)testAbortsOnOverflow {
+    bump_allocator allocator(512);
+    AssertAborts(allocator.alloc(SIZE_T_MAX));
+    AssertAborts(allocator.alloc(SIZE_T_MAX - 8));
+}
+
+- (void)testMemoryIsGuarded {
+    bump_allocator allocator(512);
+    char *test = static_cast<char*>(allocator.alloc(64));
+
+    AssertDies(*(test - 1)  = 'x');
+    AssertDies(*(test + 65) = 'x');
+}
+
+#endif // __has_feature(address_sanitizer)
 
 - (void)testDeallocAllRestoresRemaining {
     bump_allocator allocator(512);
@@ -34,25 +71,6 @@
     
     allocator.dealloc_all();
     XCTAssertEqual(allocator.remaining(), remaining);
-}
-
-- (void)testDestructorDeallocs {
-    char *ptr;
-    
-    {
-        bump_allocator allocator(512);
-        ptr = static_cast<char*>(allocator.alloc(24));
-    }
-    
-    AssertDies(*(ptr + 5) = 'x');
-}
-
-- (void)testMoveAssigmentDeallocs {
-    bump_allocator allocator(512);
-    char *ptr = static_cast<char*>(allocator.alloc(24));
-    allocator = bump_allocator();
-    
-    AssertDies(*(ptr + 5) = 'x');
 }
 
 - (void)testDefaultContructor {
@@ -131,20 +149,6 @@
     allocator.reserve(128);
     XCTAssertEqual(allocator.capacity(), capacity);
     XCTAssertEqual(allocator.remaining(), remaining);
-}
-
-- (void)testAbortsOnOverflow {
-    bump_allocator allocator(512);
-    AssertAborts(allocator.alloc(SIZE_T_MAX));
-    AssertAborts(allocator.alloc(SIZE_T_MAX - 8));
-}
-
-- (void)testMemoryIsGuarded {
-    bump_allocator allocator(512);
-    char *test = static_cast<char*>(allocator.alloc(64));
-    
-    AssertDies(*(test - 1)  = 'x');
-    AssertDies(*(test + 65) = 'x');
 }
 
 - (void)testMemoryIsAligned {

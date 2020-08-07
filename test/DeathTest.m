@@ -33,7 +33,11 @@ bool forked_context(XCTestCase *test, int testcode,
     if (pid == 0) {
         // Child process, supress stderr and set death callbacks
         dup2(open("/dev/null", O_WRONLY), STDERR_FILENO);
+
+#if __has_feature(address_sanitizer)
         __sanitizer_set_death_callback(abort);
+#endif
+
         signal(SIGABRT, _exit);
         return true;
     }

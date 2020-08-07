@@ -229,7 +229,9 @@ static inline bool all_a(const char *begin, const char *end) {
     XCTAssertFalse(std::is_sorted(begin, end));
 }
 
-- (void)testUnpackerMoveConstruction {
+#if __has_feature(address_sanitizer)
+
+- (void)testUnpackerMoveConstructor {
     std::string_view string_test("\xa4test");
     
     msg::unpacker moved_from;
@@ -270,6 +272,8 @@ static inline bool all_a(const char *begin, const char *end) {
     moved_to = msg::unpacker();
     AssertDies(str[0] == 'x');
 }
+
+#endif // __has_feature(address_sanitizer)
 
 - (void)testUnpackInvalid {
     auto packed = packed_data("\xc1");
