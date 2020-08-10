@@ -193,7 +193,7 @@ void ui_controller::redraw_event(const msg::object &event_object) {
         options oldopts = opts;
         apply(this, &ui_controller::set_option, name, args);
 
-        if (opts != oldopts) {
+        if (opts != oldopts && send_option_change()) {
             window.options_set();
         }
         
@@ -623,7 +623,9 @@ void ui_controller::set_title(msg::string new_title) {
         option_title = new_title;
     }
 
-    window.title_set();
+    if (send_option_change()) {
+        window.title_set();
+    }
 }
 
 std::string ui_controller::get_title() {
@@ -720,7 +722,8 @@ std::vector<font> ui_controller::get_fonts(double default_size) {
 
 static inline void set_font_option(std::string &opt_guifont,
                                    const msg::object &value,
-                                   window_controller &window) {
+                                   window_controller &window,
+                                   bool send_option_change) {
     if (!value.is<msg::string>()) {
         return os_log_info(rpc, "Redraw info: Option type error - "
                                 "Option=guifont Type=%s",
@@ -728,7 +731,10 @@ static inline void set_font_option(std::string &opt_guifont,
     }
 
     opt_guifont = value.get<msg::string>();
-    window.font_set();
+
+    if (send_option_change) {
+        window.font_set();
+    }
 }
 
 static inline void set_ext_option(bool &opt, const msg::object &value) {
@@ -743,7 +749,7 @@ static inline void set_ext_option(bool &opt, const msg::object &value) {
 
 void ui_controller::set_option(msg::string name, msg::object value) {
     if (name == "guifont") {
-        set_font_option(option_guifont, value, window);
+        set_font_option(option_guifont, value, window, send_option_change());
     } else if (name == "ext_cmdline")  {
         set_ext_option(opts.ext_cmdline, value);
     } else if (name == "ext_hlstate")  {

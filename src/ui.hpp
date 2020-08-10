@@ -584,6 +584,10 @@ private:
 
     void set_option(msg::string name, msg::object object);
 
+    bool send_option_change() const {
+        return !signal_flush && !signal_enter;
+    }
+
 public:
     window_controller window;
 
