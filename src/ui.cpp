@@ -400,9 +400,9 @@ void ui_controller::flush() {
     writing = complete.exchange(completed);
     *writing = *completed;
 
-    if (flush_wait) {
-        dispatch_semaphore_signal(flush_wait);
-        flush_wait = nullptr;
+    if (signal_flush) {
+        dispatch_semaphore_signal(signal_flush);
+        signal_flush = nullptr;
     } else {
         window.redraw();
     }

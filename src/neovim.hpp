@@ -280,10 +280,26 @@ public:
     /// Synchronously attaches to the remote UI process.
     /// @param width    Requested screen columns.
     /// @param height   Requested screen rows.
-    /// Once this function returns, the first grid is ready to be drawn.
-    /// Attaches using the API method nvim_ui_attach with ext_linegrid enabled
-    /// and all other ext options disabled. 
+    /// Blocks until the first UI flush event. Once this function returns, the
+    /// first grid is ready to be drawn. Attaches using nvim_ui_attach with
+    /// ext_linegrid enabled and all other ext options disabled.
     void ui_attach(size_t width, size_t height);
+
+    /// Synchronously attach to the remote UI process and wait for VimEnter.
+    ///
+    /// @param width    Requested screen columns.
+    /// @param height   Requested screen rows.
+    /// @param timeout  Maximum time to wait for VimEnter.
+    ///
+    /// Similar to ui_attach, except this function blocks until the first UI
+    /// flush event following VimEnter. The first grid following VimEnter is
+    /// usually closer to what the user expects to see (colorschemes are applied
+    /// and files are loaded). Neovim may be blocked before VimEnter, so use
+    /// a small timeout value.
+    ///
+    /// Note: This function only makes sense for Neovim processes started with
+    /// the --embed flag that are waiting for a UI to attach.
+    void ui_attach_wait(size_t width, size_t height, dispatch_time_t timeout);
 
     /// Calls API method nvim_try_resize. Resizes the global grid.
     /// @param width    The new requested width.

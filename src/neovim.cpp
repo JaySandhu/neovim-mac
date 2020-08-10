@@ -268,7 +268,7 @@ int process::io_init(int readfd, int writefd) {
 
     dispatch_source_set_cancel_handler_f(read_source, [](void *context) {
         process *ptr = static_cast<process*>(context);
-        ptr->ui.window.shutdown();
+        ptr->ui.shutdown();
     });
 
     dispatch_source_set_cancel_handler_f(write_source, [](void *context) {
@@ -409,6 +409,8 @@ void process::on_rpc_notification(msg::array array) {
 
     if (name == "redraw") {
         return ui.redraw(args);
+    } else if (name == "vimenter") {
+        return ui.vimenter();
     }
 
     os_log_info(rpc, "Unhanled notification - Name=%.*s, Args=%s",
@@ -542,14 +544,40 @@ void process::set_controller(window_controller window) {
     ui.window = window;
 }
 
+static constexpr std::array<std::pair<msg::string, bool>, 1> attach_options{{
+    {"ext_linegrid", true}
+}};
+
 void process::ui_attach(size_t width, size_t height) {
-    std::array<std::pair<msg::string, bool>, 1> map{{
-        {"ext_linegrid", true}
-    }};
-
-    rpc_request(null_msgid, "nvim_ui_attach", width, height, map);
-
     ui.signal_on_flush(semaphore);
+    rpc_request(null_msgid, "nvim_ui_attach", width, height, attach_options);
+    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+}
+
+void process::ui_attach_wait(size_t width, size_t height,
+                             dispatch_time_t timeout) {
+    ui.signal_on_entered_flush(semaphore);
+
+    rpc_request(null_msgid, "nvim_command",
+                "autocmd VimEnter * call rpcnotify(1, 'vimenter')");
+
+    rpc_request(null_msgid, "nvim_ui_attach", width, height, attach_options);
+
+    if (!dispatch_semaphore_wait(semaphore, timeout)) {
+        return;
+    }
+
+    dispatch_sync_f(queue, this, [](void *ptr) {
+        process *self = static_cast<process*>(ptr);
+
+        // If a grid is availible, signal now, otherwise wait for a flush.
+        if (self->ui.is_drawable()) {
+            self->ui.signal();
+        } else {
+            self->ui.vimenter();
+        }
+    });
+
     dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
 }
 

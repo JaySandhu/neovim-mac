@@ -532,7 +532,8 @@ public:
 /// related options, and communicates with the delegate.
 class ui_controller {
 private:
-    dispatch_semaphore_t flush_wait;
+    dispatch_semaphore_t signal_flush;
+    dispatch_semaphore_t signal_enter;
     std::vector<cell_attributes> hl_table;
     std::vector<cursor_attributes> mode_table;
 
@@ -554,8 +555,9 @@ private:
     std::string option_guifont;
     options opts;
 
-    void redraw_event(const msg::object &event);
     grid* get_grid(size_t index);
+
+    void redraw_event(const msg::object &event);
 
     void flush();
 
@@ -585,7 +587,9 @@ private:
 public:
     window_controller window;
 
-    ui_controller(): flush_wait(nullptr), hl_table(1) {
+    ui_controller(): hl_table(1) {
+        signal_flush = nullptr;
+        signal_enter = nullptr;
         complete = &triple_buffered[0];
         writing  = &triple_buffered[1];
         drawing  = &triple_buffered[2];
@@ -609,10 +613,46 @@ public:
         }
     }
 
-    /// Signals semaphore on the next redraw event.
+    /// Signals semaphore on the next flush event.
     /// Note: window.redraw() is not called when a waiter is signaled.
-    void signal_on_flush(dispatch_semaphore_t waiting) {
-        flush_wait = waiting;
+    void signal_on_flush(dispatch_semaphore_t semaphore) {
+        signal_flush = semaphore;
+    }
+
+    /// Signals semaphore on first flush event following VimEnter.
+    void signal_on_entered_flush(dispatch_semaphore_t semaphore) {
+        signal_enter = semaphore;
+    }
+
+    /// Signals any waiting clients immediately.
+    void signal() {
+        if (signal_enter) {
+            dispatch_semaphore_signal(signal_enter);
+            signal_enter = nullptr;
+        } else if (signal_flush) {
+            dispatch_semaphore_signal(signal_flush);
+            signal_flush = nullptr;
+        }
+    }
+
+    /// Signals any waiting clients and calls window.shutdown().
+    /// Note: Signaling waiters is required to avoid deadlocks.
+    void shutdown() {
+        signal();
+        window.shutdown();
+    }
+
+    /// Notify the controller of the VimEnter event.
+    void vimenter() {
+        if (signal_enter) {
+            signal_flush = signal_enter;
+            signal_enter = nullptr;
+        }
+    }
+
+    /// Returns true if a grid is ready to be drawn, otherwise false.
+    bool is_drawable() {
+        return complete.load()->draw_tick > 0;
     }
 
     /// Get the current Neovim options.
