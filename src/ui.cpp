@@ -633,7 +633,7 @@ std::string ui_controller::get_title() {
     return option_title;
 }
 
-std::string ui_controller::get_font_string() {
+std::string ui_controller::get_guifont() {
     std::lock_guard lock(option_lock);
     return option_guifont;
 }
@@ -641,83 +641,6 @@ std::string ui_controller::get_font_string() {
 nvim::options ui_controller::get_options() {
     std::lock_guard lock(option_lock);
     return opts;
-}
-
-/// Makes a font object from a Vim font string.
-/// If size is not given in fontstr, default_size is used.
-static font make_font(std::string_view fontstr, double default_size) {
-    size_t index = fontstr.size();
-    size_t multiply = 1;
-    size_t size = 0;
-    
-    while (index) {
-        index -= 1;
-        char digit = fontstr[index];
-        
-        if (isdigit(digit)) {
-            size = size + (multiply * (digit - '0'));
-            multiply *= 10;
-        } else {
-            break;
-        }
-    }
-    
-    if (size && index && fontstr[index] == 'h' && fontstr[index - 1] == ':') {
-        return font{std::string(fontstr.substr(0, index - 1)), double(size)};
-    } else {
-        return font{std::string(fontstr), default_size};
-    }
-}
-
-static inline size_t find_unescaped_comma(std::string_view string, size_t pos) {
-    for (;;) {
-        pos = string.find(',', pos);
-
-        if (pos == std::string_view::npos) {
-            return pos;
-        }
-
-        // TODO: We're probably not handling multiple backslashes properly.
-        //       Replace with a more robust solution.
-        if (pos != 0 && string[pos - 1] != '\\') {
-            return pos;
-        }
-        
-        pos += 1;
-    }
-}
-
-std::vector<font> ui_controller::get_fonts(double default_size) {
-    std::lock_guard lock(option_lock);
-    std::vector<font> fonts;
-    
-    if (!option_guifont.size()) {
-        return fonts;
-    }
-
-    std::string_view fontopt = option_guifont;
-    size_t index = 0;
-
-    for (;;) {
-        size_t pos = find_unescaped_comma(fontopt, index);
-
-        if (pos == std::string_view::npos) {
-            auto fontstr = fontopt.substr(index);
-            fonts.push_back(make_font(fontstr, default_size));
-            break;
-        }
-
-        auto fontstr = fontopt.substr(index, pos - index);
-        fonts.push_back(make_font(fontstr, default_size));
-        
-        index = fontopt.find_first_not_of(' ', pos + 1);
-
-        if (pos == std::string::npos) {
-            break;
-        }
-    }
-    
-    return fonts;
 }
 
 static inline void set_font_option(std::string &opt_guifont,
@@ -767,6 +690,81 @@ void ui_controller::set_option(msg::string name, msg::object value) {
     } else if (name == "ext_termcolors")  {
         set_ext_option(opts.ext_termcolors, value);
     }
+}
+
+/// Makes a font object from a Vim font string.
+/// If size is not given in fontstr, default_size is used.
+static font make_font(std::string_view fontstr, double default_size) {
+    size_t index = fontstr.size();
+    size_t multiply = 1;
+    size_t size = 0;
+
+    while (index) {
+        index -= 1;
+        char digit = fontstr[index];
+
+        if (isdigit(digit)) {
+            size = size + (multiply * (digit - '0'));
+            multiply *= 10;
+        } else {
+            break;
+        }
+    }
+
+    if (size && index && fontstr[index] == 'h' && fontstr[index - 1] == ':') {
+        return font{fontstr.substr(0, index - 1), double(size)};
+    } else {
+        return font{fontstr, default_size};
+    }
+}
+
+static inline size_t find_unescaped_comma(std::string_view string, size_t pos) {
+    for (;;) {
+        pos = string.find(',', pos);
+
+        if (pos == std::string_view::npos) {
+            return pos;
+        }
+
+        // TODO: We're probably not handling multiple backslashes properly.
+        //       Replace with a more robust solution.
+        if (pos != 0 && string[pos - 1] != '\\') {
+            return pos;
+        }
+
+        pos += 1;
+    }
+}
+
+std::vector<font> parse_guifont(std::string_view guifont, double default_size) {
+    std::vector<font> fonts;
+
+    if (!guifont.size()) {
+        return fonts;
+    }
+
+    size_t index = 0;
+
+    for (;;) {
+        size_t pos = find_unescaped_comma(guifont, index);
+
+        if (pos == std::string_view::npos) {
+            auto fontstr = guifont.substr(index);
+            fonts.push_back(make_font(fontstr, default_size));
+            break;
+        }
+
+        auto fontstr = guifont.substr(index, pos - index);
+        fonts.push_back(make_font(fontstr, default_size));
+
+        index = guifont.find_first_not_of(' ', pos + 1);
+
+        if (pos == std::string_view::npos) {
+            break;
+        }
+    }
+
+    return fonts;
 }
 
 } // namespace ui

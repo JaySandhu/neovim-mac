@@ -487,12 +487,6 @@ inline bool operator!=(const options &left, const options &right) {
     return memcmp(&left, &right, sizeof(options)) != 0;
 }
 
-/// Describes a user selected font.
-struct font {
-    std::string name;
-    double size;
-};
-
 /// The Neovim window controller.
 /// The window controller receives various UI related updates.
 /// Note: This is a intended to be a thin C++ wrapper around NVWindowController,
@@ -618,12 +612,15 @@ public:
     }
 
     /// Signals semaphore on the next flush event.
+    /// Precondition: No signals are currently pending.
     /// Note: window.redraw() is not called when a waiter is signaled.
     void signal_on_flush(dispatch_semaphore_t semaphore) {
         signal_flush = semaphore;
     }
 
-    /// Signals semaphore on first flush event following VimEnter.
+    /// Signals semaphore on the first flush event following VimEnter.
+    /// Precondition: No signals are currently pending.
+    /// Note: window.redraw() is not called when a waiter is signaled.
     void signal_on_entered_flush(dispatch_semaphore_t semaphore) {
         signal_enter = semaphore;
     }
@@ -659,23 +656,33 @@ public:
         return complete.load()->draw_tick > 0;
     }
 
-    /// Get the current Neovim options.
+    /// Returns the current Neovim options.
     nvim::options get_options();
 
-    /// Get the current Neovim title.
+    /// Returns the Neovim window title.
     std::string get_title();
 
-    /// Get the raw guifont option string.
-    std::string get_font_string();
-
-    /// Returns a parsed representation of the guifont option.
-    /// @param default_size The default font size if one is not specified.
-    std::vector<nvim::font> get_fonts(double default_size);
+    /// Returns the guifont option string.
+    std::string get_guifont();
 
     /// Handle a Neovim RPC redraw notification.
     /// @param events The paramters of the RPC notification.
     void redraw(msg::array events);
 };
+
+/// Describes a user selected font.
+struct font {
+    std::string_view name;
+    double size;
+};
+
+/// Returns a parsed representation of the guifont option.
+/// @param guifont      The guifont option string.
+/// @param default_size The default font size to use if one is not specified.
+/// Note: nvim::font names are views into the guifont string, as such their
+/// lifetimes are tied to the memory underlying guifont.
+std::vector<nvim::font> parse_guifont(std::string_view guifont,
+                                      double default_size);
 
 } // namespace nvim
 

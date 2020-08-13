@@ -241,25 +241,19 @@ public:
         return ui.get_global_grid();
     }
 
-    /// Get the current Neovim options.
+    /// Returns the current Neovim options.
     nvim::options get_options() {
         return ui.get_options();
     }
 
-    /// Get the current Neovim title.
+    /// Returns the Neovim window title.
     std::string get_title() {
         return ui.get_title();
     }
 
-    /// Get the raw guifont option string.
-    std::string get_font_string() {
-        return ui.get_font_string();
-    }
-
-    /// Returns a parsed representation of the guifont option.
-    /// @param default_size The default font size if one is not specified.
-    std::vector<nvim::font> get_fonts(double default_size) {
-        return ui.get_fonts(default_size);
+    /// Returns the guifont option.
+    std::string get_guifont() {
+        return ui.get_guifont();
     }
 
     /// Set the window controller.
