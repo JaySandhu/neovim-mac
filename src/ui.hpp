@@ -591,7 +591,7 @@ private:
 public:
     window_controller window;
 
-    ui_controller(): hl_table(1) {
+    ui_controller(): hl_table(1), option_title("NVIM") {
         signal_flush = nullptr;
         signal_enter = nullptr;
         complete = &triple_buffered[0];
