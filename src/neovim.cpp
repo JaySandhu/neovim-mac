@@ -527,7 +527,11 @@ mode process::get_mode() {
                                                    const msg::object &result,
                                                    bool timed_out) {
         if (timed_out) {
-            mode = mode::unknown;
+            if (write_state == dispatch_source_state::cancelled) {
+                mode = mode::cancelled;
+            } else {
+                mode = mode::timed_out;
+            }
         } else {
             mode = to_mode(error, result);
         }

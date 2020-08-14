@@ -141,6 +141,7 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
 }
 
 - (BOOL)windowShouldClose:(NSWindow *)sender {
+    puts("windowShouldClose");
     nvim.command("quitall");
     return NO;
 }
@@ -854,8 +855,12 @@ static bool is_error(const msg::object &error, std::string_view error_string) {
 - (void)normalCommand:(std::string_view)command {
     nvim::mode mode = nvim.get_mode();
 
-    if (mode == nvim::mode::unknown || is_ex_mode(mode) || is_prompt(mode)) {
-        return NSBeep();
+    if (is_busy(mode) || is_ex_mode(mode) || is_prompt(mode)) {
+        if (mode == nvim::mode::cancelled && isOpen) {
+            [self.window close];
+        } else {
+            return NSBeep();
+        }
     }
 
     if (mode != nvim::mode::normal) {
@@ -879,7 +884,7 @@ static std::vector<std::string_view> URLPaths(NSArray<NSURL*> *urls) {
 - (IBAction)openDocument:(id)sender {
     nvim::mode mode = nvim.get_mode();
 
-    if (mode == nvim::mode::unknown || is_ex_mode(mode) || is_prompt(mode)) {
+    if (is_busy(mode) || is_ex_mode(mode) || is_prompt(mode)) {
         return NSBeep();
     }
 
@@ -908,12 +913,11 @@ static std::vector<std::string_view> URLPaths(NSArray<NSURL*> *urls) {
 static inline bool canSave(nvim::process &nvim) {
     nvim::mode mode = nvim.get_mode();
 
-    if (mode == nvim::mode::unknown  || is_prompt(mode) ||
-        mode == nvim::mode::terminal || is_ex_mode(mode)) {
+    if (is_busy(mode) || is_prompt(mode) || is_ex_mode(mode) || is_terminal_mode(mode)) {
         return false;
     }
 
-    if (mode == nvim::mode::command_line || is_operator_pending(mode)) {
+    if (is_command_line_mode(mode) || is_operator_pending(mode)) {
         nvim.feedkeys(CTRL_C);
     }
 
@@ -1073,7 +1077,7 @@ static inline bool canSave(nvim::process &nvim) {
         nvim.feedkeys(CTRL_C "\"+gP");
     } else if (is_command_line_mode(mode)) {
         nvim.feedkeys(CTRL_R "+");
-    } else if (mode == nvim::mode::terminal) {
+    } else if (is_terminal_mode(mode)) {
         nvim.feedkeys(CTRL_W "\"+");
     } else {
         NSBeep();
@@ -1173,11 +1177,11 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
 
     nvim::mode mode = nvim.get_mode();
 
-    if (mode == nvim::mode::unknown || is_prompt(mode)) {
+    if (is_busy(mode) || is_prompt(mode)) {
         return NO;
     }
 
-    if (mode == nvim::mode::terminal || is_command_line_mode(mode) || is_ex_mode(mode)) {
+    if (is_terminal_mode(mode) || is_command_line_mode(mode) || is_ex_mode(mode)) {
         std::string filenames = joinURLs(urls, ' ');
         nvim.paste(std::string_view(filenames.data(), filenames.size() - 1));
         return YES;

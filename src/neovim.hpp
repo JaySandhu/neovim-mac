@@ -36,7 +36,16 @@ using response_handler = std::function<void(const msg::object &error,
 
 /// Neovim modes. See nvim :help mode() for more information.
 enum class mode : uint64_t {
+    cancelled,
+    timed_out,
     unknown,
+    ex_mode_vim,
+    ex_mode,
+    prompt_enter,
+    prompt_more,
+    prompt_confirm,
+    terminal,
+    command_line,
     normal,
     normal_ctrli_insert,
     normal_ctrli_replace,
@@ -58,14 +67,7 @@ enum class mode : uint64_t {
     replace_completion,
     replace_completion_ctrlx,
     replace_virtual,
-    command_line,
-    ex_mode_vim,
-    ex_mode,
-    prompt_enter,
-    prompt_more,
-    prompt_confirm,
-    shell,
-    terminal
+    shell
 };
 
 /// Returns true if mode is an ex mode, otherwise false.
@@ -116,6 +118,11 @@ inline bool is_command_line_mode(nvim::mode mode) {
     return mode == mode::command_line;
 }
 
+/// Returns true if mode is a terminal mode, otherwise false.
+inline bool is_terminal_mode(nvim::mode mode) {
+    return mode == mode::terminal;
+}
+
 /// Returns true if an operator is currently pending, otherwise false.
 inline bool is_operator_pending(nvim::mode mode) {
     return mode == mode::operator_pending ||
@@ -129,6 +136,13 @@ inline bool is_prompt(nvim::mode mode) {
     return mode == mode::prompt_enter ||
            mode == mode::prompt_more  ||
            mode == mode::prompt_confirm;
+}
+
+/// Returns true if mode indicates that Neovim is currently busy.
+inline bool is_busy(nvim::mode mode) {
+    return mode == mode::cancelled ||
+           mode == mode::timed_out ||
+           mode == mode::unknown;
 }
 
 /// A Neovim RPC client. Represents a connection to a Neovim process.
@@ -267,7 +281,7 @@ public:
     /// @returns An errno code if an error occurred, 0 if no error occurred.
     int spawn(const char *path, const char *argv[]);
 
-    /// Connect to an existing Neovim process via a Unix pipe.
+    /// Connect to an existing Neovim process via a Unix domain socket.
     /// @returns An errno code if an error occurred, 0 if no error occurred.
     int connect(std::string_view addr);
 
@@ -359,7 +373,9 @@ public:
     ///
     /// Synchronously calls the API method nvim_get_mode and returns the result
     /// as a nvim::mode. On a successful call, the time taken is in the order of
-    /// nanoseconds. This call will timeout in 100ms and return mode::unknown.
+    /// nanoseconds. This call will timeout in 100ms and return mode::timed_out.
+    /// If the Neovim connection has shutdown, or is in the process of shutting
+    /// down, mode::cancelled is returned.
     nvim::mode get_mode();
 
     /// Calls API method nvim_input_mouse. Used for real time mouse input.
