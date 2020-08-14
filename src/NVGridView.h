@@ -15,9 +15,6 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// A value indicating a cell could not be found.
-inline constexpr auto NVCellNotFound = nvim::grid_point{SIZE_T_MAX, SIZE_T_MAX};
-
 /// @class NVGridView
 /// @abstract Renders Neovim grids.
 ///
@@ -60,9 +57,16 @@ inline constexpr auto NVCellNotFound = nvim::grid_point{SIZE_T_MAX, SIZE_T_MAX};
 - (nvim::grid_size)desiredGridSize;
 
 /// Translates a window location to a grid point.
-/// @returns The grid position of the cell at window location. Returns
-/// NVCellNotFound if windowLocation is out of the view's range.
+/// @returns The grid position of the cell at window location.
+/// Note: The returned value is calculated as if the grid extended to +/- inf
+/// starting at the cell (0, 0). Thus, the returned grid position may be out of
+/// the current grids bounds.
 - (nvim::grid_point)cellLocation:(NSPoint)windowLocation;
+
+/// Translates a window location to a grid point clamped to a given grid size.
+/// @returns The grid position of the cell at window location.
+- (nvim::grid_point)cellLocation:(NSPoint)windowLocation
+                         clampTo:(nvim::grid_size)gridSize;
 
 /// Set the view to inactive.
 /// An inactive view disables cursor blinking and always uses a block outline

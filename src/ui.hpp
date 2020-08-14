@@ -249,8 +249,8 @@ public:
 };
 
 struct grid_size {
-    size_t width;
-    size_t height;
+    int32_t width;
+    int32_t height;
 };
 
 inline bool operator==(const grid_size &left, const grid_size &right) {
@@ -262,8 +262,8 @@ inline bool operator!=(const grid_size &left, const grid_size &right) {
 }
 
 struct grid_point {
-    size_t row;
-    size_t column;
+    int32_t row;
+    int32_t column;
 };
 
 inline bool operator==(const grid_point &left, const grid_point &right) {
@@ -458,7 +458,7 @@ public:
 
     /// Returns The grid's size.
     nvim::grid_size size() const {
-        return nvim::grid_size{grid_width, grid_height};
+        return nvim::grid_size{(int32_t)grid_width, (int32_t)grid_height};
     }
 
     /// The total number of cells in grid, equal to width() * height().

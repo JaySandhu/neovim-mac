@@ -681,24 +681,36 @@ static void keyDownIgnoreModifiers(nvim::process &nvim, NSEventModifierFlags fla
     }
 }
 
+static constexpr auto CellNotFound = nvim::grid_point{INT32_MAX, INT32_MAX};
+
+static inline bool pointInGrid(nvim::grid_point point, nvim::grid_size size) {
+    return point.row >= 0 && point.row < size.height &&
+           point.column >= 0 && point.column < size.width;
+}
+
 - (void)mouseDown:(NSEvent *)event button:(MouseButton)button {
     nvim::grid_point location = [gridView cellLocation:event.locationInWindow];
 
-    if (location == NVCellNotFound) {
+    if (!pointInGrid(location, lastGridSize)) {
+        lastMouseLocation[button] = CellNotFound;
         return;
     }
 
-    input_modifiers modifiers = input_modifiers(event.modifierFlags);
-
-    nvim.input_mouse(buttonName(button), "press", modifiers, location.row, location.column);
     lastMouseLocation[button] = location;
+    input_modifiers modifiers = input_modifiers(event.modifierFlags);
+    nvim.input_mouse(buttonName(button), "press", modifiers, location.row, location.column);
 }
 
 - (void)mouseDragged:(NSEvent *)event button:(MouseButton)button {
-    nvim::grid_point location = [gridView cellLocation:event.locationInWindow];
+    if (lastMouseLocation[button] == CellNotFound) {
+        return;
+    }
+
+    NSPoint windowLocation = [event locationInWindow];
+    nvim::grid_point location = [gridView cellLocation:windowLocation clampTo:lastGridSize];
     nvim::grid_point &lastLocation = lastMouseLocation[button];
 
-    if (location != lastLocation && location != NVCellNotFound) {
+    if (location != lastLocation) {
         input_modifiers modifiers = input_modifiers(event.modifierFlags);
         nvim.input_mouse(buttonName(button), "drag", modifiers, location.row, location.column);
         lastLocation = location;
@@ -706,12 +718,15 @@ static void keyDownIgnoreModifiers(nvim::process &nvim, NSEventModifierFlags fla
 }
 
 - (void)mouseUp:(NSEvent *)event button:(MouseButton)button {
-    nvim::grid_point location = [gridView cellLocation:event.locationInWindow];
-    input_modifiers modifiers = input_modifiers(event.modifierFlags);
-
-    if (location != NVCellNotFound) {
-        nvim.input_mouse(buttonName(button), "release", modifiers, location.row, location.column);
+    if (lastMouseLocation[button] == CellNotFound) {
+        return;
     }
+
+    NSPoint windowLocation = [event locationInWindow];
+    nvim::grid_point location = [gridView cellLocation:windowLocation clampTo:lastGridSize];
+
+    input_modifiers modifiers = input_modifiers(event.modifierFlags);
+    nvim.input_mouse(buttonName(button), "release", modifiers, location.row, location.column);
 }
 
 - (void)mouseDown:(NSEvent *)event {
@@ -752,10 +767,6 @@ static void keyDownIgnoreModifiers(nvim::process &nvim, NSEventModifierFlags fla
 
 static void scrollEvent(nvim::process &nvim, size_t count, std::string_view direction,
                         std::string_view modifiers, nvim::grid_point location) {
-    if (location == NVCellNotFound) {
-        return;
-    }
-
     for (size_t i=0; i<count; ++i) {
         nvim.input_mouse("wheel", direction, modifiers, location.row, location.column);
     }
@@ -767,6 +778,10 @@ static void scrollEvent(nvim::process &nvim, size_t count, std::string_view dire
     CGFloat deltaY = [event scrollingDeltaY];
 
     nvim::grid_point location = [gridView cellLocation:event.locationInWindow];
+
+    if (!pointInGrid(location, lastGridSize)) {
+        return;
+    }
 
     if ([event hasPreciseScrollingDeltas]) {
         CGSize cellSize = [gridView cellSize];

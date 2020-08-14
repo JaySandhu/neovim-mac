@@ -635,18 +635,21 @@ static void blinkCursorToggleOn(void *context) {
 
 - (nvim::grid_point)cellLocation:(NSPoint)windowLocation {
     NSPoint viewLocation = [self convertPoint:windowLocation fromView:nil];
+    nvim::grid_point location;
+    location.column = floor(viewLocation.x / backingCellSize.width);
+    location.row = floor(viewLocation.y / backingCellSize.height);
+    return location;
+}
 
-    if (viewLocation.x < 0 || viewLocation.y < 0) {
-        return NVCellNotFound;
-    }
+- (nvim::grid_point)cellLocation:(NSPoint)windowLocation clampTo:(nvim::grid_size)gridSize {
+    NSPoint viewLocation = [self convertPoint:windowLocation fromView:nil];
 
-    size_t row = viewLocation.x / backingCellSize.width;
-    size_t col = viewLocation.y / backingCellSize.height;
+    int32_t col = floor(viewLocation.x / backingCellSize.width);
+    int32_t row = floor(viewLocation.y / backingCellSize.height);
 
     nvim::grid_point location;
-    location.row = std::min(col, grid->height());
-    location.column = std::min(row, grid->width());
-
+    location.column = std::clamp(col, 0, gridSize.width - 1);
+    location.row = std::clamp(row, 0, gridSize.height - 1);
     return location;
 }
 
