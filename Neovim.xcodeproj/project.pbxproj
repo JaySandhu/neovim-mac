@@ -26,6 +26,7 @@
 		696465D324AB971B0084E178 /* nvim in CopyFiles */ = {isa = PBXBuildFile; fileRef = 69CB6DF424AB96B00075229B /* nvim */; };
 		69905F2424C4B57D00CD67F1 /* Neovim.icns in Resources */ = {isa = PBXBuildFile; fileRef = 69905F2324C4B57D00CD67F1 /* Neovim.icns */; };
 		6993FAD624BCCECB0022682E /* spawn.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6993FAD524BCCECB0022682E /* spawn.cpp */; };
+		69A3A76624E6EC40003F628C /* Credits.rtf in Resources */ = {isa = PBXBuildFile; fileRef = 69A3A76524E6EC40003F628C /* Credits.rtf */; };
 		69B04DD424B76C8B000DF9C4 /* neovim_mac.vim in CopyFiles */ = {isa = PBXBuildFile; fileRef = 69B04DD224B76C10000DF9C4 /* neovim_mac.vim */; };
 		69CB6DEA24AB963B0075229B /* lib in Resources */ = {isa = PBXBuildFile; fileRef = 69CB6DE924AB963B0075229B /* lib */; };
 		69CB6DEC24AB96450075229B /* share in Resources */ = {isa = PBXBuildFile; fileRef = 69CB6DEB24AB96450075229B /* share */; };
@@ -115,6 +116,7 @@
 		69905F2324C4B57D00CD67F1 /* Neovim.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = Neovim.icns; sourceTree = "<group>"; };
 		6993FAD424BCCECB0022682E /* spawn.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = spawn.hpp; sourceTree = "<group>"; };
 		6993FAD524BCCECB0022682E /* spawn.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = spawn.cpp; sourceTree = "<group>"; };
+		69A3A76524E6EC40003F628C /* Credits.rtf */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.rtf; path = Credits.rtf; sourceTree = "<group>"; };
 		69B04DD224B76C10000DF9C4 /* neovim_mac.vim */ = {isa = PBXFileReference; lastKnownFileType = text; path = neovim_mac.vim; sourceTree = "<group>"; };
 		69CB6DE924AB963B0075229B /* lib */ = {isa = PBXFileReference; lastKnownFileType = folder; path = lib; sourceTree = "<group>"; };
 		69CB6DEB24AB96450075229B /* share */ = {isa = PBXFileReference; lastKnownFileType = folder; path = share; sourceTree = "<group>"; };
@@ -220,6 +222,7 @@
 				69240E21242B9855004E0DE0 /* Info.plist */,
 				69905F2324C4B57D00CD67F1 /* Neovim.icns */,
 				693465E124C618CF0050ACEA /* Neovim-Document.icns */,
+				69A3A76524E6EC40003F628C /* Credits.rtf */,
 			);
 			path = Resources;
 			sourceTree = SOURCE_ROOT;
@@ -339,6 +342,7 @@
 				69CB6DEA24AB963B0075229B /* lib in Resources */,
 				693465E224C618CF0050ACEA /* Neovim-Document.icns in Resources */,
 				69240E1D242B9855004E0DE0 /* Assets.xcassets in Resources */,
+				69A3A76624E6EC40003F628C /* Credits.rtf in Resources */,
 				69240E20242B9855004E0DE0 /* MainMenu.xib in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
