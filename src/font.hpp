@@ -408,12 +408,16 @@ private:
             background(background.opaque()),
             foreground(foreground.opaque()) {
 
+            // This function is optimized for hashing speed, not hash quality.
+            // There's a trade off between avoiding collisions and hashing time.
+            // Initial measurements showed we were spending a ton time hashing,
+            // so we switched to this implementation.
             simd_ulong4 jumbled;
             memcpy(&jumbled, graphemes.data(), graphemes.size());
 
-            jumbled *= simd_ulong4{41099511628211,
-                                   41099511628211,
-                                   41099511628211};
+            jumbled *= simd_ulong4{18446744073709551557ull,
+                                   9223372036854775643ull,
+                                   4611686018427387701ull};
 
             jumbled.w = ((uintptr_t)font >> 3) ^ foreground ^ background;
             hash = jumbled.x ^ jumbled.y ^ jumbled.z ^ jumbled.w;
