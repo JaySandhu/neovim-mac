@@ -152,7 +152,6 @@ process::process() {
 }
 
 process::~process() {
-    puts("neovim destructor");
     if (!queue) return;
 
     assert(dispatch_source_testcancel(read_source));

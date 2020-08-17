@@ -10,8 +10,8 @@
 #import "AppDelegate.h"
 #import "NVRenderContext.h"
 #import "NVWindowController.h"
-#import "log.h"
 
+#include "log.h"
 #include "msgpack.hpp"
 #include "neovim.hpp"
 

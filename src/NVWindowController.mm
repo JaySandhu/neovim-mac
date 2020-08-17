@@ -10,7 +10,9 @@
 #import <Carbon/Carbon.h>
 #import "NVWindowController.h"
 #import "NVGridView.h"
+
 #include <thread>
+#include "log.h"
 #include "neovim.hpp"
 
 #define CTRL_C "\x03"
@@ -136,12 +138,10 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
 }
 
 - (void)windowWillClose:(NSNotification *)notification {
-    puts("Window closed!");
     isOpen = NO;
 }
 
 - (BOOL)windowShouldClose:(NSWindow *)sender {
-    puts("windowShouldClose");
     nvim.command("quitall");
     return NO;
 }
@@ -386,7 +386,7 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(nvim::
     int error = nvim.connect([addr UTF8String]);
 
     if (error) {
-        printf("Connect error: %i: %s\n", error, strerror(error));
+        os_log_error(rpc, "Connect error: %i: %s\n", error, strerror(error));
         return error;
     }
 
@@ -399,7 +399,7 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(nvim::
     int error = nvim.spawn([nvimExecutable UTF8String], argv);
 
     if (error) {
-        printf("Spawn error: %i: %s\n", error, strerror(error));
+        os_log_error(rpc, "Spawn error: %i: %s\n", error, strerror(error));
         return error;
     }
 
@@ -440,10 +440,6 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(nvim::
 
     argv.push_back(nullptr);
     return [self spawnWithArgs:argv.data()];
-}
-
-- (void)dealloc {
-    puts("NVWindowController dealloced!");
 }
 
 - (void)windowDidBecomeKey:(NSNotification *)notification {
@@ -1251,16 +1247,12 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
 namespace nvim {
 
 void window_controller::close() {
-    puts("Neovim did Exit!");
-
     dispatch_async_f(dispatch_get_main_queue(), controller, [](void *context) {
         [(__bridge NVWindowController*)context close];
     });
 }
 
 void window_controller::shutdown() {
-    puts("Neovim did shutdown!");
-
     dispatch_async_f(dispatch_get_main_queue(), controller, [](void *context) {
         [(__bridge NVWindowController*)context shutdown];
     });
