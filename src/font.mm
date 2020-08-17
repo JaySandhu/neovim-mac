@@ -84,14 +84,23 @@ font_family font_manager::get(CTFontDescriptorRef descriptor,
     arc_ptr bold = CTFontDescriptorCreateCopyWithSymbolicTraits(descriptor, kCTFontBoldTrait, mask);
     arc_ptr italic = CTFontDescriptorCreateCopyWithSymbolicTraits(descriptor, kCTFontItalicTrait, mask);
     arc_ptr bold_italic = CTFontDescriptorCreateCopyWithSymbolicTraits(descriptor, mask, mask);
-    
+
+    arc_ptr regular = get_font(descriptor, scaled_size);
+
     font_family family;
-    family.fonts[(size_t)nvim::font_attributes::none] = get_font(descriptor, scaled_size);
-    family.fonts[(size_t)nvim::font_attributes::bold] = get_font(bold.get(), scaled_size);
-    family.fonts[(size_t)nvim::font_attributes::italic] = get_font(italic.get(), scaled_size);
-    family.fonts[(size_t)nvim::font_attributes::bold_italic] = get_font(bold_italic.get(), scaled_size);
     family.scale_factor_ = scale_factor;
     family.unscaled_size_ = size;
+
+    family.fonts[(size_t)nvim::font_attributes::none] = regular;
+
+    family.fonts[(size_t)nvim::font_attributes::bold] =
+        bold ? get_font(bold.get(), scaled_size) : regular;
+
+    family.fonts[(size_t)nvim::font_attributes::italic] =
+        italic ? get_font(italic.get(), scaled_size) : regular;
+
+    family.fonts[(size_t)nvim::font_attributes::bold_italic] =
+        bold_italic ? get_font(bold_italic.get(), scaled_size) : regular;
 
     return family;
 }
