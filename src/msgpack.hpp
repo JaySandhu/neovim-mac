@@ -108,87 +108,30 @@ bool operator<(const array_view<T> &left, const array_view<T> &right) {
                                         right.begin(), right.end());
 }
 
-/// Holds a sorted contiguous sequence of Key Value pairs.
+/// Holds a contiguous sequence of Key Value pairs.
 template<typename Key, typename Value>
-class map_view {
-private:
-    std::pair<Key, Value> *ptr;
-    size_t length;
-
+class map_view : public array_view<std::pair<Key, Value>> {
 public:
-    using value_type = std::pair<Key, Value>;
-
-    map_view(): ptr(nullptr), length(0) {}
-
-    /// Note: Constructor sorts elements
-    map_view(value_type *ptr, size_t size): ptr(ptr), length(size) {
-        std::sort(begin(), end(), [](const value_type &a, const value_type &b) {
-            return a.first < b.first;
-        });
-    }
-
-    value_type* data() {
-        return ptr;
-    }
-
-    const value_type* data() const {
-        return ptr;
-    }
-
-    value_type* begin() {
-        return ptr;
-    }
-
-    const value_type* begin() const {
-        return ptr;
-    }
-
-    value_type* end() {
-        return ptr + length;
-    }
-
-    const value_type* end() const {
-        return ptr + length;
-    }
-
-    size_t size() const {
-        return length;
-    }
+    using array_view<std::pair<Key, Value>>::array_view;
 
     const Value* get(const Key &key) const {
-        auto *found = std::lower_bound(begin(), end(), key,
-        [](const value_type &pair, const Key &key) {
-            return pair.first < key;
-        });
-
-        if (found != end() && found->first == key) {
-            return &found->second;
-        } else {
-            return nullptr;
+        for (const auto &pair : *this) {
+            if (pair.first == key) {
+                return &pair.second;
+            }
         }
+
+        return nullptr;
     }
 
-    /// @returns A pointer to the value mapped to key.
+    /// Returns A pointer to the value mapped to key.
     /// If no such value exists, returns nullptr.
+    /// Note: get() is implemented as a linear search. For perfomant lookup on
+    /// large maps, sort the underlying array and use a binary search.
     Value* get(const Key &key) {
         return const_cast<Value*>(std::as_const(*this).get(key));
     }
 };
-
-template<typename Key, typename Value>
-bool operator==(const map_view<Key, Value> &left,
-                const map_view<Key, Value> &right) {
-    return std::equal(left.begin(), left.end(), right.begin(), right.end());
-}
-
-template<typename Key, typename Value>
-bool operator<(const map_view<Key, Value> &left,
-               const map_view<Key, Value> &right) {
-    return std::lexicographical_compare(left.begin(), left.end(),
-                                        right.begin(), right.end());
-}
-
-struct object;
 
 /// Represents a msgpack integer.
 ///
@@ -248,6 +191,7 @@ struct extension : msg::array_view<char> {
     using array_view::array_view;
 };
 
+struct object;
 struct invalid : std::monostate {};
 struct null    : std::monostate {};
 

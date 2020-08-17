@@ -175,66 +175,40 @@ private:
     static_assert(offsetof(pair, first) == 0);
     static_assert(offsetof(pair, second) == sizeof(object));
 
-    struct state {
-        object *dest;
-        object *obj;
-        size_t index;
-        size_t total;
-
-        state(object *dest, size_t total):
-            dest(dest), obj(nullptr), index(0), total(total) {}
-
-        // An array of n pairs is stored as an array of n*2 objects.
-        // Store the parent obj so we can emplace a map later.
-        state(object *obj, pair *pairs, size_t count):
-            dest((object*)pairs), obj(obj), index(0), total(count * 2) {}
-
-        void finalize() {
-            // Map sorts its elements on construction, so we can't construct
-            // one until we've finished reading all of its elements.
-            if (obj) {
-                auto *pairs = reinterpret_cast<pair*>(dest);
-                obj->emplace<map>(pairs, total / 2);
-            };
-        }
-
-        object* next() {
-            return dest + index++;
-        }
-
-        bool done() const {
-            return index == total;
-        }
+    struct range {
+        object *begin;
+        object *end;
     };
 
-public:
-    std::vector<state> stack;
+    std::vector<range> stack;
 
+public:
     unpack_stack() {
         stack.reserve(32);
     }
 
     void push_array(object *obj, object *dest, size_t count) {
         obj->emplace<array>(dest, count);
-        stack.emplace_back(dest, count);
+        stack.push_back(range{dest, dest + count});
     }
 
     void push_map(object *obj, pair *dest, size_t count) {
-        // Map constructed at finalize
-        stack.emplace_back(obj, dest, count);
+        obj->emplace<map>(dest, count);
+        object *begin = reinterpret_cast<object*>(dest);
+        stack.push_back(range{begin, begin + (count * 2)});
     }
 
     // Returns the next object to unpack. nullptr when done.
     object* pop() {
         while (!stack.empty()) {
-            state &back = stack.back();
-            
-            if (back.done()) {
-                back.finalize();
+            range &back = stack.back();
+            object *ret = back.begin;
+
+            if (++back.begin == back.end) {
                 stack.pop_back();
-            } else {
-                return back.next();
             }
+
+            return ret;
         }
         
         return nullptr;

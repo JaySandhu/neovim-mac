@@ -100,7 +100,6 @@ static inline bool all_a(const char *begin, const char *end) {
     XCTAssertEqual(view.data(), +pairs);
     XCTAssertEqual(view.size(), 5);
     XCTAssertEqual(std::distance(view.begin(), view.end()), 5);
-    XCTAssertTrue(std::is_sorted(view.begin(), view.end()));
 }
 
 - (void)testMapViewEquality {
