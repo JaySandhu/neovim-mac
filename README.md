@@ -2,7 +2,7 @@
 
 # Neovim for macOS
 
-A fast minimal Neovim GUI for macOS.
+A fast, minimal, Neovim GUI for macOS.
 
 ## Features
  * Fast Metal based renderer.
@@ -10,7 +10,7 @@ A fast minimal Neovim GUI for macOS.
  * Native macOS keyboard shortcuts and behavior.
 
 ## Screenshots
-![screenshot 1](https://i.postimg.cc/5N8LJQD6/Screen-Shot-2020-08-14-at-19-00-21.png)
+![screenshot 1](https://i.postimg.cc/zB118zbZ/Screen-Shot-2020-08-14-at-19-18-50.png)
 ![screenshot 2](https://i.postimg.cc/g2dR2kP4/Screen-Shot-2020-08-14-at-19-01-20.png)
 
 ## Roadmap
@@ -26,9 +26,10 @@ Neovim for macOS uses a forked version of
  * A mousescroll option (https://github.com/neovim/neovim/pull/12355).
  * Scrolling fixes (https://github.com/neovim/neovim/pull/12356).
 
-We'll also be building our modified version of Neovim, so before we begin, ensure you have the
+Hopefully these changes will eventually be accepted into Neovim. Until then,
+we'll need to build our modified version from source, so before we begin, ensure you have the
 [build perquisites](https://github.com/neovim/neovim/wiki/Building-Neovim#build-prerequisites).
-Building is as simple as:
+After that, building is as simple as:
 
 ```
 git clone https://github.com/JaySandhu/neovim-mac.git
@@ -48,6 +49,6 @@ If everything went as planned, you'll find Neovim.app in build/release.
 
 [![License](http://img.shields.io/:license-mit-blue.svg?style=flat-square)](http://badges.mit-license.org)
 
- * [MIT License](https://mit-license.org/)
+ * [MIT License](https://mit-license.org/).
  * Copyright 2020 © Jay Sandhu.
 
