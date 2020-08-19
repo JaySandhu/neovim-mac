@@ -28,7 +28,7 @@ Neovim for macOS uses a forked version of
 
 Hopefully these changes will eventually be accepted into Neovim. Until then,
 we'll need to build our modified version from source, so before we begin, ensure you have the
-[build perquisites](https://github.com/neovim/neovim/wiki/Building-Neovim#build-prerequisites).
+[build prerequisites](https://github.com/neovim/neovim/wiki/Building-Neovim#build-prerequisites).
 After that, building is as simple as:
 
 ```
