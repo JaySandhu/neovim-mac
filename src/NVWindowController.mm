@@ -23,6 +23,9 @@
 #define CTRL_W "\x17"
 #define CTRL_BACKSLASH "\x1c"
 
+static constexpr int32_t MIN_GRID_WIDTH = 12;
+static constexpr int32_t MIN_GRID_HEIGHT = 3;
+
 enum MouseButton {
     MouseButtonLeft,
     MouseButtonRight,
@@ -109,8 +112,8 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
 
     if (savedFrameString) {
         NSRect frame = NSRectFromString(savedFrameString);
-        lastGridSize.width = frame.size.width;
-        lastGridSize.height = frame.size.height;
+        lastGridSize.width = std::max(MIN_GRID_WIDTH, (int32_t)frame.size.width);
+        lastGridSize.height = std::max(MIN_GRID_HEIGHT, (int32_t)frame.size.height);
         [self.window setFrameTopLeftPoint:frame.origin];
     } else {
         lastGridSize.width = 80;
@@ -214,7 +217,7 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
 
 /// Returns the minimum NVGridView frame size for the given cell size.
 static inline NSSize minGridViewSize(NSSize cellSize) {
-    return CGSizeMake(cellSize.width * 12, cellSize.height * 3);
+    return NSMakeSize(cellSize.width * MIN_GRID_WIDTH, cellSize.height * MIN_GRID_HEIGHT);
 }
 
 - (void)setFont:(const font_family&)font {
