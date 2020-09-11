@@ -25,24 +25,20 @@
 #   build/nvim/lib
 #   build/nvim/share
 
+set -e
+
 pushd "$(dirname "$0")"
 mkdir -p build
 cd build
 
 if [ ! -d "neovim" ]; then
     git clone --depth 1 "https://github.com/JaySandhu/neovim.git" -b "release-0.4-patched"
-    cd neovim
-
-    mkdir .deps
-    cd .deps
-    cmake ../third-party
-    make
-    cd ..
-
-    make CMAKE_BUILD_TYPE=Release CMAKE_EXTRA_FLAGS="-DCMAKE_INSTALL_PREFIX:PATH=.."
-    make install
-    cd ..
 fi
+
+cd neovim
+make CMAKE_BUILD_TYPE=Release CMAKE_EXTRA_FLAGS="-DCMAKE_INSTALL_PREFIX:PATH=.."
+make install
+cd ..
 
 echo "Making directories"
 rm -rf nvim
