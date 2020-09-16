@@ -278,8 +278,13 @@ public:
     void set_controller(window_controller controller);
 
     /// Spawns and connects to a new Neovim process.
+    /// @param path         Path to Neovim executable.
+    /// @param argv         Arguments passed to the new process.
+    /// @param env          Environment variables passed to the new process.
+    /// @param workingdir   The new process's working directory.
     /// @returns An errno code if an error occurred, 0 if no error occurred.
-    int spawn(const char *path, const char *argv[]);
+    int spawn(const char *path, const char *argv[],
+              const char *env[], const char *workingdir);
 
     /// Connect to an existing Neovim process via a Unix domain socket.
     /// @returns An errno code if an error occurred, 0 if no error occurred.

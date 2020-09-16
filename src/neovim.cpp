@@ -171,7 +171,8 @@ process::~process() {
     }
 }
 
-int process::spawn(const char *path, const char *argv[]) {
+int process::spawn(const char *path, const char *argv[],
+                   const char *env[], const char *workingdir) {
     unnamed_pipe read_pipe;
     unnamed_pipe write_pipe;
 
@@ -182,7 +183,7 @@ int process::spawn(const char *path, const char *argv[]) {
     streams.input = write_pipe.read_end.get();
     streams.output = read_pipe.write_end.get();
 
-    subprocess process = process_spawn(path, argv, environment(), streams);
+    subprocess process = process_spawn(path, argv, env, workingdir, streams);
 
     if (process.error) {
         return process.error;

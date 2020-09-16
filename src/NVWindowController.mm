@@ -397,9 +397,14 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(nvim::
     return 0;
 }
 
-- (int)spawnWithArgs:(const char**)argv {
+- (int)spawnWithArgs:(const char**)argv workingDirectory:(NSString *)directory {
     NSString *nvimExecutable = [[NSBundle mainBundle] pathForAuxiliaryExecutable:@"nvim"];
-    int error = nvim.spawn([nvimExecutable UTF8String], argv);
+
+    extern char **environ;
+    const char *workingDir = [directory UTF8String];
+    const char *path = [nvimExecutable UTF8String];
+
+    int error = nvim.spawn(path, argv, (const char**)environ, workingDir);
 
     if (error) {
         os_log_error(rpc, "Spawn error: %i: %s\n", error, strerror(error));
@@ -415,15 +420,22 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(nvim::
         "nvim", "--embed", nullptr
     };
 
-    return [self spawnWithArgs:argv];
+    return [self spawnWithArgs:argv workingDirectory:NSHomeDirectory()];
 }
 
 - (int)spawnOpenFile:(NSString *)filename {
     const char *argv[4] = {"nvim", "--embed", [filename UTF8String], nullptr};
-    return [self spawnWithArgs:argv];
+    NSString *directory = [filename stringByDeletingLastPathComponent];
+
+    return [self spawnWithArgs:argv workingDirectory:directory];
 }
 
 - (int)spawnOpenFiles:(NSArray<NSString*> *)filenames {
+    if ([filenames count] == 0) {
+        return [self spawn];
+    }
+
+    NSString *directory = [filenames[0] stringByDeletingLastPathComponent];
     std::vector<const char*> argv{"nvim", "--embed", "-p"};
 
     for (NSString *file in filenames) {
@@ -431,18 +443,17 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(nvim::
     }
 
     argv.push_back(nullptr);
-    return [self spawnWithArgs:argv.data()];
+    return [self spawnWithArgs:argv.data() workingDirectory:directory];
 }
 
 - (int)spawnOpenURLs:(NSArray<NSURL*>*)urls {
-    std::vector<const char*> argv{"nvim", "--embed", "-p"};
+    NSMutableArray<NSString*> *paths = [NSMutableArray arrayWithCapacity:[urls count]];
 
     for (NSURL *url in urls) {
-        argv.push_back([[url path] UTF8String]);
+        [paths addObject:[url path]];
     }
 
-    argv.push_back(nullptr);
-    return [self spawnWithArgs:argv.data()];
+    return [self spawnOpenFiles:paths];
 }
 
 - (void)windowDidBecomeKey:(NSNotification *)notification {

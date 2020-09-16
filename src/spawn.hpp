@@ -16,13 +16,6 @@
 #include <string>
 #include <vector>
 
-extern char **environ;
-
-/// Returns a const qualified pointer to the current environment.
-inline const char** environment() {
-    return (const char**)environ;
-}
-
 /// A file descriptor with unique ownership.
 class file_descriptor {
 private:
@@ -114,10 +107,11 @@ struct subprocess {
 
 /// Spawns a new child process that executes a specified file.
 ///
-/// @param path     Path to the executable.
-/// @param argv     Arguments passed to the new process.
-/// @param env      Environment variables passed to the new process.
-/// @param streams  The new process's standard streams.
+/// @param path         Path to the executable.
+/// @param argv         Arguments passed to the new process.
+/// @param env          Environment variables passed to the new process.
+/// @param workingdir   The new process's working directory.
+/// @param streams      The new process's standard streams.
 ///
 /// Note: The argv and env arrays must be terminated by a null pointer.
 ///
@@ -126,6 +120,7 @@ struct subprocess {
 subprocess process_spawn(const char *path,
                          const char *argv[],
                          const char *env[],
+                         const char *workingdir,
                          standard_streams streams);
 
 /// Higher level overload for process_spawn.
@@ -136,6 +131,7 @@ subprocess process_spawn(const char *path,
 subprocess process_spawn(const std::string &path,
                          const std::vector<std::string> &argv,
                          const std::vector<std::string> &env,
+                         const std::string &workingdir,
                          standard_streams streams);
 
 #endif // SPAWN_HPP
