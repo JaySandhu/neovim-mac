@@ -442,11 +442,12 @@ private:
     size_t cursor_row;
     size_t cursor_col;
     uint64_t draw_tick;
+    bool cursor_hidden;
 
     friend class ui_controller;
 
 public:
-    grid(): grid_width(0), grid_height(0), draw_tick(0) {}
+    grid(): grid_width(0), grid_height(0), draw_tick(0), cursor_hidden(0) {}
 
     const cell* begin() const {
         return cells.data();
@@ -464,6 +465,11 @@ public:
     /// A const pointer to the cell at the given row and column position.
     const cell* get(size_t row, size_t col) const {
         return cells.data() + (row * grid_width) + col;
+    }
+    
+    /// Return whether to hide cursor.
+    bool hide_cursor() const {
+        return cursor_hidden;
     }
 
     /// Returns the grid's cursor.
@@ -615,6 +621,10 @@ private:
     void redraw_event(const msg::object &event);
 
     void flush();
+    
+    void busy_start();
+    
+    void busy_stop();
 
     void grid_resize(size_t grid, size_t width, size_t height);
 
