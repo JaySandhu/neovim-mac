@@ -201,8 +201,11 @@ void ui_controller::redraw_event(const msg::object &event_object) {
     }
 
     // The following events are ignored for now.
-    if (name == "mouse_on" || name == "mouse_off"  ||
-        name == "set_icon" || name == "hl_group_set") {
+    if (name == "mouse_on"     ||
+        name == "mouse_off"    ||
+        name == "set_icon"     ||
+        name == "hl_group_set" ||
+        name == "win_viewport" ) {
         return;
     }
     
