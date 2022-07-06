@@ -336,19 +336,19 @@ public:
             waitbuff(nullptr),
             waitlen(0) {}
 
-        unpacker get_return_object() {
+        unpacker get_return_object() noexcept {
             return unpacker(this, handle_type::from_promise(*this));
         }
 
-        auto initial_suspend() {
+        auto initial_suspend() noexcept {
             return std::experimental::suspend_never();
         }
 
-        auto final_suspend() {
+        auto final_suspend() noexcept {
             return std::experimental::suspend_never();
         }
 
-        auto yield_value(msg::object *value) {
+        auto yield_value(msg::object *value) noexcept {
             // We've unpacked an object. Store a pointer to it and suspend.
             obj = value;
             return std::experimental::suspend_always();
