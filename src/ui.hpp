@@ -11,6 +11,7 @@
 #define UI_HPP
 
 #include <dispatch/dispatch.h>
+#include <array>
 #include <atomic>
 #include "msgpack.hpp"
 #include "unfair_lock.hpp"
