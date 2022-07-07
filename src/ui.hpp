@@ -469,7 +469,7 @@ public:
 };
 
 /// Neovim UI options. See nvim :help ui-ext-options.
-struct options {
+struct ui_options {
     bool ext_cmdline;
     bool ext_hlstate;
     bool ext_linegrid;
@@ -480,12 +480,12 @@ struct options {
     bool ext_termcolors;
 };
 
-inline bool operator==(const options &left, const options &right) {
-    return memcmp(&left, &right, sizeof(options)) == 0;
+inline bool operator==(const ui_options &left, const ui_options &right) {
+    return memcmp(&left, &right, sizeof(ui_options)) == 0;
 }
 
-inline bool operator!=(const options &left, const options &right) {
-    return memcmp(&left, &right, sizeof(options)) != 0;
+inline bool operator!=(const ui_options &left, const ui_options &right) {
+    return memcmp(&left, &right, sizeof(ui_options)) != 0;
 }
 
 /// The Neovim window controller.
@@ -548,7 +548,7 @@ private:
     unfair_lock option_lock;
     std::string option_title;
     std::string option_guifont;
-    options opts;
+    ui_options ui_opts;
 
     grid* get_grid(size_t index);
 
@@ -658,7 +658,7 @@ public:
     }
 
     /// Returns the current Neovim options.
-    nvim::options get_options();
+    nvim::ui_options get_ui_options();
 
     /// Returns the Neovim window title.
     std::string get_title();

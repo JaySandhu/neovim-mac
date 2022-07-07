@@ -190,10 +190,10 @@ void ui_controller::redraw_event(const msg::object &event_object) {
     // options actually changed.
     if (name == "option_set") {
         std::lock_guard lock(option_lock);
-        options oldopts = opts;
+        ui_options oldopts = ui_opts;
         apply(this, &ui_controller::set_option, name, args);
 
-        if (opts != oldopts && send_option_change()) {
+        if (ui_opts != oldopts && send_option_change()) {
             window.options_set();
         }
         
@@ -641,9 +641,9 @@ std::string ui_controller::get_guifont() {
     return option_guifont;
 }
 
-nvim::options ui_controller::get_options() {
+nvim::ui_options ui_controller::get_ui_options() {
     std::lock_guard lock(option_lock);
-    return opts;
+    return ui_opts;
 }
 
 static inline void set_font_option(std::string &opt_guifont,
@@ -677,21 +677,21 @@ void ui_controller::set_option(msg::string name, msg::object value) {
     if (name == "guifont") {
         set_font_option(option_guifont, value, window, send_option_change());
     } else if (name == "ext_cmdline")  {
-        set_ext_option(opts.ext_cmdline, value);
+        set_ext_option(ui_opts.ext_cmdline, value);
     } else if (name == "ext_hlstate")  {
-        set_ext_option(opts.ext_hlstate, value);
+        set_ext_option(ui_opts.ext_hlstate, value);
     } else if (name == "ext_linegrid")  {
-        set_ext_option(opts.ext_linegrid, value);
+        set_ext_option(ui_opts.ext_linegrid, value);
     } else if (name == "ext_messages")  {
-        set_ext_option(opts.ext_messages, value);
+        set_ext_option(ui_opts.ext_messages, value);
     } else if (name == "ext_multigrid")  {
-        set_ext_option(opts.ext_multigrid, value);
+        set_ext_option(ui_opts.ext_multigrid, value);
     } else if (name == "ext_popupmenu")  {
-        set_ext_option(opts.ext_popupmenu, value);
+        set_ext_option(ui_opts.ext_popupmenu, value);
     } else if (name == "ext_tabline")  {
-        set_ext_option(opts.ext_tabline, value);
+        set_ext_option(ui_opts.ext_tabline, value);
     } else if (name == "ext_termcolors")  {
-        set_ext_option(opts.ext_termcolors, value);
+        set_ext_option(ui_opts.ext_termcolors, value);
     }
 }
 

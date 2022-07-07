@@ -256,8 +256,8 @@ public:
     }
 
     /// Returns the current Neovim options.
-    nvim::options get_options() {
-        return ui.get_options();
+    nvim::ui_options get_ui_options() {
+        return ui.get_ui_options();
     }
 
     /// Returns the Neovim window title.

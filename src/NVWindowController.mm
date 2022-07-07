@@ -1226,7 +1226,7 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
 }
 
 - (void)optionsDidChange {
-    static constexpr nvim::options expected = {
+    static constexpr nvim::ui_options expected = {
         .ext_cmdline    = false,
         .ext_hlstate    = false,
         .ext_linegrid   = true,
@@ -1237,7 +1237,7 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
         .ext_termcolors = false
     };
 
-    nvim::options opts = nvim.get_options();
+    nvim::ui_options opts = nvim.get_ui_options();
 
     if (opts != expected) {
         NSAlert *alert = [[NSAlert alloc] init];
