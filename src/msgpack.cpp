@@ -42,6 +42,14 @@ struct base_visitor {
 };
 
 struct to_string_visitor : base_visitor {
+    auto binary_formatter() {
+        return [this](unsigned char byte) {
+            static constexpr char hex_digits[] = "0123456789abcdef";
+            buffer.push_back(hex_digits[byte >> 4]);
+            buffer.push_back(hex_digits[byte & 0x0F]);
+        };
+    }
+
     void operator()(msg::null val) {
         buffer.append("null");
     }
@@ -66,16 +74,15 @@ struct to_string_visitor : base_visitor {
 
     void operator()(msg::binary val) {
         buffer.push_back('b');
-        
-        append_container(val, '\'', '\'', [this](unsigned char byte) {
-            static constexpr char digits[] = "0123456789abcdef";
-            buffer.push_back(digits[byte >> 4]);
-            buffer.push_back(digits[byte & 15]);
-        });
+        append_container(val, '\'', '\'', binary_formatter());
     }
 
     void operator()(msg::extension val) {
-        buffer.append("(extension)");
+        buffer.append("(extension: type=");
+        buffer.push_back(val[0] + '0');
+        buffer.append(", payload=b");
+        append_container(val.subarray(1), '\'', '\'', binary_formatter());
+        buffer.push_back(')');
     }
 
     void operator()(msg::array val) {
