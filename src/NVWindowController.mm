@@ -51,6 +51,7 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
     font_manager *fontManager;
 
     nvim::process nvim;
+    nvim::ui_options uiOptions;
     nvim::grid_size lastGridSize;
     nvim::grid_point lastMouseLocation[3];
 
@@ -99,6 +100,18 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
 
     self = [super initWithWindow:window];
     nvim.set_controller((__bridge void*)self);
+
+    uiOptions = {
+        .ext_cmdline    = false,
+        .ext_hlstate    = false,
+        .ext_linegrid   = true,
+        .ext_messages   = false,
+        .ext_multigrid  = false,
+        .ext_popupmenu  = false,
+        .ext_tabline    = true,
+        .ext_termcolors = false
+    };
+
     return self;
 }
 
@@ -377,7 +390,7 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(nvim::
 
 - (void)attach {
     dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC);
-    nvim.ui_attach_wait(lastGridSize.width, lastGridSize.height, timeout);
+    nvim.ui_attach_wait(lastGridSize.width, lastGridSize.height, uiOptions, timeout);
 
     [neovimWindows addObject:self];
     isAlive = YES;
@@ -1226,20 +1239,9 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
 }
 
 - (void)optionsDidChange {
-    static constexpr nvim::ui_options expected = {
-        .ext_cmdline    = false,
-        .ext_hlstate    = false,
-        .ext_linegrid   = true,
-        .ext_messages   = false,
-        .ext_multigrid  = false,
-        .ext_popupmenu  = false,
-        .ext_tabline    = false,
-        .ext_termcolors = false
-    };
-
     nvim::ui_options opts = nvim.get_ui_options();
 
-    if (opts != expected) {
+    if (opts != uiOptions) {
         NSAlert *alert = [[NSAlert alloc] init];
         alert.alertStyle = NSAlertStyleWarning;
         alert.messageText = @"Unexpected UI options";

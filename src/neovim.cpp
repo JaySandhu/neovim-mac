@@ -548,24 +548,36 @@ void process::set_controller(window_controller window) {
     ui.window = window;
 }
 
-static constexpr std::array<std::pair<msg::string, bool>, 1> attach_options{{
-    {"ext_linegrid", true}
-}};
+static std::array<std::pair<msg::string, bool>, 8>
+make_attach_otpions(ui_options options) {
+    return {{
+        {"ext_cmdline",     options.ext_cmdline},
+        {"ext_hlstate",     options.ext_hlstate},
+        {"ext_linegrid",    options.ext_linegrid},
+        {"ext_messages",    options.ext_messages},
+        {"ext_multigrid",   options.ext_multigrid},
+        {"ext_popupmenu",   options.ext_popupmenu},
+        {"ext_tabline",     options.ext_tabline},
+        {"ext_termcolors",  options.ext_termcolors}
+    }};
+}
 
-void process::ui_attach(size_t width, size_t height) {
+void process::ui_attach(size_t width, size_t height, ui_options options) {
     ui.signal_on_flush(semaphore);
-    rpc_request(null_msgid, "nvim_ui_attach", width, height, attach_options);
+    rpc_request(null_msgid, "nvim_ui_attach",
+                width, height, make_attach_otpions(options));
     dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
 }
 
 void process::ui_attach_wait(size_t width, size_t height,
-                             dispatch_time_t timeout) {
+                             ui_options options, dispatch_time_t timeout) {
     ui.signal_on_entered_flush(semaphore);
 
     rpc_request(null_msgid, "nvim_command",
                 "autocmd VimEnter * call rpcnotify(1, 'vimenter')");
 
-    rpc_request(null_msgid, "nvim_ui_attach", width, height, attach_options);
+    rpc_request(null_msgid, "nvim_ui_attach",
+                width, height, make_attach_otpions(options));
 
     if (!dispatch_semaphore_wait(semaphore, timeout)) {
         return;
