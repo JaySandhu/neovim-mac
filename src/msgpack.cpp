@@ -79,9 +79,9 @@ struct to_string_visitor : base_visitor {
 
     void operator()(msg::extension val) {
         buffer.append("(extension: type=");
-        buffer.push_back(val[0] + '0');
+        buffer.push_back(val.type() + '0');
         buffer.append(", payload=b");
-        append_container(val.subarray(1), '\'', '\'', binary_formatter());
+        append_container(val.payload(), '\'', '\'', binary_formatter());
         buffer.push_back(')');
     }
 

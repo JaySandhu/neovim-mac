@@ -189,6 +189,14 @@ public:
 
 struct extension : msg::array_view<char> {
     using array_view::array_view;
+
+    int type() const {
+        return data()[0];
+    }
+
+    msg::array_view<char> payload() const {
+        return subarray(1);
+    }
 };
 
 struct object;
