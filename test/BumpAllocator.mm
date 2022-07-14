@@ -17,6 +17,10 @@
 
 @implementation testBumpAllocator
 
++ (void)setUp {
+    signal(SIGHUP, SIG_IGN);
+}
+
 #if __has_feature(address_sanitizer)
 
 - (void)testDeallocAllPoisions {

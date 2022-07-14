@@ -30,6 +30,10 @@ static inline bool all_a(const char *begin, const char *end) {
 
 @implementation testMsgpack : XCTestCase
 
++ (void)setUp {
+    signal(SIGHUP, SIG_IGN);
+}
+
  - (void)setUp {
     [super setUp];
     [self setContinueAfterFailure:NO];

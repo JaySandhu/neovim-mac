@@ -30,6 +30,10 @@ static inline bool all_of(const circular_buffer &buffer, char val) {
 
 @implementation testCircularBuffer
 
++ (void)setUp {
+    signal(SIGHUP, SIG_IGN);
+}
+
 - (void)testDefaultContructor {
     circular_buffer buffer;
     XCTAssertEqual(buffer.size(), 0);
