@@ -7,6 +7,7 @@
 //  See LICENSE.txt for details.
 //
 
+#include <array>
 #include <XCTest/XCTest.h>
 #include "DeathTest.h"
 #include "msgpack.hpp"
