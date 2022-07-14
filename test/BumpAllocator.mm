@@ -168,13 +168,13 @@
     std::mt19937_64 mt;
     std::uniform_int_distribution<size_t> dist(8, 8192);
     
-    AssertNoDeath({
+    AssertNoDeath([&](){
         for (int i=0; i<128; ++i) {
             size_t size = dist(mt);
             void *ptr = allocator.alloc(size);
             memset(ptr, 'x', size);
         }
-    });
+    }());
 }
 
 @end
