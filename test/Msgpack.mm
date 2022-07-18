@@ -39,6 +39,40 @@ static inline bool all_a(const char *begin, const char *end) {
     [self setContinueAfterFailure:NO];
 }
 
+- (void)testIntegerRoundTrip {
+    XCTAssertEqual(UINT8_MAX,  msg::integer(UINT8_MAX));
+    XCTAssertEqual(UINT8_MAX,  msg::integer(UINT8_MAX).as<uint8_t>());
+
+    XCTAssertEqual(UINT16_MAX, msg::integer(UINT16_MAX));
+    XCTAssertEqual(UINT16_MAX, msg::integer(UINT16_MAX).as<uint16_t>());
+
+    XCTAssertEqual(UINT32_MAX, msg::integer(UINT32_MAX));
+    XCTAssertEqual(UINT32_MAX, msg::integer(UINT32_MAX).as<uint32_t>());
+
+    XCTAssertEqual(UINT64_MAX, msg::integer(UINT64_MAX));
+    XCTAssertEqual(UINT64_MAX, msg::integer(UINT64_MAX).as<uint64_t>());
+
+    XCTAssertEqual(INT8_MAX,  msg::integer(INT8_MAX));
+    XCTAssertEqual(INT8_MAX,  msg::integer(INT8_MAX).as<int8_t>());
+    XCTAssertEqual(INT8_MIN,  msg::integer(INT8_MIN));
+    XCTAssertEqual(INT8_MIN,  msg::integer(INT8_MIN).as<int8_t>());
+
+    XCTAssertEqual(INT16_MAX, msg::integer(INT16_MAX));
+    XCTAssertEqual(INT16_MAX, msg::integer(INT16_MAX).as<int16_t>());
+    XCTAssertEqual(INT16_MIN, msg::integer(INT16_MIN));
+    XCTAssertEqual(INT16_MIN, msg::integer(INT16_MIN).as<int16_t>());
+
+    XCTAssertEqual(INT32_MAX, msg::integer(INT32_MAX));
+    XCTAssertEqual(INT32_MAX, msg::integer(INT32_MAX).as<int32_t>());
+    XCTAssertEqual(INT32_MIN, msg::integer(INT32_MIN));
+    XCTAssertEqual(INT32_MIN, msg::integer(INT32_MIN).as<int32_t>());
+
+    XCTAssertEqual(INT64_MAX, msg::integer(INT64_MAX));
+    XCTAssertEqual(INT64_MAX, msg::integer(INT64_MAX).as<int64_t>());
+    XCTAssertEqual(INT64_MIN, msg::integer(INT64_MIN));
+    XCTAssertEqual(INT64_MIN, msg::integer(INT64_MIN).as<int64_t>());
+}
+
 - (void)testArrayViewDefaultConstructor {
     msg::array_view<int> view;
     XCTAssertEqual(view.data(), nullptr);
