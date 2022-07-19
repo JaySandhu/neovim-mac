@@ -7,9 +7,9 @@
 //  See LICENSE.txt for details.
 //
 
-#include <XCTest/XCTest.h>
 #include <random>
-#include "DeathTest.h"
+#include <XCTest/XCTest.h>
+#include "AsanAssert.h"
 #include "bump_allocator.hpp"
 
 @interface testBumpAllocator : XCTestCase
@@ -17,18 +17,12 @@
 
 @implementation testBumpAllocator
 
-+ (void)setUp {
-    signal(SIGHUP, SIG_IGN);
-}
-
-#if __has_feature(address_sanitizer)
-
 - (void)testDeallocAllPoisions {
     bump_allocator allocator(512);
     char *ptr = static_cast<char*>(allocator.alloc(24));
     allocator.dealloc_all();
-    
-    AssertDies(*(ptr + 5) = 'x');
+
+    AssertRegionPoisoned(ptr, 24);
 }
 
 - (void)testDestructorPoisions {
@@ -39,7 +33,7 @@
         ptr = static_cast<char*>(allocator.alloc(24));
     }
 
-    AssertDies(*(ptr + 5) = 'x');
+    AssertRegionPoisoned(ptr, 24);
 }
 
 - (void)testMoveAssigmentPoisions {
@@ -47,24 +41,16 @@
     char *ptr = static_cast<char*>(allocator.alloc(24));
     allocator = bump_allocator();
 
-    AssertDies(*(ptr + 5) = 'x');
-}
-
-- (void)testAbortsOnOverflow {
-    bump_allocator allocator(512);
-    AssertAborts(allocator.alloc(SIZE_T_MAX));
-    AssertAborts(allocator.alloc(SIZE_T_MAX - 8));
+    AssertRegionPoisoned(ptr, 24);
 }
 
 - (void)testMemoryIsGuarded {
     bump_allocator allocator(512);
     char *test = static_cast<char*>(allocator.alloc(64));
 
-    AssertDies(*(test - 1)  = 'x');
-    AssertDies(*(test + 65) = 'x');
+    AssertAddressPoisoned(test - 1);
+    AssertAddressPoisoned(test + 65);
 }
-
-#endif // __has_feature(address_sanitizer)
 
 - (void)testDeallocAllRestoresRemaining {
     bump_allocator allocator(512);
@@ -88,7 +74,7 @@
     void *ptr = default_constructed.alloc(24);
     
     XCTAssertGreaterThan(default_constructed.capacity(), 24);
-    AssertNoDeath(memset(ptr, 'x', 24));
+    AssertRegionValid(ptr, 24);
 }
 
 - (void)testInitialCapacityConstructor {
@@ -111,7 +97,7 @@
     XCTAssertEqual(moved_to.capacity(), 512);
     XCTAssertEqual(moved_to.remaining(), remaining);
 
-    AssertNoDeath(memset(ptr, 'x', 24));
+    AssertRegionValid(ptr, 24);
 }
 
 - (void)testMoveContructor {
@@ -127,7 +113,7 @@
     XCTAssertEqual(moved_to.capacity(), 512);
     XCTAssertEqual(moved_to.remaining(), remaining);
     
-    AssertNoDeath(memset(ptr, 'x', 24));
+    AssertRegionValid(ptr, 24);
 }
 
 - (void)testCapacityExpandsAsNeeded {
@@ -138,7 +124,7 @@
     
     allocator.alloc(1024);
     XCTAssertGreaterThanOrEqual(allocator.capacity(), 1024);
-    AssertNoDeath(memset(ptr, 'x', 24));
+    AssertRegionValid(ptr, 24);
 }
 
 - (void)testReserveResizesAsNeeded {
@@ -171,14 +157,12 @@
     
     std::mt19937_64 mt;
     std::uniform_int_distribution<size_t> dist(8, 8192);
-    
-    AssertNoDeath([&](){
-        for (int i=0; i<128; ++i) {
-            size_t size = dist(mt);
-            void *ptr = allocator.alloc(size);
-            memset(ptr, 'x', size);
-        }
-    }());
+
+    for (int i=0; i<128; ++i) {
+        size_t size = dist(mt);
+        void *ptr = allocator.alloc(size);
+        AssertRegionValid(ptr, size);
+    }
 }
 
 @end

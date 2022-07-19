@@ -7,11 +7,12 @@
 //  See LICENSE.txt for details.
 //
 
-#include <XCTest/XCTest.h>
 #include <algorithm>
 #include <string>
 #include <vector>
-#include "DeathTest.h"
+#include <XCTest/XCTest.h>
+
+#include "AsanAssert.h"
 #include "circular_buffer.hpp"
 
 template<typename Range1, typename Range2>
@@ -29,10 +30,6 @@ static inline bool all_of(const circular_buffer &buffer, char val) {
 @end
 
 @implementation testCircularBuffer
-
-+ (void)setUp {
-    signal(SIGHUP, SIG_IGN);
-}
 
 - (void)testDefaultContructor {
     circular_buffer buffer;
@@ -57,8 +54,8 @@ static inline bool all_of(const circular_buffer &buffer, char val) {
         circular_buffer buffer(1024);
         data = buffer.data();
     }
-        
-    AssertDies(*data = 'x');
+
+    AssertAddressPoisoned(data);
 }
 
 - (void)testMoveConstructor {
@@ -113,7 +110,7 @@ static inline bool all_of(const circular_buffer &buffer, char val) {
     char *ptr = moved_to.data();
     moved_to = circular_buffer();
     
-    AssertDies(*ptr = 'x');
+    AssertAddressPoisoned(ptr);
 }
 
 - (void)testCopyConstructor {
@@ -172,7 +169,7 @@ static inline bool all_of(const circular_buffer &buffer, char val) {
     
     XCTAssertGreaterThan(small.capacity(), old_capacity);
     XCTAssertNotEqual(old_data, small.data());
-    AssertDies(*old_data = 'x');
+    AssertAddressPoisoned(old_data);
 }
 
 - (void)testClearResetsBuffer {
@@ -203,7 +200,7 @@ static inline bool all_of(const circular_buffer &buffer, char val) {
     XCTAssertGreaterThan(buffer.capacity(), capacity);
     XCTAssertNotEqual(buffer.data(), data);
     
-    AssertDies(*data = 'x', "Buffer not deallocated");
+    AssertAddressPoisoned(data, "Buffer not deallocated");
 }
 
 - (void)testCanInsertIntoDefaultConstructedBuffer {
@@ -254,7 +251,7 @@ static inline bool all_of(const circular_buffer &buffer, char val) {
     XCTAssertGreaterThan(buffer.capacity(), capacity);
     XCTAssertNotEqual(buffer.data(), data);
     XCTAssertTrue(all_of(buffer, 'x'));
-    AssertDies(*data = 'x', "Buffer not deallocated");
+    AssertAddressPoisoned(data, "Buffer not deallocated");
 }
 
 - (void)testInsertingCapacityDoesNotResize {
@@ -285,7 +282,7 @@ static inline bool all_of(const circular_buffer &buffer, char val) {
     XCTAssertNotEqual(buffer.data(), data);
     XCTAssertEqual(buffer.size(), input.size());
     XCTAssertEqual(buffer, input);
-    AssertDies(*data = 'x', "Buffer not deallocated");
+    AssertAddressPoisoned(data, "Buffer not deallocated");
 }
 
 - (void)testCanPushBackMultiple {

@@ -9,7 +9,7 @@
 
 #include <array>
 #include <XCTest/XCTest.h>
-#include "DeathTest.h"
+#include "AsanAssert.h"
 #include "msgpack.hpp"
 
 template<size_t N>
@@ -29,10 +29,6 @@ static inline bool all_a(const char *begin, const char *end) {
 @end
 
 @implementation testMsgpack : XCTestCase
-
-+ (void)setUp {
-    signal(SIGHUP, SIG_IGN);
-}
 
  - (void)setUp {
     [super setUp];
@@ -267,8 +263,6 @@ static inline bool all_a(const char *begin, const char *end) {
     XCTAssertFalse(std::is_sorted(begin, end));
 }
 
-#if __has_feature(address_sanitizer)
-
 - (void)testUnpackerMoveConstructor {
     std::string_view string_test("\xa4test");
     
@@ -278,10 +272,10 @@ static inline bool all_a(const char *begin, const char *end) {
 
     {
         msg::unpacker moved_to(std::move(moved_from));
-        AssertNoDeath(str[0] == 'x');
+        AssertAddressValid(str.data());
     }
 
-    AssertDies(str[0] == 'x');
+    AssertAddressPoisoned(&str);
 }
 
 - (void)testUnpackerMoveAssignment {
@@ -294,10 +288,10 @@ static inline bool all_a(const char *begin, const char *end) {
     {
         msg::unpacker moved_to;
         moved_to = std::move(moved_from);
-        AssertNoDeath(str[0] == 'x');
+        AssertAddressValid(str.data());
     }
 
-    AssertDies(str[0] == 'x');
+    AssertAddressPoisoned(&str);
 }
 
 - (void)testUnpackerMoveAssignmentDestroysObjects {
@@ -308,10 +302,8 @@ static inline bool all_a(const char *begin, const char *end) {
     msg::string &str = moved_to.unpack()->get<msg::string>();
 
     moved_to = msg::unpacker();
-    AssertDies(str[0] == 'x');
+    AssertAddressPoisoned(&str);
 }
-
-#endif // __has_feature(address_sanitizer)
 
 - (void)testUnpackInvalid {
     auto packed = packed_data("\xc1");
