@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -466,6 +467,17 @@ public:
         return promise->unpack(handle);
     }
 };
+
+/// One shot unpacking of integer types.
+///
+/// @param data     Pointer to input buffer. Should contain a packed
+///                 representation of an integer type.
+/// @param length   Length of the input buffer.
+///
+/// @returns Returns an integer type upon successful unpacking. On error
+///          returns std::nullopt. Note: excess bytes in the data buffer is
+///          considered an error.
+std::optional<integer> unpack_integer(const void *data, size_t length);
 
 namespace detail {
 

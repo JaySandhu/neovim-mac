@@ -222,6 +222,22 @@ public:
     }
 };
 
+template<typename T>
+std::optional<integer> read_numeric(const unsigned char *data, size_t length) {
+    if (length != sizeof(T)) {
+        return std::nullopt;
+    }
+
+    unsigned_equivalent<T> storage;
+    memcpy(&storage, data, sizeof(T));
+
+    unsigned_equivalent<T> swapped = byteswap(storage);
+
+    T value;
+    memcpy(&value, &swapped, sizeof(T));
+    return value;
+}
+
 } // namespace
 
 std::string to_string(const object &obj) {
@@ -550,6 +566,58 @@ unpack_object: // Label avoids excess indentation
 
     // Do it all over again.
     goto unpack_object;
+}
+
+std::optional<integer> unpack_integer(const void *data, size_t length) {
+    if (length == 0) {
+        return std::nullopt;
+    }
+
+    const unsigned char *bytes = static_cast<const unsigned char*>(data);
+    const unsigned char byte = bytes[0];
+
+    switch (byte) {
+        case 0x00 ... 0x7f:
+            if (length == 1) {
+                return byte;
+            } else {
+                return std::nullopt;
+            }
+
+        case 0xcc:
+            return read_numeric<uint8_t>(bytes + 1, length - 1);
+
+        case 0xcd:
+            return read_numeric<uint16_t>(bytes + 1, length - 1);
+
+        case 0xce:
+            return read_numeric<uint32_t>(bytes + 1, length - 1);
+
+        case 0xcf:
+            return read_numeric<uint64_t>(bytes + 1, length - 1);
+
+        case 0xd0:
+            return read_numeric<int8_t>(bytes + 1, length - 1);
+
+        case 0xd1:
+            return read_numeric<int16_t>(bytes + 1, length - 1);
+
+        case 0xd2:
+            return read_numeric<int32_t>(bytes + 1, length - 1);
+
+        case 0xd3:
+            return read_numeric<int64_t>(bytes + 1, length - 1);
+
+        case 0xe0 ... 0xff:
+            if (length == 1) {
+                return -256 | byte;
+            } else {
+                return std::nullopt;
+            }
+            
+        default:
+            return std::nullopt;
+    }
 }
 
 } // namespace msg

@@ -1200,6 +1200,138 @@ static inline bool all_a(const char *begin, const char *end) {
     XCTAssertFalse(unpacker.unpack());
 }
 
+- (void)testOneShotUnpackUnsignedIntegerFixedMin {
+    auto value = msg::integer(0);
+    auto packed = packed_data("\x00");
+    auto unpacked = msg::unpack_integer(packed.data(), packed.size());
+
+    XCTAssertTrue(unpacked);
+    XCTAssertTrue(*unpacked == value);
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() - 1));
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() + 1));
+}
+
+- (void)testOneShotUnpackUnsignedIntegerFixedMax {
+    auto value = msg::integer(127);
+    auto packed = packed_data("\x7f");
+    auto unpacked = msg::unpack_integer(packed.data(), packed.size());
+
+    XCTAssertTrue(unpacked);
+    XCTAssertTrue(*unpacked == value);
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() - 1));
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() + 1));
+}
+
+- (void)testOneShotUnpackUnsignedInteger8bit {
+    auto value = msg::integer(128);
+    auto packed = packed_data("\xcc\x80");
+    auto unpacked = msg::unpack_integer(packed.data(), packed.size());
+
+    XCTAssertTrue(unpacked);
+    XCTAssertTrue(*unpacked == value);
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() - 1));
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() + 1));
+}
+
+- (void)testOneShotUnpackUnsignedInteger16bit {
+    auto value = msg::integer(256);
+    auto packed = packed_data("\xcd\x01\x00");
+    auto unpacked = msg::unpack_integer(packed.data(), packed.size());
+
+    XCTAssertTrue(unpacked);
+    XCTAssertTrue(*unpacked == value);
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() - 1));
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() + 1));
+}
+
+- (void)testOneShotUnpackUnsignedInteger32bit {
+    auto value = msg::integer(65536);
+    auto packed = packed_data("\xce\x00\x01\x00\x00");
+    auto unpacked = msg::unpack_integer(packed.data(), packed.size());
+
+    XCTAssertTrue(unpacked);
+    XCTAssertTrue(*unpacked == value);
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() - 1));
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() + 1));
+}
+
+- (void)testOneShotUnpackUnsignedInteger64bit {
+    auto value = msg::integer(4294967296);
+    auto packed = packed_data("\xcf\x00\x00\x00\x01\x00\x00\x00\x00");
+    auto unpacked = msg::unpack_integer(packed.data(), packed.size());
+
+    XCTAssertTrue(unpacked);
+    XCTAssertTrue(*unpacked == value);
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() - 1));
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() + 1));
+}
+
+- (void)testOneShotUnpackNegativeIntegerFixedMin {
+    auto value = msg::integer(-1);
+    auto packed = packed_data("\xff");
+    auto unpacked = msg::unpack_integer(packed.data(), packed.size());
+
+    XCTAssertTrue(unpacked);
+    XCTAssertTrue(*unpacked == value);
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() - 1));
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() + 1));
+}
+
+- (void)testOneShotUnpackNegativeIntegerFixedMax {
+    auto value = msg::integer(-32);
+    auto packed = packed_data("\xe0");
+    auto unpacked = msg::unpack_integer(packed.data(), packed.size());
+
+    XCTAssertTrue(unpacked);
+    XCTAssertTrue(*unpacked == value);
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() - 1));
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() + 1));
+}
+
+- (void)testOneShotUnpackNegativeInteger8bit {
+    auto value = msg::integer(-128);
+    auto packed = packed_data("\xd0\x80");
+    auto unpacked = msg::unpack_integer(packed.data(), packed.size());
+
+    XCTAssertTrue(unpacked);
+    XCTAssertTrue(*unpacked == value);
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() - 1));
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() + 1));
+}
+
+- (void)testOneShotUnpackNegativeInteger16bit {
+    auto value = msg::integer(-32768);
+    auto packed = packed_data("\xd1\x80\x00");
+    auto unpacked = msg::unpack_integer(packed.data(), packed.size());
+
+    XCTAssertTrue(unpacked);
+    XCTAssertTrue(*unpacked == value);
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() - 1));
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() + 1));
+}
+
+- (void)testOneShotUnpackNegativeInteger32bit {
+    auto value = msg::integer(-2147483648);
+    auto packed = packed_data("\xd2\x80\x00\x00\x00");
+    auto unpacked = msg::unpack_integer(packed.data(), packed.size());
+
+    XCTAssertTrue(unpacked);
+    XCTAssertTrue(*unpacked == value);
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() - 1));
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() + 1));
+}
+
+- (void)testOneShotUnpackNegativeInteger64bit {
+    auto value = msg::integer(-4294967296);
+    auto packed = packed_data("\xd3\xff\xff\xff\xff\x00\x00\x00\x00");
+    auto unpacked = msg::unpack_integer(packed.data(), packed.size());
+
+    XCTAssertTrue(unpacked);
+    XCTAssertTrue(*unpacked == value);
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() - 1));
+    XCTAssertFalse(msg::unpack_integer(packed.data(), packed.size() + 1));
+}
+
 - (void)testPackNull {
     auto packed = packed_data("\xc0");
     msg::packer packer;
