@@ -49,8 +49,13 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
     NVRenderContextManager *contextManager;
     NVRenderContext *renderContext;
     NVGridView *gridView;
-    font_manager *fontManager;
+    NSView *titlebarView;
 
+    NSLayoutConstraint *gridViewWidthConstraint;
+    NSLayoutConstraint *gridViewHeightConstraint;
+    NSLayoutConstraint *titlebarHeightConstraint;
+
+    font_manager *fontManager;
     nvim::process nvim;
     nvim::ui_options uiOptions;
     nvim::grid_size lastGridSize;
@@ -94,13 +99,20 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
     [window setTabbingMode:NSWindowTabbingModeDisallowed];
     [window registerForDraggedTypes:[NSArray arrayWithObject:NSPasteboardTypeFileURL]];
 
-    [window setStyleMask:NSWindowStyleMaskTitled         |
-                         NSWindowStyleMaskClosable       |
-                         NSWindowStyleMaskMiniaturizable |
+    [window setStyleMask:NSWindowStyleMaskTitled              |
+                         NSWindowStyleMaskClosable            |
+                         NSWindowStyleMaskMiniaturizable      |
+                         NSWindowStyleMaskFullSizeContentView |
                          NSWindowStyleMaskResizable];
+
+    window.titlebarAppearsTransparent = YES;
 
     self = [super initWithWindow:window];
     nvim.set_controller((__bridge void*)self);
+
+    titlebarView = [[NSView alloc] init];
+    titlebarView.wantsLayer = YES;
+    titlebarView.layer.backgroundColor = CGColorGetConstantColor(kCGColorWhite);
 
     uiOptions = {
         .ext_cmdline    = false,
@@ -183,6 +195,10 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
 // the cell size, but the cell size depends on the font, and we don't know the
 // font until we've attached to the Neovim process.
 - (void)saveFrame {
+    if (!isOpen) {
+        return;
+    }
+
     NSRect rect = [self.window frame];
     rect.origin.y += rect.size.height;
     rect.size.width = lastGridSize.width;
@@ -194,11 +210,8 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
 }
 
 /// Resizes the window anchored at the top left point.
-/// Attempts to constrain the window size to the current screen.
-- (void)resizeWindow {
-    NSWindow *window = [self window];
-    NSScreen *screen = [window screen];
-
+/// Attempts to constrain the window size to the given screen size.
+- (void)resizeWindow:(NSWindow *)window inScreen:(NSScreen *)screen {
     if (!screen) {
         return;
     }
@@ -207,10 +220,10 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
     NSRect windowRect = [window frame];
     NSSize cellSize = [gridView cellSize];
 
-    CGFloat borderHeight = windowRect.size.height - window.contentView.frame.size.height;
+    CGFloat borderHeight = titlebarHeightConstraint.constant;
     CGFloat maxGridHeight = floor((screenRect.size.height - borderHeight) / cellSize.height);
     CGFloat contentHeight = cellSize.height * std::min(maxGridHeight, (CGFloat)lastGridSize.height);
-    CGFloat windowHeight = borderHeight + contentHeight;
+    CGFloat windowHeight = contentHeight + borderHeight;
     CGFloat deltaY = windowRect.size.height - windowHeight;
 
     windowRect.size.height = windowHeight;
@@ -239,9 +252,17 @@ static inline NSSize minGridViewSize(NSSize cellSize) {
     NSWindow *window = [self window];
     NSSize cellSize = [gridView cellSize];
 
-    [self resizeWindow];
+    [self resizeWindow:window inScreen:window.screen];
     [window setResizeIncrements:cellSize];
-    [window setContentMinSize:minGridViewSize(cellSize)];
+    NSSize minSize = minGridViewSize(cellSize);
+
+    if (gridViewWidthConstraint) {
+        gridViewWidthConstraint.constant = minSize.width;
+    }
+
+    if (gridViewHeightConstraint) {
+        gridViewHeightConstraint.constant = minSize.height;
+    }
 }
 
 /// Returns a font descriptor and font size based on the guifont option.
@@ -304,8 +325,9 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(nvim::
 }
 
 - (void)initialRedraw {
-    NSWindow *window = [self window];
+    NVWindow *window = (NVWindow *)[self window];
     NSScreen *proposedScreen = [window screen];
+    NSView *contentView = [window contentView];
     CGFloat scaleFactor = 1;
 
     if (proposedScreen) {
@@ -339,11 +361,33 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(nvim::
 
     [window makeFirstResponder:self];
     [window setAnimationBehavior:NSWindowAnimationBehaviorDocumentWindow];
-    [window setContentView:gridView];
     [window setResizeIncrements:cellSize];
-    [window setContentMinSize:minGridViewSize(cellSize)];
 
-    [self resizeWindow];
+    [contentView addSubview:titlebarView];
+    [contentView addSubview:gridView];
+    titlebarView.translatesAutoresizingMaskIntoConstraints = NO;
+    gridView.translatesAutoresizingMaskIntoConstraints = NO;
+
+    NSSize minGridSize = minGridViewSize(cellSize);
+    gridViewWidthConstraint = [gridView.widthAnchor constraintGreaterThanOrEqualToConstant:minGridSize.width];
+    gridViewHeightConstraint = [gridView.heightAnchor constraintGreaterThanOrEqualToConstant:minGridSize.height];
+    titlebarHeightConstraint = [titlebarView.heightAnchor constraintEqualToConstant:window.titlebarHeight];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [titlebarView.topAnchor constraintEqualToAnchor:contentView.topAnchor],
+        [titlebarView.leftAnchor constraintEqualToAnchor:contentView.leftAnchor],
+        [titlebarView.rightAnchor constraintEqualToAnchor:contentView.rightAnchor],
+        titlebarHeightConstraint,
+
+        [gridView.topAnchor constraintEqualToAnchor:titlebarView.bottomAnchor],
+        [gridView.leftAnchor constraintEqualToAnchor:contentView.leftAnchor],
+        [gridView.widthAnchor constraintEqualToAnchor:contentView.widthAnchor],
+        [gridView.bottomAnchor constraintEqualToAnchor:contentView.bottomAnchor],
+        gridViewWidthConstraint,
+        gridViewHeightConstraint,
+    ]];
+
+    [self resizeWindow:window inScreen:proposedScreen];
     [self titleDidChange];
 
     if (shouldCenter) {
@@ -384,7 +428,8 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(nvim::
         lastGridSize = gridSize;
 
         if (!isLiveResizing && gridSize != gridView.desiredGridSize) {
-            [self resizeWindow];
+            NSWindow *window = [self window];
+            [self resizeWindow:window inScreen:window.screen];
         }
     }
 }
@@ -501,6 +546,7 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(nvim::
             NSSize desiredSize = [self->gridView desiredFrameSize];
 
             if (memcmp(&currentSize, &desiredSize, sizeof(NSSize)) != 0) {
+                desiredSize.height += self->titlebarHeightConstraint.constant;
                 [self.window setContentSize:desiredSize];
             }
 
