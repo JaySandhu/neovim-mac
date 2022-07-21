@@ -8,8 +8,9 @@
 //
 
 #import <Carbon/Carbon.h>
-#import "NVWindowController.h"
 #import "NVGridView.h"
+#import "NVWindow.h"
+#import "NVWindowController.h"
 
 #include <thread>
 #include "log.h"
@@ -87,7 +88,7 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
 // displayed. Once the window closes, the controller is released.
 
 - (instancetype)init {
-    NSWindow *window = [[NSWindow alloc] init];
+    NSWindow *window = [[NVWindow alloc] init];
     [window setDelegate:self];
     [window setWindowController:self];
     [window setTabbingMode:NSWindowTabbingModeDisallowed];
