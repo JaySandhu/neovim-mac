@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
+#include <sanitizer/asan_interface.h>
 #include "circular_buffer.hpp"
 
 // Allocates a mirrored buffer, that is a virtual memory region size * 2 bytes
@@ -58,6 +59,7 @@ void circular_buffer::deallocate_mirrored(void *ptr, size_t size) {
     // In debug builds ptr is not deallocated, instead it's marked as
     // inaccessible, this helps catch use after frees.
 #ifdef DEBUG
+    ASAN_POISON_MEMORY_REGION(ptr, size * 2);
     auto error = mach_vm_protect(mach_task_self(), addr, size * 2, 0, 0);
 #else
     auto error = mach_vm_deallocate(mach_task_self(), addr, size * 2);
