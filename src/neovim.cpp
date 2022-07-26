@@ -618,6 +618,23 @@ void process::command(std::string_view command, response_handler handler) {
     rpc_request(msgid, "nvim_command", command);
 }
 
+rpc_response process::sync_command(std::string_view command,
+                                   dispatch_time_t timeout) {
+    rpc_response response;
+    auto id = store_handler(timeout, [this, &response](const msg::object &err,
+                                                       const msg::object &res,
+                                                       bool timed_out){
+        response.error = err;
+        response.result = res;
+        response.timed_out = timed_out;
+        dispatch_semaphore_signal(semaphore);
+    });
+
+    rpc_request(id, "nvim_command", command);
+    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+    return response;
+}
+
 void process::paste(std::string_view data) {
     rpc_request(null_msgid, "nvim_paste", data, false, -1);
 }

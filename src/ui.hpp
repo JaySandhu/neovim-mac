@@ -13,6 +13,9 @@
 #include <dispatch/dispatch.h>
 #include <array>
 #include <atomic>
+#include <string>
+#include <unordered_map>
+
 #include "msgpack.hpp"
 #include "unfair_lock.hpp"
 
@@ -488,6 +491,24 @@ inline bool operator!=(const ui_options &left, const ui_options &right) {
     return memcmp(&left, &right, sizeof(ui_options)) != 0;
 }
 
+/// Neovim showtabline option. See nvim :help showtabline.
+enum class showtabline {
+    never,
+    if_multiple,
+    always
+};
+
+/// Represents an externalized Neovim tabpage.
+struct tabpage {
+    std::string name;
+    std::string filetype;
+    void *nvtab;
+    int handle;
+    bool closed;
+    bool name_changed;
+    bool filetype_changed;
+};
+
 /// The Neovim window controller.
 /// The window controller receives various UI related updates.
 /// Note: This is a intended to be a thin C++ wrapper around NVWindowController,
@@ -517,8 +538,14 @@ public:
     /// Called when the guifont option changes.
     void font_set();
 
+    /// Called when the showtabline option changes.
+    void showtabline_set();
+
     /// Called when any of the options listed in nvim::options change.
     void options_set();
+
+    /// Called when the externalized tabline should be updated.
+    void tabline_update();
 };
 
 /// Responsible for handling Neovim UI events.
@@ -548,7 +575,13 @@ private:
     unfair_lock option_lock;
     std::string option_title;
     std::string option_guifont;
+    showtabline option_showtabline;
     ui_options ui_opts;
+
+    unfair_lock tab_lock;
+    std::unordered_map<int, tabpage> tabpage_map;
+    std::vector<tabpage*> tabpages;
+    tabpage *tabpage_selected;
 
     grid* get_grid(size_t index);
 
@@ -578,6 +611,8 @@ private:
     void set_title(msg::string title);
 
     void set_option(msg::string name, msg::object object);
+
+    void tabline_update(msg::extension curtab, msg::array tabs);
 
     bool send_option_change() const {
         return !signal_flush && !signal_enter;
@@ -665,6 +700,32 @@ public:
 
     /// Returns the guifont option string.
     std::string get_guifont();
+
+    /// Returns the showtabline option.
+    showtabline get_showtabline();
+
+    /// The tabline lock. Clients should hold this lock when working with tabs.
+    unfair_lock& get_tab_lock() {
+        return tab_lock;
+    }
+
+    /// Returns a view into the internal array of tabpages.
+    /// Note: Clients should acquire and hold the tabline lock during access.
+    msg::array_view<tabpage*> get_tabs() {
+        return msg::array_view<tabpage*>(tabpages.data(), tabpages.size());
+    }
+
+    /// Returns the selected tabpage.
+    /// Note: Clients should acquire and hold the tabline lock during access.
+    tabpage* get_selected_tab() {
+        return tabpage_selected;
+    }
+
+    /// Frees the given tabpage.
+    /// Note: Clients should acquire and hold the tabline lock before freeing.
+    void free_tabpage(tabpage *tab) {
+        tabpage_map.erase(tab->handle);
+    }
 
     /// Handle a Neovim RPC redraw notification.
     /// @param events The paramters of the RPC notification.

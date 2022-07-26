@@ -9,6 +9,7 @@
 
 #import <Carbon/Carbon.h>
 #import "NVGridView.h"
+#import "NVTabLine.h"
 #import "NVWindow.h"
 #import "NVWindowController.h"
 
@@ -45,18 +46,24 @@ static inline std::string_view buttonName(MouseButton button) {
 
 static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray alloc] init];
 
+@interface NVWindowController() <NVTabLineDelegate>
+@end
+
 @implementation NVWindowController {
     NVRenderContextManager *contextManager;
     NVRenderContext *renderContext;
     NVGridView *gridView;
+    NVTabLine *tabLine;
     NSView *titlebarView;
 
+    NSMutableArray<NVTab*> *tabs;
     NSLayoutConstraint *gridViewWidthConstraint;
     NSLayoutConstraint *gridViewHeightConstraint;
     NSLayoutConstraint *titlebarHeightConstraint;
 
     font_manager *fontManager;
     nvim::process nvim;
+    nvim::showtabline showTabLineOption;
     nvim::ui_options uiOptions;
     nvim::grid_size lastGridSize;
     nvim::grid_point lastMouseLocation[3];
@@ -124,6 +131,12 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
         .ext_tabline    = true,
         .ext_termcolors = false
     };
+
+    tabs = [NSMutableArray arrayWithCapacity:32];
+
+    NVTabTheme *tabTheme = [NVTabTheme defaultLightTheme];
+    tabLine = [[NVTabLine alloc] initWithFrame:titlebarView.bounds delegate:self theme:tabTheme];
+    tabLine.translatesAutoresizingMaskIntoConstraints = NO;
 
     return self;
 }
@@ -387,8 +400,9 @@ static std::pair<arc_ptr<CTFontDescriptorRef>, CGFloat> getFontDescriptor(nvim::
         gridViewHeightConstraint,
     ]];
 
-    [self resizeWindow:window inScreen:proposedScreen];
     [self titleDidChange];
+    [self optionShowTabLineDidChange];
+    [self resizeWindow:window inScreen:proposedScreen];
 
     if (shouldCenter) {
         [window center];
@@ -1266,12 +1280,8 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
 }
 
 - (void)titleDidChange {
-    std::string title = nvim.get_title();
-    NSString *nstitle = [[NSString alloc] initWithBytes:title.data()
-                                                 length:title.size()
-                                               encoding:NSUTF8StringEncoding];
-
-    [[self window] setTitle:nstitle];
+    NSString *title = NSStringFromStringView(nvim.get_title());
+    [[self window] setTitle:title];
 }
 
 - (void)fontDidChange {
@@ -1301,6 +1311,229 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
             [alert runModal];
         }
     }
+}
+
+static inline NSString* NSStringFromStringView(std::string_view string) {
+    return [[NSString alloc] initWithBytes:string.data()
+                                    length:string.size()
+                                  encoding:NSUTF8StringEncoding];
+}
+
+- (void)showTabLine {
+    if (tabLine.isShown) {
+        return;
+    }
+
+    NVWindow *window = (NVWindow *)[self window];
+
+    CGFloat currentTitleBarHeight = window.titlebarHeight;
+    CGFloat titleBarHeightDelta = 42 - currentTitleBarHeight;
+
+    [window setTitlebarHeight:42];
+    [window setTitleVisibility:NSWindowTitleHidden];
+    [window setTitlebarAppearsTransparent:YES];
+    [window setMovable:NO];
+
+    titlebarHeightConstraint.constant = 42;
+    [titlebarView addSubview:tabLine];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [tabLine.topAnchor constraintEqualToAnchor:titlebarView.topAnchor],
+        [tabLine.bottomAnchor constraintEqualToAnchor:titlebarView.bottomAnchor],
+        [tabLine.leftAnchor constraintEqualToAnchor:titlebarView.leftAnchor],
+        [tabLine.rightAnchor constraintEqualToAnchor:titlebarView.rightAnchor]
+    ]];
+
+    NSRect windowFrame = [window frame];
+    windowFrame.size.height += titleBarHeightDelta;
+    windowFrame.origin.y -= titleBarHeightDelta;
+
+    tabLine.isShown = YES;
+    tabLine.needsLayout = YES;
+
+    [window setFrame:windowFrame display:YES animate:YES];
+}
+
+- (void)hideTabLine {
+    if (!tabLine.isShown) {
+        return;
+    }
+
+    NVWindow *window = (NVWindow *)[self window];
+
+    [window setTitlebarHeight:NVWindowSystemTitleBarHeight];
+    [window setTitleVisibility:NSWindowTitleVisible];
+    [window setTitlebarAppearsTransparent:YES];
+    [window setMovable:YES];
+
+    CGFloat newTitleBarHeight = window.titlebarHeight;
+    CGFloat titleBarHeightDelta = newTitleBarHeight - 42;
+
+    titlebarHeightConstraint.constant = newTitleBarHeight;
+
+    [tabLine cancelAllAnimations];
+    [tabLine removeFromSuperview];
+    [tabLine setIsShown:NO];
+
+    NSRect windowFrame = [window frame];
+    windowFrame.size.height += titleBarHeightDelta;
+    windowFrame.origin.y -= titleBarHeightDelta;
+
+    [window setFrame:windowFrame display:YES animate:YES];
+}
+
+
+static inline bool shouldShowTabLine(size_t tabsCount, nvim::showtabline showtabline) {
+    switch (showtabline) {
+        case nvim::showtabline::never:
+            return false;
+
+        case nvim::showtabline::if_multiple:
+            return tabsCount > 1;
+
+        case nvim::showtabline::always:
+            return true;
+    }
+}
+
+- (void)optionShowTabLineDidChange {
+    showTabLineOption = nvim.get_showtabline();
+
+    if (shouldShowTabLine(tabs.count, showTabLineOption)) {
+        [self showTabLine];
+    } else {
+        [self hideTabLine];
+    }
+}
+
+- (void)tabLineUpdate {
+    std::lock_guard<unfair_lock> lg(nvim.get_tab_lock());
+
+    auto tabpages = nvim.get_tabs();
+    auto selected = nvim.get_selected_tab();
+    auto tabCount = tabpages.size();
+
+    bool shownAtStart = tabLine.isShown;
+    bool shownAtEnd = shouldShowTabLine(tabCount, showTabLineOption);
+    bool shouldAnimate = shownAtStart && shownAtEnd;
+
+    if (shownAtStart && !shownAtEnd) {
+        [self hideTabLine];
+    }
+
+    for (NVTab *tab in tabs) {
+        auto *tabpage = static_cast<nvim::tabpage*>(tab.tabpage);
+
+        if (tabpage->closed) {
+            nvim.free_tabpage(tabpage);
+
+            if (shouldAnimate) {
+                [tabLine animateCloseTab:tab];
+            } else {
+                [tabLine closeTab:tab];
+            }
+        } else {
+            if (tabpage->name_changed) {
+                tabpage->name_changed = false;
+                tab.title = NSStringFromStringView(tabpage->name);
+            }
+
+            if (tabpage->filetype_changed) {
+                tabpage->filetype_changed = false;
+                tab.filetype = NSStringFromStringView(tabpage->filetype);
+            }
+        }
+    }
+
+    [tabs removeAllObjects];
+
+    for (size_t index=0; index<tabCount; ++index) {
+        auto tabpage = tabpages[index];
+
+        if (!tabpage->nvtab) {
+            NSString *title = NSStringFromStringView(tabpage->name);
+            NSString *filetype = NSStringFromStringView(tabpage->filetype);
+            NVTab *tab = [[NVTab alloc] initWithTitle:title filetype:filetype tabpage:tabpage tabLine:tabLine];
+            tabpage->nvtab = (__bridge void*)tab;
+
+            if (shouldAnimate) {
+                [tabLine animateAddTab:tab atIndex:index isSelected:tabpage == selected];
+            }
+        }
+
+        [tabs addObject:(__bridge NVTab*)tabpage->nvtab];
+    }
+
+    if (shouldAnimate) {
+        [tabLine animateSetTabs:tabs selectedTab:(__bridge NVTab*)selected->nvtab];
+    } else {
+        [tabLine setTabs:tabs];
+        [tabLine setSelectedTab:(__bridge NVTab*)selected->nvtab];
+    }
+
+    if (!shownAtStart && shownAtEnd) {
+        [self showTabLine];
+    }
+}
+
+- (void)tabLineAddNewTab:(NVTabLine *)tabLine {
+    [self normalCommand:"tabnew"];
+}
+
+- (void)tabLine:(NVTabLine *)tabLine closeTab:(NVTab *)tab {
+    if (tabs.count == 1) {
+        return [self normalCommand:"quit"];
+    }
+
+    auto tabpage = static_cast<nvim::tabpage*>(tab.tabpage);
+
+    std::string command;
+    command.reserve(256);
+    command.append("execute \"tabclose \" . nvim_tabpage_get_number(");
+    command.append(std::to_string(tabpage->handle));
+    command.push_back(')');
+
+    [self normalCommand:command];
+}
+
+- (BOOL)tabLine:(NVTabLine *)tabLine shouldSelectTab:(NVTab *)tab {
+    nvim::mode mode = nvim.get_mode();
+
+    if (is_busy(mode) || is_ex_mode(mode) || is_prompt(mode)) {
+        return NO;
+    }
+
+    if (mode != nvim::mode::normal) {
+        nvim.feedkeys(CTRL_BACKSLASH CTRL_N);
+    }
+
+    auto tabpage = static_cast<nvim::tabpage*>(tab.tabpage);
+
+    std::string command;
+    command.reserve(256);
+    command.append("execute \"tabnext \" . nvim_tabpage_get_number(");
+    command.append(std::to_string(tabpage->handle));
+    command.push_back(')');
+
+    auto response = nvim.sync_command(command, dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC));
+    return !response.timed_out && response.error.is<msg::null>();
+}
+
+- (void)tabLine:(NVTabLine *)tabLine didMoveTab:(NVTab *)tab fromIndex:(NSUInteger)fromIndex toIndex:(NSUInteger)toIndex {
+    if (fromIndex == toIndex) {
+        return;
+    }
+
+    std::string command;
+    command.reserve(256);
+    command.append("tabmove ");
+    command.append(std::to_string(fromIndex > toIndex ? toIndex : toIndex + 1));
+
+    [self normalCommand:command];
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+        [self tabLineUpdate];
+    });
 }
 
 @end
@@ -1342,6 +1575,18 @@ void window_controller::font_set() {
 void window_controller::options_set() {
     dispatch_async_f(dispatch_get_main_queue(), controller, [](void *context) {
         [(__bridge NVWindowController*)context optionsDidChange];
+    });
+}
+
+void window_controller::showtabline_set() {
+    dispatch_async_f(dispatch_get_main_queue(), controller, [](void *context) {
+        [(__bridge NVWindowController*)context optionShowTabLineDidChange];
+    });
+}
+
+void window_controller::tabline_update() {
+    dispatch_async_f(dispatch_get_main_queue(), controller, [](void *context) {
+        [(__bridge NVWindowController*)context tabLineUpdate];
     });
 }
 

@@ -29,6 +29,7 @@
 		69A3A76624E6EC40003F628C /* Credits.rtf in Resources */ = {isa = PBXBuildFile; fileRef = 69A3A76524E6EC40003F628C /* Credits.rtf */; };
 		69B04DD424B76C8B000DF9C4 /* neovim_mac.vim in CopyFiles */ = {isa = PBXBuildFile; fileRef = 69B04DD224B76C10000DF9C4 /* neovim_mac.vim */; };
 		69C320D928897B7600A6EA0A /* NVWindow.m in Sources */ = {isa = PBXBuildFile; fileRef = 69C320D828897B7600A6EA0A /* NVWindow.m */; };
+		69C320DC2889C01000A6EA0A /* NVTabLine.m in Sources */ = {isa = PBXBuildFile; fileRef = 69C320DB2889C01000A6EA0A /* NVTabLine.m */; };
 		69CB6DEA24AB963B0075229B /* lib in Resources */ = {isa = PBXBuildFile; fileRef = 69CB6DE924AB963B0075229B /* lib */; };
 		69CB6DEC24AB96450075229B /* share in Resources */ = {isa = PBXBuildFile; fileRef = 69CB6DEB24AB96450075229B /* share */; };
 		69CB6DED24AB96560075229B /* lib in CopyFiles */ = {isa = PBXBuildFile; fileRef = 69CB6DE924AB963B0075229B /* lib */; };
@@ -121,6 +122,8 @@
 		69B04DD224B76C10000DF9C4 /* neovim_mac.vim */ = {isa = PBXFileReference; lastKnownFileType = text; path = neovim_mac.vim; sourceTree = "<group>"; };
 		69C320D728897B7600A6EA0A /* NVWindow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NVWindow.h; sourceTree = "<group>"; };
 		69C320D828897B7600A6EA0A /* NVWindow.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = NVWindow.m; sourceTree = "<group>"; };
+		69C320DA2889C01000A6EA0A /* NVTabLine.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NVTabLine.h; sourceTree = "<group>"; };
+		69C320DB2889C01000A6EA0A /* NVTabLine.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = NVTabLine.m; sourceTree = "<group>"; };
 		69CB6DE924AB963B0075229B /* lib */ = {isa = PBXFileReference; lastKnownFileType = folder; path = lib; sourceTree = "<group>"; };
 		69CB6DEB24AB96450075229B /* share */ = {isa = PBXFileReference; lastKnownFileType = folder; path = share; sourceTree = "<group>"; };
 		69CB6DF424AB96B00075229B /* nvim */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = nvim; sourceTree = "<group>"; };
@@ -199,6 +202,8 @@
 				6955FE6524363AD400008191 /* NVWindowController.mm */,
 				69208E292457142600DBB860 /* NVGridView.h */,
 				69208E2A2457142600DBB860 /* NVGridView.mm */,
+				69C320DA2889C01000A6EA0A /* NVTabLine.h */,
+				69C320DB2889C01000A6EA0A /* NVTabLine.m */,
 				6945BBDE2457282C009ADB03 /* shader_types.hpp */,
 				69E15156244E023900F8AEC7 /* shaders.metal */,
 				69B04DD224B76C10000DF9C4 /* neovim_mac.vim */,
@@ -375,6 +380,7 @@
 				69431234243E098B0015C0EA /* ui.cpp in Sources */,
 				6993FAD624BCCECB0022682E /* spawn.cpp in Sources */,
 				6945A1552434E593005D68ED /* neovim.cpp in Sources */,
+				69C320DC2889C01000A6EA0A /* NVTabLine.m in Sources */,
 				695C0ABD242E274800266D89 /* msgpack.cpp in Sources */,
 				69E15157244E023900F8AEC7 /* shaders.metal in Sources */,
 				69240E1B242B9854004E0DE0 /* AppDelegate.mm in Sources */,
@@ -547,7 +553,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.github.jaysandhu.neovim-mac";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -571,7 +577,7 @@
 					"@executable_path/../Frameworks",
 				);
 				LLVM_LTO = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.github.jaysandhu.neovim-mac";
 				PRODUCT_NAME = "$(TARGET_NAME)";

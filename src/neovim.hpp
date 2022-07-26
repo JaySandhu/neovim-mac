@@ -34,6 +34,14 @@ using response_handler = std::function<void(const msg::object &error,
                                             const msg::object &result,
                                             bool timed_out)>;
 
+/// RPC response
+/// Data members represent the parameters in RPC response handler.
+struct rpc_response {
+    msg::object error;
+    msg::object result;
+    bool timed_out;
+};
+
 /// Neovim modes. See nvim :help mode() for more information.
 enum class mode : uint64_t {
     cancelled,
@@ -270,6 +278,34 @@ public:
         return ui.get_guifont();
     }
 
+    /// Returns the showtabline option.
+    nvim::showtabline get_showtabline() {
+        return ui.get_showtabline();
+    }
+
+    /// The tabline lock. Clients should hold this lock when working with tabs.
+    unfair_lock& get_tab_lock() {
+        return ui.get_tab_lock();
+    }
+
+    /// Returns a view into the internal array of tabpages.
+    /// Note: Clients should acquire and hold the tabline lock during access.
+    msg::array_view<tabpage*> get_tabs() {
+        return ui.get_tabs();
+    }
+
+    /// Returns the selected tabpage.
+    /// Note: Clients should acquire and hold the tabline lock during access.
+    tabpage* get_selected_tab() {
+        return ui.get_selected_tab();
+    }
+
+    /// Frees the given tabpage.
+    /// Note: Clients should acquire and hold the tabline lock before freeing.
+    void free_tabpage(tabpage *tab) {
+        ui.free_tabpage(tab);
+    }
+
     /// Set the window controller.
     ///
     /// The window controller receives various UI related messages.
@@ -342,6 +378,14 @@ public:
     /// On execution error fails with VimL error, does not update v:errmsg.
     /// No timeout is set on the request.
     void command(std::string_view command, response_handler handler);
+
+    /// Calls API method nvim_command synchronously.
+    /// On execution error fails with VimL error, does not update v:errmsg.
+    /// @param command  The neovim command to execute.
+    /// @param timeout  Request timeout.
+    /// @returns A rpc_response.
+    rpc_response sync_command(std::string_view command,
+                              dispatch_time_t timeout);
 
     /// Calls API method nvim_eval. Evaluates a VimL expression.
     /// @param expr     VimL expression.

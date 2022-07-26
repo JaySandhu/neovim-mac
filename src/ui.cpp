@@ -181,6 +181,8 @@ void ui_controller::redraw_event(const msg::object &event_object) {
         return apply(this, &ui_controller::mode_change, name, args);
     } else if (name == "grid_cursor_goto") {
         return apply(this, &ui_controller::grid_cursor_goto, name, args);
+    } else if (name == "tabline_update") {
+        return apply(this, &ui_controller::tabline_update, name, args);
     } else if (name == "set_title") {
         return apply(this, &ui_controller::set_title, name, args);
     }
@@ -646,6 +648,11 @@ nvim::ui_options ui_controller::get_ui_options() {
     return ui_opts;
 }
 
+nvim::showtabline ui_controller::get_showtabline() {
+    std::lock_guard lock(option_lock);
+    return option_showtabline;
+}
+
 static inline void set_font_option(std::string &opt_guifont,
                                    const msg::object &value,
                                    window_controller &window,
@@ -660,6 +667,31 @@ static inline void set_font_option(std::string &opt_guifont,
 
     if (send_option_change) {
         window.font_set();
+    }
+}
+
+static inline void set_showtabline_option(showtabline &stal,
+                                          const msg::object &value,
+                                          window_controller &window,
+                                          bool send_option_change) {
+
+    if (!value.is<msg::integer>()) {
+        return os_log_info(rpc, "Redraw info: Option type error - "
+                                "Option=showtabline Type=%s",
+                                msg::type_string(value).c_str());
+    }
+
+    int intval = value.get<msg::integer>().as<int>();
+
+    if (intval < 0 || intval > 2) {
+        return os_log_info(rpc, "Redraw info: Option enum error - "
+                                "Option=showtabline IntVal=%i", intval);
+    }
+
+    stal = static_cast<showtabline>(intval);
+
+    if (send_option_change) {
+        window.showtabline_set();
     }
 }
 
@@ -692,6 +724,154 @@ void ui_controller::set_option(msg::string name, msg::object value) {
         set_ext_option(ui_opts.ext_tabline, value);
     } else if (name == "ext_termcolors")  {
         set_ext_option(ui_opts.ext_termcolors, value);
+    } else if (name == "showtabline") {
+        set_showtabline_option(option_showtabline, value,
+                               window, send_option_change());
+    }
+}
+
+struct tabpage_data {
+    int handle;
+    msg::string name;
+    msg::string filetype;
+};
+
+static std::optional<int> to_tabpage_handle(msg::extension handle) {
+    if (handle.type() != 2) {
+        return std::nullopt;
+    }
+
+    auto payload = handle.payload();
+    auto integer = msg::unpack_integer(payload.data(), payload.size());
+
+    if (!integer) {
+        return std::nullopt;
+    }
+
+    return integer->as<int>();
+}
+
+static std::optional<tabpage_data> to_tabpage_data(msg::object object) {
+    if (!object.is<msg::map>()) {
+        return std::nullopt;
+    }
+
+    msg::map map = object.get<msg::map>();
+    std::optional<int> handle = std::nullopt;
+    const msg::string *name = nullptr;
+    msg::string filetype = "";
+
+    for (const auto& [k, value] : map) {
+        if (!k.is<msg::string>()) {
+            os_log_error(rpc, "Redraw error: Map key type error - "
+                              "Event=tabline_update, KeyType=%s, Key=%s",
+                              msg::type_string(k).c_str(),
+                              msg::to_string(k).c_str());
+            continue;
+        }
+
+        msg::string key = k.get<msg::string>();
+
+        if (key == "tab" && value.is<msg::extension>()) {
+            handle = to_tabpage_handle(value.get<msg::extension>());
+        } else if (key == "name") {
+            name = value.get_if<msg::string>();
+        } else if (key == "filetype" && value.is<msg::string>()) {
+            filetype = value.get<msg::string>();
+        } else {
+            os_log_info(rpc, "Redraw info: Ignoring tab attribute - "
+                             "Event=tabline_update, Name=%.*s, Data=%s",
+                             (int)key.size(), key.data(),
+                             msg::to_string(value).c_str());
+        }
+    }
+
+    if (!handle || !name) {
+        return std::nullopt;
+    }
+
+    tabpage_data data;
+    data.handle = *handle;
+    data.name = *name;
+    data.filetype = filetype;
+    return data;
+}
+
+static tabpage* get_tabpage(std::unordered_map<int, tabpage> &tabpage_map,
+                            msg::extension handle_object) {
+    auto handle = to_tabpage_handle(handle_object);
+
+    if (!handle) {
+        return nullptr;
+    }
+
+    auto iter = tabpage_map.find(*handle);
+
+    if (iter == tabpage_map.end()) {
+        return nullptr;
+    }
+
+    return &(iter->second);
+}
+
+void ui_controller::tabline_update(msg::extension selected, msg::array tabs) {
+    size_t previous_tabs_count = tabpages.size();
+    bool have_changes = false;
+
+    for (auto &kv : tabpage_map) {
+        kv.second.closed = true;
+    }
+
+    for (const msg::object &object : tabs) {
+        auto tab_data = to_tabpage_data(object);
+
+        if (!tab_data) {
+            os_log_error(rpc, "Redraw error: Tabpage data malformed - "
+                              "Event=tabline_update, TabIndex=%zu, TabData=%s",
+                              tabs.size(), msg::to_string(object).c_str());
+            continue;
+        }
+
+        tabpage &tab = tabpage_map[tab_data->handle];
+        tab.handle = tab_data->handle;
+        tab.closed = false;
+
+        if (tab.name != tab_data->name) {
+            tab.name = tab_data->name;
+            tab.name_changed = true;
+            have_changes = true;
+        }
+
+        if (tab.filetype != tab_data->filetype) {
+            tab.filetype = tab_data->filetype;
+            tab.filetype_changed = true;
+            have_changes = true;
+        }
+
+        tabpages.push_back(&tab);
+    }
+
+    if (tabpages.size() == previous_tabs_count) {
+        return os_log_error(rpc, "Redraw error: Empty tapages array - "
+                                 "Event=tabline_update");
+    }
+
+    tabpage_selected = get_tabpage(tabpage_map, selected);
+
+    if (!tabpage_selected) {
+        return os_log_error(rpc, "Redraw error: Missing selected tabpage - "
+                                 "Event=tabline_update");
+    }
+
+    auto begin = tabpages.begin();
+    auto previous_end = begin + previous_tabs_count;
+    auto end = tabpages.end();
+
+    if (!have_changes && std::equal(begin, previous_end, previous_end, end)) {
+        tabpages.erase(previous_end, end);
+    } else {
+        tabpages.erase(begin, previous_end);
+        window.tabline_update();
     }
 }
 
