@@ -367,7 +367,7 @@ static NSArray* alphaMaskGradientLocations(CGFloat intrinsicWidth, CGFloat frame
 }
 
 - (void)setFrame:(NSRect)frame {
-    CGFloat intrinsicWidth = self.intrinsicContentSize.width;
+    CGFloat intrinsicWidth = self.intrinsicContentSize.width + 4;
 
     maxFrame = frame;
     visualFrame = frame;
