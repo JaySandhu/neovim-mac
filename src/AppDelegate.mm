@@ -8,6 +8,7 @@
 //
 
 #import "AppDelegate.h"
+#import "NVPreferences.h"
 #import "NVRenderContext.h"
 #import "NVWindowController.h"
 
@@ -93,6 +94,7 @@ static NVWindowController* openWith(NSArray<NVWindowController*> *windows,
 @end
 
 @implementation AppDelegate {
+    NVPreferencesController *preferencesController;
     NVRenderContextManager *contextManager;
     BOOL shouldTerminate;
 }
@@ -268,6 +270,14 @@ static NVWindowController* openWith(NSArray<NVWindowController*> *windows,
 
     NVWindowController *controller = [[NVWindowController alloc] initWithContextManager:contextManager];
     [controller spawnOpenURLs:[panel URLs]];
+}
+
+- (IBAction)displayPreferenes:(id)sender {
+    if (!preferencesController) {
+        preferencesController = [[NVPreferencesController alloc] init];
+    }
+
+    [preferencesController showWindow:nil];
 }
 
 @end

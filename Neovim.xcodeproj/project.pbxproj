@@ -35,6 +35,8 @@
 		69CB6DEC24AB96450075229B /* share in Resources */ = {isa = PBXBuildFile; fileRef = 69CB6DEB24AB96450075229B /* share */; };
 		69CB6DED24AB96560075229B /* lib in CopyFiles */ = {isa = PBXBuildFile; fileRef = 69CB6DE924AB963B0075229B /* lib */; };
 		69CB6DEE24AB965A0075229B /* share in CopyFiles */ = {isa = PBXBuildFile; fileRef = 69CB6DEB24AB96450075229B /* share */; };
+		69DBB09D28914CFC00E46ED2 /* NVPreferences.m in Sources */ = {isa = PBXBuildFile; fileRef = 69DBB09C28914CFC00E46ED2 /* NVPreferences.m */; };
+		69DBB09F28914D7800E46ED2 /* Preferences.xib in Resources */ = {isa = PBXBuildFile; fileRef = 69DBB09E28914D7800E46ED2 /* Preferences.xib */; };
 		69E15157244E023900F8AEC7 /* shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 69E15156244E023900F8AEC7 /* shaders.metal */; };
 		69FB837D24A0F370008CCED1 /* NVRenderContext.mm in Sources */ = {isa = PBXBuildFile; fileRef = 69FB837C24A0F370008CCED1 /* NVRenderContext.mm */; };
 /* End PBXBuildFile section */
@@ -131,6 +133,9 @@
 		69CB6DEB24AB96450075229B /* share */ = {isa = PBXFileReference; lastKnownFileType = folder; path = share; sourceTree = "<group>"; };
 		69CB6DF424AB96B00075229B /* nvim */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = nvim; sourceTree = "<group>"; };
 		69D42C4B244611AA0006FEF3 /* log.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = log.h; sourceTree = "<group>"; };
+		69DBB09B28914CFC00E46ED2 /* NVPreferences.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NVPreferences.h; sourceTree = "<group>"; };
+		69DBB09C28914CFC00E46ED2 /* NVPreferences.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = NVPreferences.m; sourceTree = "<group>"; };
+		69DBB09E28914D7800E46ED2 /* Preferences.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = Preferences.xib; sourceTree = "<group>"; };
 		69E15154244DFE3400F8AEC7 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 		69E15156244E023900F8AEC7 /* shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = shaders.metal; sourceTree = "<group>"; };
 		69FB837B24A0F370008CCED1 /* NVRenderContext.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NVRenderContext.h; sourceTree = "<group>"; };
@@ -209,6 +214,8 @@
 				69C320DB2889C01000A6EA0A /* NVTabLine.m */,
 				690C5332289046A9004C99C7 /* NVColorScheme.h */,
 				690C5333289046A9004C99C7 /* NVColorScheme.mm */,
+				69DBB09B28914CFC00E46ED2 /* NVPreferences.h */,
+				69DBB09C28914CFC00E46ED2 /* NVPreferences.m */,
 				6945BBDE2457282C009ADB03 /* shader_types.hpp */,
 				69E15156244E023900F8AEC7 /* shaders.metal */,
 				69B04DD224B76C10000DF9C4 /* neovim_mac.vim */,
@@ -234,6 +241,7 @@
 			children = (
 				69240E1C242B9855004E0DE0 /* Assets.xcassets */,
 				69240E1E242B9855004E0DE0 /* MainMenu.xib */,
+				69DBB09E28914D7800E46ED2 /* Preferences.xib */,
 				69240E21242B9855004E0DE0 /* Info.plist */,
 				69905F2324C4B57D00CD67F1 /* Neovim.icns */,
 				693465E124C618CF0050ACEA /* Neovim-Document.icns */,
@@ -354,6 +362,7 @@
 			files = (
 				69CB6DEC24AB96450075229B /* share in Resources */,
 				69905F2424C4B57D00CD67F1 /* Neovim.icns in Resources */,
+				69DBB09F28914D7800E46ED2 /* Preferences.xib in Resources */,
 				69CB6DEA24AB963B0075229B /* lib in Resources */,
 				693465E224C618CF0050ACEA /* Neovim-Document.icns in Resources */,
 				69240E1D242B9855004E0DE0 /* Assets.xcassets in Resources */,
@@ -376,6 +385,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				69DBB09D28914CFC00E46ED2 /* NVPreferences.m in Sources */,
 				69240E23242B9855004E0DE0 /* main.m in Sources */,
 				69208E2B2457142600DBB860 /* NVGridView.mm in Sources */,
 				69C320D928897B7600A6EA0A /* NVWindow.m in Sources */,

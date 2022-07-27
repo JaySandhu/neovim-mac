@@ -10,6 +10,7 @@
 #import <Carbon/Carbon.h>
 #import "NVColorScheme.h"
 #import "NVGridView.h"
+#import "NVPreferences.h"
 #import "NVTabLine.h"
 #import "NVWindow.h"
 #import "NVWindowController.h"
@@ -73,6 +74,7 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
     CGFloat scrollingDeltaX;
     CGFloat scrollingDeltaY;
 
+    BOOL titlebarAppearsTransparent;
     BOOL shouldCenter;
     BOOL isOpen;
     BOOL isAlive;
@@ -114,7 +116,8 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
                          NSWindowStyleMaskFullSizeContentView |
                          NSWindowStyleMaskResizable];
 
-    window.titlebarAppearsTransparent = YES;
+    titlebarAppearsTransparent = [NVPreferences titlebarAppearsTransparent];
+    window.titlebarAppearsTransparent = titlebarAppearsTransparent;
 
     self = [super initWithWindow:window];
     nvim.set_controller((__bridge void*)self);
@@ -137,13 +140,15 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
         .ext_messages   = false,
         .ext_multigrid  = false,
         .ext_popupmenu  = false,
-        .ext_tabline    = true,
+        .ext_tabline    = (bool)[NVPreferences externalizeTabline],
         .ext_termcolors = false
     };
 
-    tabs = [NSMutableArray arrayWithCapacity:32];
-    tabLine = [[NVTabLine alloc] initWithFrame:titlebarView.bounds delegate:self colorScheme:colorScheme];
-    tabLine.translatesAutoresizingMaskIntoConstraints = NO;
+    if (uiOptions.ext_tabline) {
+        tabs = [NSMutableArray arrayWithCapacity:32];
+        tabLine = [[NVTabLine alloc] initWithFrame:titlebarView.bounds delegate:self colorScheme:colorScheme];
+        tabLine.translatesAutoresizingMaskIntoConstraints = NO;
+    }
 
     return self;
 }
@@ -1327,7 +1332,7 @@ static inline NSString* NSStringFromStringView(std::string_view string) {
 }
 
 - (void)showTabLine {
-    if (tabLine.isShown) {
+    if (!uiOptions.ext_tabline || tabLine.isShown) {
         return;
     }
 
@@ -1370,7 +1375,7 @@ static inline NSString* NSStringFromStringView(std::string_view string) {
 
     [window setTitlebarHeight:NVWindowSystemTitleBarHeight];
     [window setTitleVisibility:NSWindowTitleVisible];
-    [window setTitlebarAppearsTransparent:YES];
+    [window setTitlebarAppearsTransparent:titlebarAppearsTransparent];
     [window setMovable:YES];
 
     CGFloat newTitleBarHeight = window.titlebarHeight;
@@ -1404,6 +1409,10 @@ static inline bool shouldShowTabLine(size_t tabsCount, nvim::showtabline showtab
 }
 
 - (void)optionShowTabLineDidChange {
+    if (!uiOptions.ext_tabline) {
+        return;
+    }
+
     showTabLineOption = nvim.get_showtabline();
 
     if (shouldShowTabLine(tabs.count, showTabLineOption)) {
@@ -1414,6 +1423,10 @@ static inline bool shouldShowTabLine(size_t tabsCount, nvim::showtabline showtab
 }
 
 - (void)tabLineUpdate {
+    if (!uiOptions.ext_tabline) {
+        return;
+    }
+
     std::lock_guard<unfair_lock> lg(nvim.get_tab_lock());
 
     auto tabpages = nvim.get_tabs();

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="20037" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES" customObjectInstantitationMethod="direct">
+    <dependencies>
+        <deployment identifier="macosx"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="20037"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <objects>
+        <customObject id="-2" userLabel="File's Owner" customClass="NVPreferencesController">
+            <connections>
+                <outlet property="externalTablineCheckbox" destination="W98-yA-bUV" id="P5U-3c-7Hz"/>
+                <outlet property="titlebarTransparentCheckbox" destination="Wsk-l1-Pa6" id="KUs-FS-mdU"/>
+                <outlet property="window" destination="QvC-M9-y7g" id="hf7-gP-WtQ"/>
+            </connections>
+        </customObject>
+        <customObject id="-1" userLabel="First Responder" customClass="FirstResponder"/>
+        <customObject id="-3" userLabel="Application" customClass="NSObject"/>
+        <window title="Preferences" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" restorable="NO" releasedWhenClosed="NO" visibleAtLaunch="NO" frameAutosaveName="" animationBehavior="default" id="QvC-M9-y7g">
+            <windowStyleMask key="styleMask" titled="YES" closable="YES" miniaturizable="YES"/>
+            <windowPositionMask key="initialPositionMask" leftStrut="YES" rightStrut="YES" topStrut="YES" bottomStrut="YES"/>
+            <rect key="contentRect" x="196" y="240" width="480" height="270"/>
+            <rect key="screenRect" x="0.0" y="0.0" width="3008" height="1667"/>
+            <view key="contentView" wantsLayer="YES" id="EiT-Mj-1SZ">
+                <rect key="frame" x="0.0" y="0.0" width="261" height="96"/>
+                <autoresizingMask key="autoresizingMask"/>
+                <subviews>
+                    <button horizontalHuggingPriority="750" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="Wsk-l1-Pa6">
+                        <rect key="frame" x="30" y="39" width="199" height="18"/>
+                        <buttonCell key="cell" type="check" title="Titlebar appears transparent" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="ky6-v0-GQf">
+                            <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                            <font key="font" metaFont="system"/>
+                        </buttonCell>
+                        <connections>
+                            <action selector="toggledTitlebarAppearsTransparent:" target="-2" id="U2M-mh-ve5"/>
+                        </connections>
+                    </button>
+                    <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="cgM-hM-EdN">
+                        <rect key="frame" x="30" y="64" width="97" height="16"/>
+                        <textFieldCell key="cell" lineBreakMode="clipping" title="User Interface" id="OJG-mh-XpS">
+                            <font key="font" textStyle="headline" name=".SFNS-Bold"/>
+                            <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
+                            <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
+                        </textFieldCell>
+                    </textField>
+                    <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="W98-yA-bUV">
+                        <rect key="frame" x="30" y="15" width="120" height="18"/>
+                        <buttonCell key="cell" type="check" title="External tabline" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="EPP-nD-DAx">
+                            <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                            <font key="font" metaFont="system"/>
+                        </buttonCell>
+                        <connections>
+                            <action selector="toggledExternalizeTabline:" target="-2" id="dKO-gH-Z0k"/>
+                        </connections>
+                    </button>
+                </subviews>
+                <constraints>
+                    <constraint firstItem="cgM-hM-EdN" firstAttribute="top" secondItem="EiT-Mj-1SZ" secondAttribute="top" constant="16" id="6h4-k9-vzQ"/>
+                    <constraint firstItem="W98-yA-bUV" firstAttribute="top" secondItem="Wsk-l1-Pa6" secondAttribute="bottom" constant="8" id="a7H-Py-UgI"/>
+                    <constraint firstItem="Wsk-l1-Pa6" firstAttribute="leading" secondItem="EiT-Mj-1SZ" secondAttribute="leading" constant="32" id="ceq-aE-uUb"/>
+                    <constraint firstItem="cgM-hM-EdN" firstAttribute="leading" secondItem="EiT-Mj-1SZ" secondAttribute="leading" constant="32" id="hY4-he-6ii"/>
+                    <constraint firstItem="W98-yA-bUV" firstAttribute="leading" secondItem="EiT-Mj-1SZ" secondAttribute="leading" constant="32" id="kq8-pH-mWa"/>
+                    <constraint firstAttribute="trailing" secondItem="Wsk-l1-Pa6" secondAttribute="trailing" constant="32" id="kym-xn-H2g"/>
+                    <constraint firstAttribute="bottom" secondItem="W98-yA-bUV" secondAttribute="bottom" constant="16" id="l9Z-DY-Zne"/>
+                    <constraint firstItem="Wsk-l1-Pa6" firstAttribute="top" secondItem="cgM-hM-EdN" secondAttribute="bottom" constant="8" id="q2y-aK-PqR"/>
+                </constraints>
+            </view>
+            <point key="canvasLocation" x="139" y="144"/>
+        </window>
+    </objects>
+</document>
