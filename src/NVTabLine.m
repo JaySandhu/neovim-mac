@@ -518,6 +518,8 @@ static NSImage* iconForFileType(NSString *filetype) {
     _leftSeparator.backgroundColor = colorScheme.tabSeparatorColor.CGColor;
     _rightSeparator.backgroundColor = colorScheme.tabSeparatorColor.CGColor;
 
+    closeButton.colorScheme = colorScheme;
+
     if (_isSelected) {
         shapeLayer.fillColor = selectColor;
     } else if (_isHighlighted) {
