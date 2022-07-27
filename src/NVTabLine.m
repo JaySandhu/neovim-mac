@@ -94,36 +94,6 @@ static void animateLayerPath(CAShapeLayer *layer, CGPathRef fromPath, CGPathRef 
     [layer addAnimation:animation forKey:@"path"];
 }
 
-@implementation NVTabTheme
-
-+ (NVTabTheme*)defaultLightTheme {
-    NVTabTheme *theme = [[NVTabTheme alloc] init];
-    theme.tabButtonColor = [NSColor colorWithSRGBRed:0.4 green:0.4 blue:0.4 alpha:1];
-    theme.tabButtonHoverColor = [NSColor colorWithSRGBRed:0.76 green:0.76 blue:0.76 alpha:1];
-    theme.tabButtonHighlightColor = [NSColor colorWithSRGBRed:0.66 green:0.66 blue:0.66 alpha:1];
-    theme.tabSeparatorColor = [NSColor colorWithSRGBRed:0.56 green:0.56 blue:0.56 alpha:1];
-    theme.tabBackgroundColor = [NSColor colorWithSRGBRed:0.92 green:0.92 blue:0.92 alpha:1];
-    theme.selectedTabBackgroundColor = [NSColor colorWithSRGBRed:1 green:1 blue:1 alpha:1];
-    theme.tabHoverColor = [NSColor colorWithSRGBRed:0.96 green:0.96 blue:0.96 alpha:1];
-    theme.tabTitleColor = [NSColor colorWithSRGBRed:0 green:0 blue:0 alpha:0.75];
-    return theme;
-}
-
-+ (NVTabTheme*)defaultDarkTheme {
-    NVTabTheme *theme = [[NVTabTheme alloc] init];
-    theme.tabButtonColor = [NSColor colorWithSRGBRed:1 green:1 blue:1 alpha:1];
-    theme.tabButtonHoverColor = [NSColor colorWithSRGBRed:0.27 green:0.27 blue:0.27 alpha:1];
-    theme.tabButtonHighlightColor = [NSColor colorWithSRGBRed:0.36 green:0.36 blue:0.36 alpha:1];
-    theme.tabSeparatorColor = [NSColor colorWithSRGBRed:0.37 green:0.37 blue:0.37 alpha:1];
-    theme.tabBackgroundColor = [NSColor colorWithSRGBRed:0.13 green:0.13 blue:0.13 alpha:1];
-    theme.selectedTabBackgroundColor = [NSColor colorWithSRGBRed:0.24 green:0.24 blue:0.24 alpha:1];
-    theme.tabHoverColor = [NSColor colorWithSRGBRed:0.20 green:0.20 blue:0.20 alpha:1];
-    theme.tabTitleColor = [NSColor colorWithSRGBRed:1 green:1 blue:1 alpha:1];
-    return theme;
-}
-
-@end
-
 @interface NVTabLine()
 - (void)onTabAddButton:(id)sender;
 - (void)onTabCloseButton:(id)sender;
@@ -153,13 +123,13 @@ static void animateLayerPath(CAShapeLayer *layer, CGPathRef fromPath, CGPathRef 
                    symbolName:(NSString *)symbolName
                  symbolWeight:(NSFontWeight)symbolWeight
                  fadeDuration:(float)fadeDuration
-                        theme:(NVTabTheme *)theme {
+                  colorScheme:(NVColorScheme *)colorScheme {
     self = [super initWithFrame:frameRect];
     self.wantsLayer = YES;
 
     fadeAnimationDuration = fadeDuration;
-    hoverColor = CGColorRetain(theme.tabButtonHoverColor.CGColor);
-    highlightColor = CGColorRetain(theme.tabButtonHighlightColor.CGColor);
+    hoverColor = CGColorRetain(colorScheme.tabButtonHoverColor.CGColor);
+    highlightColor = CGColorRetain(colorScheme.tabButtonHighlightColor.CGColor);
 
     NSRect bounds = [self bounds];
     circlePath = CGPathCreateWithEllipseInRect(bounds, nil);
@@ -178,7 +148,7 @@ static void animateLayerPath(CAShapeLayer *layer, CGPathRef fromPath, CGPathRef 
     imageView = [[NSImageView alloc] initWithFrame:symbolRect];
     imageView.image = [symbol imageWithSymbolConfiguration:config];
     imageView.imageScaling = NSImageScaleProportionallyUpOrDown;
-    imageView.contentTintColor = theme.tabButtonColor;
+    imageView.contentTintColor = colorScheme.tabButtonColor;
 
     [self addSubview:imageView];
     return self;
@@ -312,12 +282,12 @@ static void animateLayerPath(CAShapeLayer *layer, CGPathRef fromPath, CGPathRef 
     }
 }
 
-- (void)setTheme:(NVTabTheme *)theme {
+- (void)setColorScheme:(NVColorScheme *)colorScheme {
     CGColorRelease(hoverColor);
     CGColorRelease(highlightColor);
-    hoverColor = CGColorRetain(theme.tabButtonHoverColor.CGColor);
-    highlightColor = CGColorRetain(theme.tabButtonHighlightColor.CGColor);
-    imageView.contentTintColor = theme.tabButtonColor;
+    hoverColor = CGColorRetain(colorScheme.tabButtonHoverColor.CGColor);
+    highlightColor = CGColorRetain(colorScheme.tabButtonHighlightColor.CGColor);
+    imageView.contentTintColor = colorScheme.tabButtonColor;
 }
 
 @end
@@ -327,13 +297,13 @@ static void animateLayerPath(CAShapeLayer *layer, CGPathRef fromPath, CGPathRef 
 
 @implementation NVTabCloseButton
 
-- (instancetype)initWithTheme:(NVTabTheme *)theme {
+- (instancetype)initWithColorscheme:(NVColorScheme *)colorScheme {
     self = [super initWithFrame:CGRectMake(0, 0, 14, 14)
                      symbolRect:CGRectMake(1, 1.5, 12, 12)
                      symbolName:@"xmark"
                    symbolWeight:NSFontWeightBold
                    fadeDuration:0
-                          theme:theme];
+                    colorScheme:colorScheme];
 
     return self;
 }
@@ -345,13 +315,13 @@ static void animateLayerPath(CAShapeLayer *layer, CGPathRef fromPath, CGPathRef 
 
 @implementation NVTabAddButton
 
-- (instancetype)initWithTheme:(NVTabTheme *)theme {
+- (instancetype)initWithColorscheme:(NVColorScheme *)colorScheme {
     self = [super initWithFrame:CGRectMake(0, 3, 28, 28)
                      symbolRect:CGRectMake(5.5, 6.0, 17, 17)
                      symbolName:@"plus"
                    symbolWeight:NSFontWeightBold
                    fadeDuration:0.33
-                          theme:theme];
+                    colorScheme:colorScheme];
     return self;
 }
 
@@ -471,7 +441,7 @@ static NSArray* alphaMaskGradientLocations(CGFloat intrinsicWidth, CGFloat frame
 
     tabLine = owner;
     _tabpage = tabpage;
-    NVTabTheme *theme = owner.theme;
+    NVColorScheme *colorScheme = owner.colorScheme;
 
     iconLayer = [CALayer layer];
     iconLayer.anchorPoint = CGPointMake(0, 0);
@@ -481,9 +451,9 @@ static NSArray* alphaMaskGradientLocations(CGFloat intrinsicWidth, CGFloat frame
     [self setFiletype:filetype];
 
     titleLabel = [NVTabTitle labelWithString:title];
-    titleLabel.textColor = theme.tabTitleColor;
+    titleLabel.textColor = colorScheme.tabTitleColor;
 
-    closeButton = [[NVTabCloseButton alloc] initWithTheme:theme];
+    closeButton = [[NVTabCloseButton alloc] initWithColorscheme:colorScheme];
     closeButton.action = @selector(onTabCloseButton:);
     closeButton.target = owner;
 
@@ -491,22 +461,22 @@ static NSArray* alphaMaskGradientLocations(CGFloat intrinsicWidth, CGFloat frame
     [self addSubview:closeButton];
 
     background = [CALayer layer];
-    background.backgroundColor = theme.tabBackgroundColor.CGColor;
+    background.backgroundColor = colorScheme.tabBackgroundColor.CGColor;
 
     shapeLayer = [CAShapeLayer layer];
     shapeLayer.opacity = 0;
-    selectColor = CGColorRetain(theme.selectedTabBackgroundColor.CGColor);
-    hoverColor = CGColorRetain(theme.tabHoverColor.CGColor);
+    selectColor = CGColorRetain(colorScheme.tabSelectedColor.CGColor);
+    hoverColor = CGColorRetain(colorScheme.tabHoverColor.CGColor);
 
     CGRect separatorBounds = CGRectMake(0, 7, 1, owner.bounds.size.height - 22);
 
     _leftSeparator = [CALayer layer];
-    _leftSeparator.backgroundColor = theme.tabSeparatorColor.CGColor;
+    _leftSeparator.backgroundColor = colorScheme.tabSeparatorColor.CGColor;
     _leftSeparator.anchorPoint = CGPointMake(0, 0);
     _leftSeparator.bounds = separatorBounds;
 
     _rightSeparator = [CALayer layer];
-    _rightSeparator.backgroundColor = theme.tabSeparatorColor.CGColor;
+    _rightSeparator.backgroundColor = colorScheme.tabSeparatorColor.CGColor;
     _rightSeparator.anchorPoint = CGPointMake(0, 0);
     _rightSeparator.bounds = separatorBounds;
 
@@ -536,17 +506,23 @@ static NSImage* iconForFileType(NSString *filetype) {
     return [NSImage imageNamed:@"vim"];
 }
 
-- (void)setTheme:(NVTabTheme *)theme {
+- (void)setColorScheme:(NVColorScheme *)colorScheme {
     CGColorRelease(selectColor);
     CGColorRelease(hoverColor);
 
-    selectColor = CGColorRetain(theme.selectedTabBackgroundColor.CGColor);
-    hoverColor = CGColorRetain(theme.tabHoverColor.CGColor);
+    selectColor = CGColorRetain(colorScheme.tabSelectedColor.CGColor);
+    hoverColor = CGColorRetain(colorScheme.tabHoverColor.CGColor);
 
-    titleLabel.textColor = theme.tabTitleColor;
-    background.backgroundColor = theme.tabBackgroundColor.CGColor;
-    _leftSeparator.backgroundColor = theme.tabSeparatorColor.CGColor;
-    _rightSeparator.backgroundColor = theme.tabSeparatorColor.CGColor;
+    titleLabel.textColor = colorScheme.tabTitleColor;
+    background.backgroundColor = colorScheme.tabBackgroundColor.CGColor;
+    _leftSeparator.backgroundColor = colorScheme.tabSeparatorColor.CGColor;
+    _rightSeparator.backgroundColor = colorScheme.tabSeparatorColor.CGColor;
+
+    if (_isSelected) {
+        shapeLayer.fillColor = selectColor;
+    } else if (_isHighlighted) {
+        shapeLayer.fillColor = hoverColor;
+    }
 }
 
 - (void)setTitle:(NSString *)title {
@@ -966,30 +942,30 @@ static NVTabLayoutInfo tabLayoutInfo(NSRect frame, NSSize titleSize, bool isSele
 
 - (instancetype)initWithFrame:(NSRect)frame
                      delegate:(id<NVTabLineDelegate>)delegate
-                        theme:(NVTabTheme *)theme {
+                  colorScheme:(NVColorScheme *)colorScheme {
     self = [super initWithFrame:frame];
     self.wantsLayer = YES;
 
     CALayer *layer = [self layer];
-    layer.backgroundColor = theme.tabBackgroundColor.CGColor;
+    layer.backgroundColor = colorScheme.tabBackgroundColor.CGColor;
 
     tabLine = [[NSView alloc] init];
     tabLine.wantsLayer = YES;
 
     CALayer *documentLayer = [tabLine layer];
-    documentLayer.backgroundColor = theme.tabBackgroundColor.CGColor;
+    documentLayer.backgroundColor = colorScheme.tabBackgroundColor.CGColor;
 
     scrollView = [[NVTabLineScrollView alloc] init];
     scrollView.documentView = tabLine;;
     [scrollView setHasVerticalScroller:NO];
     [self addSubview:scrollView];
 
-    tabAddButton = [[NVTabAddButton alloc] initWithTheme:theme];
+    tabAddButton = [[NVTabAddButton alloc] initWithColorscheme:colorScheme];
     tabAddButton.target = self;
     tabAddButton.action = @selector(onTabAddButton:);
     [self addSubview:tabAddButton];
 
-    _theme = theme;
+    _colorScheme = colorScheme;
     _delegate = delegate;
     _tabs = [[NSMutableArray alloc] initWithCapacity:32];
     animationQueue = [[NSMutableArray alloc] initWithCapacity:8];
@@ -1146,15 +1122,15 @@ static inline NVTab* tabHitTest(NSView *tabLine, NSPoint location) {
     [[self window] performWindowDragWithEvent:event];
 }
 
-- (void)setTheme:(NVTabTheme *)theme {
-    _theme = theme;
+- (void)setColorScheme:(NVColorScheme *)colorScheme {
+    _colorScheme = colorScheme;
 
-    self.layer.backgroundColor = theme.tabBackgroundColor.CGColor;
-    tabLine.layer.backgroundColor = theme.tabBackgroundColor.CGColor;
-    tabAddButton.theme = theme;
+    self.layer.backgroundColor = colorScheme.tabBackgroundColor.CGColor;
+    tabLine.layer.backgroundColor = colorScheme.tabBackgroundColor.CGColor;
+    tabAddButton.colorScheme = colorScheme;
 
     for (NVTab *tab in _tabs) {
-        tab.theme = theme;
+        tab.colorScheme = colorScheme;
     }
 }
 

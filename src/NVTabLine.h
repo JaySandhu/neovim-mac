@@ -8,27 +8,12 @@
 //
 
 #import <Cocoa/Cocoa.h>
+#import "NVColorScheme.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
 @class NVTab;
 @class NVTabLine;
-
-@interface NVTabTheme : NSObject
-
-@property (nonatomic) NSColor *tabButtonColor;
-@property (nonatomic) NSColor *tabButtonHoverColor;
-@property (nonatomic) NSColor *tabButtonHighlightColor;
-@property (nonatomic) NSColor *tabSeparatorColor;
-@property (nonatomic) NSColor *tabBackgroundColor;
-@property (nonatomic) NSColor *selectedTabBackgroundColor;
-@property (nonatomic) NSColor *tabHoverColor;
-@property (nonatomic) NSColor *tabTitleColor;
-
-+ (NVTabTheme*)defaultLightTheme;
-+ (NVTabTheme*)defaultDarkTheme;
-
-@end
 
 /// NVTabLine Delegate. Forwards events originating from GUI elements.
 @protocol NVTabLineDelegate
@@ -83,15 +68,15 @@ NS_ASSUME_NONNULL_BEGIN
 @interface NVTabLine : NSView
 
 /// Create a new tabline.
-/// @param frame    The tabline frame.
-/// @param delegate The tabline delegate.
-/// @param theme    The tabline theme.
+/// @param frame        The tabline frame.
+/// @param delegate     The tabline delegate.
+/// @param colorScheme  The colorscheme.
 - (instancetype)initWithFrame:(NSRect)frame
                      delegate:(id<NVTabLineDelegate>)delegate
-                        theme:(NVTabTheme *)theme;
+                  colorScheme:(NVColorScheme *)colorScheme;
 
 /// The tabline theme.
-@property (nonatomic) NVTabTheme *theme;
+@property (nonatomic) NVColorScheme *colorScheme;
 
 /// The currently selected tab.
 @property (nonatomic) NVTab *selectedTab;

@@ -68,3 +68,7 @@ function! neovim_mac#OpenCount(paths) abort
 
     return open
 endfunction
+
+function! neovim_mac#Colorscheme(values) abort
+    call rpcnotify(1, "colorscheme", a:values)
+endfunction

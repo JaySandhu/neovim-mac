@@ -653,6 +653,11 @@ nvim::showtabline ui_controller::get_showtabline() {
     return option_showtabline;
 }
 
+nvim::colorscheme ui_controller::get_colorscheme() {
+    std::lock_guard lock(option_lock);
+    return option_colorscheme;
+}
+
 static inline void set_font_option(std::string &opt_guifont,
                                    const msg::object &value,
                                    window_controller &window,
@@ -873,6 +878,142 @@ void ui_controller::tabline_update(msg::extension selected, msg::array tabs) {
         tabpages.erase(begin, previous_end);
         window.tabline_update();
     }
+}
+
+static int hex_char_to_decimal(char value) {
+    switch (value) {
+        case '0': return 0;
+        case '1': return 1;
+        case '2': return 2;
+        case '3': return 3;
+        case '4': return 4;
+        case '5': return 5;
+        case '6': return 6;
+        case '7': return 7;
+        case '8': return 8;
+        case '9': return 9;
+        case 'a': return 10;
+        case 'b': return 11;
+        case 'c': return 12;
+        case 'd': return 13;
+        case 'e': return 14;
+        case 'f': return 15;
+        case 'A': return 10;
+        case 'B': return 11;
+        case 'C': return 12;
+        case 'D': return 13;
+        case 'E': return 14;
+        case 'F': return 15;
+        default:  return -1;
+    }
+}
+
+static std::optional<int> to_rgb_value(char a, char b) {
+    int d1 = hex_char_to_decimal(a);
+    int d2 = hex_char_to_decimal(b);
+
+    if (d1 == -1 || d2 == -1) {
+        return std::nullopt;
+    }
+
+    return (d1 * 16) + d2;
+}
+
+static std::optional<rgb_color> to_rgb_color(msg::string value) {
+    if (value.size() != 7 || value[0] != '#') {
+        return std::nullopt;
+    }
+
+    auto red = to_rgb_value(value[1], value[2]);
+    auto green = to_rgb_value(value[3], value[4]);
+    auto blue = to_rgb_value(value[5], value[6]);
+
+    if (!red || !green || !blue) {
+        return std::nullopt;
+    }
+
+    return rgb_color(*red, *green, *blue);
+}
+
+static void set_color(rgb_color &color, msg::string value) {
+    if (value.size() == 0) {
+        color = rgb_color(0, rgb_color::default_tag);
+        return;
+    }
+
+    auto rgb = to_rgb_color(value);
+
+    if (!rgb) {
+        return os_log_error(rpc, "Redraw error: Invalid color - "
+                                 "Event=colorscheme_update Color=%.*s",
+                                 (int)value.size(), value.data());
+    }
+
+    color = *rgb;
+}
+
+static void set_appearance(nvim::appearance &app, msg::string value) {
+    if (value == "light") {
+        app = nvim::appearance::light;
+    } else if (value == "dark") {
+        app = nvim::appearance::dark;
+    } else {
+        return os_log_error(rpc, "Redraw error: Invalid appearance value - "
+                                 "Event=colorscheme_update Value=%.*s",
+                                 (int)value.size(), value.data());
+    }
+}
+
+void ui_controller::colorscheme_update(msg::array args) {
+    if (args.size() != 1 || !args[0].is<msg::map>()) {
+        return os_log_error(rpc, "Redraw error: Invalid args - "
+                                 "Event=colorscheme_update Args=%s",
+                                 msg::to_string(args).c_str());
+    }
+
+    auto map = args[0].get<msg::map>();
+    std::lock_guard<unfair_lock> lock(option_lock);
+
+    for (const auto& [k, v] : map) {
+        if (!k.is<msg::string>() || !v.is<msg::string>()) {
+            os_log_error(rpc, "Redraw error: Map type error - "
+                              "Event=colorscheme_update, "
+                              "KeyType=%s, KeyValue=%s, "
+                              "ValueType=%s, Value=%s",
+                              msg::type_string(k).c_str(),
+                              msg::to_string(k).c_str(),
+                              msg::type_string(v).c_str(),
+                              msg::to_string(v).c_str());
+            continue;
+        }
+
+        auto key = k.get<msg::string>();
+        auto value = v.get<msg::string>();
+
+        if (key == "titlebar") {
+            set_color(option_colorscheme.titlebar, value);
+        } else if (key == "tab_button") {
+            set_color(option_colorscheme.tab_button, value);
+        } else if (key == "tab_button_hover") {
+            set_color(option_colorscheme.tab_button_hover, value);
+        } else if (key == "tab_button_highlight") {
+            set_color(option_colorscheme.tab_button_highlight, value);
+        } else if (key == "tab_separator") {
+            set_color(option_colorscheme.tab_separator, value);
+        } else if (key == "tab_background") {
+            set_color(option_colorscheme.tab_background, value);
+        } else if (key == "tab_selected") {
+            set_color(option_colorscheme.tab_selected, value);
+        } else if (key == "tab_hover") {
+            set_color(option_colorscheme.tab_hover, value);
+        } else if (key == "tab_title") {
+            set_color(option_colorscheme.tab_title, value);
+        } else if (key == "appearance") {
+            set_appearance(option_colorscheme.appearance, value);
+        }
+    }
+
+    window.colorscheme_update();
 }
 
 /// Makes a font object from a Vim font string.

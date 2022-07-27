@@ -283,6 +283,11 @@ public:
         return ui.get_showtabline();
     }
 
+    /// Returns the current colorscheme.
+    nvim::colorscheme get_colorscheme() {
+        return ui.get_colorscheme();
+    }
+
     /// The tabline lock. Clients should hold this lock when working with tabs.
     unfair_lock& get_tab_lock() {
         return ui.get_tab_lock();

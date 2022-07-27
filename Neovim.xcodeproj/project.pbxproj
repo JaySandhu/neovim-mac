@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		690C5334289046A9004C99C7 /* NVColorScheme.mm in Sources */ = {isa = PBXBuildFile; fileRef = 690C5333289046A9004C99C7 /* NVColorScheme.mm */; };
 		69208E2B2457142600DBB860 /* NVGridView.mm in Sources */ = {isa = PBXBuildFile; fileRef = 69208E2A2457142600DBB860 /* NVGridView.mm */; };
 		69240E1B242B9854004E0DE0 /* AppDelegate.mm in Sources */ = {isa = PBXBuildFile; fileRef = 69240E1A242B9854004E0DE0 /* AppDelegate.mm */; };
 		69240E1D242B9855004E0DE0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 69240E1C242B9855004E0DE0 /* Assets.xcassets */; };
@@ -84,6 +85,8 @@
 
 /* Begin PBXFileReference section */
 		690A0C5B2498E0D00047E131 /* unfair_lock.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = unfair_lock.hpp; sourceTree = "<group>"; };
+		690C5332289046A9004C99C7 /* NVColorScheme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NVColorScheme.h; sourceTree = "<group>"; };
+		690C5333289046A9004C99C7 /* NVColorScheme.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = NVColorScheme.mm; sourceTree = "<group>"; };
 		69208E292457142600DBB860 /* NVGridView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NVGridView.h; sourceTree = "<group>"; };
 		69208E2A2457142600DBB860 /* NVGridView.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = NVGridView.mm; sourceTree = "<group>"; };
 		69240E16242B9854004E0DE0 /* Neovim.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Neovim.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -204,6 +207,8 @@
 				69208E2A2457142600DBB860 /* NVGridView.mm */,
 				69C320DA2889C01000A6EA0A /* NVTabLine.h */,
 				69C320DB2889C01000A6EA0A /* NVTabLine.m */,
+				690C5332289046A9004C99C7 /* NVColorScheme.h */,
+				690C5333289046A9004C99C7 /* NVColorScheme.mm */,
 				6945BBDE2457282C009ADB03 /* shader_types.hpp */,
 				69E15156244E023900F8AEC7 /* shaders.metal */,
 				69B04DD224B76C10000DF9C4 /* neovim_mac.vim */,
@@ -377,6 +382,7 @@
 				693550E9242CBFE500FB0A94 /* circular_buffer.cpp in Sources */,
 				695F29C324475B7E0020B613 /* font.mm in Sources */,
 				6955FE6624363AD400008191 /* NVWindowController.mm in Sources */,
+				690C5334289046A9004C99C7 /* NVColorScheme.mm in Sources */,
 				69431234243E098B0015C0EA /* ui.cpp in Sources */,
 				6993FAD624BCCECB0022682E /* spawn.cpp in Sources */,
 				6945A1552434E593005D68ED /* neovim.cpp in Sources */,

@@ -409,6 +409,8 @@ void process::on_rpc_notification(msg::array array) {
 
     if (name == "redraw") {
         return ui.redraw(args);
+    } else if (name == "colorscheme") {
+        return ui.colorscheme_update(args);
     } else if (name == "vimenter") {
         return ui.vimenter();
     }

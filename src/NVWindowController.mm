@@ -8,6 +8,7 @@
 //
 
 #import <Carbon/Carbon.h>
+#import "NVColorScheme.h"
 #import "NVGridView.h"
 #import "NVTabLine.h"
 #import "NVWindow.h"
@@ -52,6 +53,7 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
 @implementation NVWindowController {
     NVRenderContextManager *contextManager;
     NVRenderContext *renderContext;
+    NVColorScheme *colorScheme;
     NVGridView *gridView;
     NVTabLine *tabLine;
     NSView *titlebarView;
@@ -117,9 +119,16 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
     self = [super initWithWindow:window];
     nvim.set_controller((__bridge void*)self);
 
+    colorScheme = [NVColorScheme defaultColorSchemeForAppearance:window.effectiveAppearance];
+
+    [NSDistributedNotificationCenter.defaultCenter addObserver:self
+                                                      selector:@selector(systemAppearanceChanged:)
+                                                          name:@"AppleInterfaceThemeChangedNotification"
+                                                        object:nil];
+
     titlebarView = [[NSView alloc] init];
     titlebarView.wantsLayer = YES;
-    titlebarView.layer.backgroundColor = CGColorGetConstantColor(kCGColorWhite);
+    titlebarView.layer.backgroundColor = colorScheme.titleBarColor.CGColor;
 
     uiOptions = {
         .ext_cmdline    = false,
@@ -133,9 +142,7 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
     };
 
     tabs = [NSMutableArray arrayWithCapacity:32];
-
-    NVTabTheme *tabTheme = [NVTabTheme defaultLightTheme];
-    tabLine = [[NVTabLine alloc] initWithFrame:titlebarView.bounds delegate:self theme:tabTheme];
+    tabLine = [[NVTabLine alloc] initWithFrame:titlebarView.bounds delegate:self colorScheme:colorScheme];
     tabLine.translatesAutoresizingMaskIntoConstraints = NO;
 
     return self;
@@ -1536,6 +1543,32 @@ static inline bool shouldShowTabLine(size_t tabsCount, nvim::showtabline showtab
     });
 }
 
+- (void)colorschemeUpdate {
+    nvim::colorscheme nvimColorScheme = nvim.get_colorscheme();
+    NSWindow *window = self.window;
+    NSAppearance *appearance;
+
+    if (nvimColorScheme.appearance == nvim::appearance::light) {
+        appearance = [NSAppearance appearanceNamed:NSAppearanceNameAqua];
+        window.appearance = appearance;
+    } else if (nvimColorScheme.appearance == nvim::appearance::dark) {
+        appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+        window.appearance = appearance;
+    } else {
+        appearance = [NSApp effectiveAppearance];
+    }
+
+    colorScheme = [[NVColorScheme alloc] initWithColorScheme:&nvimColorScheme appearance:appearance];
+    titlebarView.layer.backgroundColor = colorScheme.titleBarColor.CGColor;
+    tabLine.colorScheme = colorScheme;
+}
+
+- (void)systemAppearanceChanged:(NSNotification *)notifcation {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self colorschemeUpdate];
+    });
+}
+
 @end
 
 // nvim::window_controller implementation. Declared in ui.hpp.
@@ -1587,6 +1620,12 @@ void window_controller::showtabline_set() {
 void window_controller::tabline_update() {
     dispatch_async_f(dispatch_get_main_queue(), controller, [](void *context) {
         [(__bridge NVWindowController*)context tabLineUpdate];
+    });
+}
+
+void window_controller::colorscheme_update() {
+    dispatch_async_f(dispatch_get_main_queue(), controller, [](void *context) {
+        [(__bridge NVWindowController*)context colorschemeUpdate];
     });
 }
 

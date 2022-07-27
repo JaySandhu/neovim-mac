@@ -51,6 +51,11 @@ public:
         value |= is_default_bit;
     };
 
+    /// Constructs an rgb_color from a red, green, and blue color component.
+    explicit rgb_color(uint32_t red, uint32_t green, uint32_t blue) {
+        value = (blue << 16) | (green << 8) | red;
+    }
+
     /// True if the default flag was set, otherwise false.
     bool is_default() const {
         return value & is_default_bit;
@@ -85,6 +90,25 @@ public:
     operator uint32_t() const {
         return value;
     }
+};
+
+enum class appearance {
+    system,
+    light,
+    dark
+};
+
+struct colorscheme {
+    nvim::appearance appearance     = nvim::appearance::system;
+    rgb_color titlebar              = rgb_color(0, rgb_color::default_tag);
+    rgb_color tab_button            = rgb_color(0, rgb_color::default_tag);
+    rgb_color tab_button_hover      = rgb_color(0, rgb_color::default_tag);
+    rgb_color tab_button_highlight  = rgb_color(0, rgb_color::default_tag);
+    rgb_color tab_separator         = rgb_color(0, rgb_color::default_tag);
+    rgb_color tab_background        = rgb_color(0, rgb_color::default_tag);
+    rgb_color tab_selected          = rgb_color(0, rgb_color::default_tag);
+    rgb_color tab_hover             = rgb_color(0, rgb_color::default_tag);
+    rgb_color tab_title             = rgb_color(0, rgb_color::default_tag);
 };
 
 enum class cursor_shape : uint8_t {
@@ -546,6 +570,8 @@ public:
 
     /// Called when the externalized tabline should be updated.
     void tabline_update();
+
+    void colorscheme_update();
 };
 
 /// Responsible for handling Neovim UI events.
@@ -576,6 +602,7 @@ private:
     std::string option_title;
     std::string option_guifont;
     showtabline option_showtabline;
+    colorscheme option_colorscheme;
     ui_options ui_opts;
 
     unfair_lock tab_lock;
@@ -702,7 +729,10 @@ public:
     std::string get_guifont();
 
     /// Returns the showtabline option.
-    showtabline get_showtabline();
+    nvim::showtabline get_showtabline();
+
+    /// Returns the current colorscheme.
+    nvim::colorscheme get_colorscheme();
 
     /// The tabline lock. Clients should hold this lock when working with tabs.
     unfair_lock& get_tab_lock() {
@@ -730,6 +760,9 @@ public:
     /// Handle a Neovim RPC redraw notification.
     /// @param events The paramters of the RPC notification.
     void redraw(msg::array events);
+
+    /// Handle a colorscheme update.
+    void colorscheme_update(msg::array args);
 };
 
 /// Describes a user selected font.
