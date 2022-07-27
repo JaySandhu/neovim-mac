@@ -332,6 +332,7 @@ static void animateLayerPath(CAShapeLayer *layer, CGPathRef fromPath, CGPathRef 
 
 @implementation NVTabTitle {
     CAGradientLayer *alphaMask;
+    NSRect maxFrame;
     NSRect visualFrame;
 }
 
@@ -368,6 +369,7 @@ static NSArray* alphaMaskGradientLocations(CGFloat intrinsicWidth, CGFloat frame
 - (void)setFrame:(NSRect)frame {
     CGFloat intrinsicWidth = self.intrinsicContentSize.width;
 
+    maxFrame = frame;
     visualFrame = frame;
     visualFrame.size.width = MIN(frame.size.width, intrinsicWidth);
 
@@ -381,6 +383,11 @@ static NSArray* alphaMaskGradientLocations(CGFloat intrinsicWidth, CGFloat frame
     alphaMask.bounds = self.layer.bounds;
     alphaMask.locations = alphaMaskGradientLocations(intrinsicWidth, frame.size.width);
     [CATransaction commit];
+}
+
+- (void)setStringValue:(NSString *)stringValue {
+    [super setStringValue:stringValue];
+    [self setFrame:maxFrame];
 }
 
 - (NSRect)frame {
