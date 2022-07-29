@@ -1469,11 +1469,12 @@ static inline bool shouldShowTabLine(size_t tabsCount, nvim::showtabline showtab
 
     for (size_t index=0; index<tabCount; ++index) {
         auto tabpage = tabpages[index];
+        NVTab *tab = (__bridge NVTab*)tabpage->nvtab;
 
-        if (!tabpage->nvtab) {
+        if (!tab) {
             NSString *title = NSStringFromStringView(tabpage->name);
             NSString *filetype = NSStringFromStringView(tabpage->filetype);
-            NVTab *tab = [[NVTab alloc] initWithTitle:title filetype:filetype tabpage:tabpage tabLine:tabLine];
+            tab = [[NVTab alloc] initWithTitle:title filetype:filetype tabpage:tabpage tabLine:tabLine];
             tabpage->nvtab = (__bridge void*)tab;
 
             if (shouldAnimate) {
@@ -1481,7 +1482,7 @@ static inline bool shouldShowTabLine(size_t tabsCount, nvim::showtabline showtab
             }
         }
 
-        [tabs addObject:(__bridge NVTab*)tabpage->nvtab];
+        [tabs addObject:tab];
     }
 
     if (shouldAnimate) {
