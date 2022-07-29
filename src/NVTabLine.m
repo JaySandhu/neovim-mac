@@ -1522,6 +1522,7 @@ static void layersSetHidden(NSArray<CALayer*> *layers, bool hidden, bool newTran
 }
 
 - (void)animateCloseTab:(NVTab *)tab
+                atIndex:(NSUInteger)index
                duration:(CGFloat)duration
          timingFunction:(CAMediaTimingFunction *)timingFunction {
     [CATransaction begin];
@@ -1529,8 +1530,6 @@ static void layersSetHidden(NSArray<CALayer*> *layers, bool hidden, bool newTran
 
     NSArray<CALayer*> *tabBackgrounds = tabsBackgroundLayers(_tabs);
     layersSetHidden(tabBackgrounds, true, false);
-
-    unsigned long index = [_tabs indexOfObject:tab];
     [_tabs removeObjectAtIndex:index];
 
     unsigned long tabsCount = _tabs.count;
@@ -1575,7 +1574,14 @@ static void layersSetHidden(NSArray<CALayer*> *layers, bool hidden, bool newTran
 
 - (void)animateCloseTab:(NVTab *)tab {
     [self queueAnimation:^(NVTabLine *tabLine) {
+        NSUInteger index = [tabLine->_tabs indexOfObjectIdenticalTo:tab];
+
+        if (index == NSNotFound) {
+            return [tabLine didFinishAnimation];
+        }
+
         [tabLine animateCloseTab:tab
+                         atIndex:index
                         duration:0.2
                   timingFunction:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseIn]];
     }];
