@@ -18,6 +18,9 @@
 #include "neovim.hpp"
 #include "spawn.hpp"
 
+#define CTRL_S "\x13"
+#define CTRL_V "\x16"
+
 namespace nvim {
 
 // RPC implementation strategy
@@ -466,35 +469,35 @@ static mode to_mode(std::string_view shortname) {
     memcpy(&val, shortname.data(), shortname.size());
 
     switch (val) {
-        case constant("n"):        return mode::normal;
-        case constant("niI"):      return mode::normal_ctrli_insert;
-        case constant("niR"):      return mode::normal_ctrli_replace;
-        case constant("niV"):      return mode::normal_ctrli_virtual_replace;
-        case constant("no"):       return mode::operator_pending;
-        case constant("nov"):      return mode::operator_pending_forced_char;
-        case constant("noV"):      return mode::operator_pending_forced_line;
-        case constant("noCTRL-V"): return mode::operator_pending_forced_block;
-        case constant("v"):        return mode::visual_char;
-        case constant("V"):        return mode::visual_line;
-        case constant("CTRL-V"):   return mode::visual_block;
-        case constant("s"):        return mode::select_char;
-        case constant("S"):        return mode::select_line;
-        case constant("CTRL-S"):   return mode::select_block;
-        case constant("i"):        return mode::insert;
-        case constant("ic"):       return mode::insert_completion;
-        case constant("ix"):       return mode::insert_completion_ctrlx;
-        case constant("R"):        return mode::replace;
-        case constant("Rc"):       return mode::replace_completion;
-        case constant("Rx"):       return mode::replace_completion_ctrlx;
-        case constant("Rv"):       return mode::replace_virtual;
-        case constant("c"):        return mode::command_line;
-        case constant("cv"):       return mode::ex_mode_vim;
-        case constant("ce"):       return mode::ex_mode;
-        case constant("r"):        return mode::prompt_enter;
-        case constant("rm"):       return mode::prompt_more;
-        case constant("r?"):       return mode::prompt_confirm;
-        case constant("!"):        return mode::shell;
-        case constant("t"):        return mode::terminal;
+        case constant("n"):         return mode::normal;
+        case constant("niI"):       return mode::normal_ctrli_insert;
+        case constant("niR"):       return mode::normal_ctrli_replace;
+        case constant("niV"):       return mode::normal_ctrli_virtual_replace;
+        case constant("no"):        return mode::operator_pending;
+        case constant("nov"):       return mode::operator_pending_forced_char;
+        case constant("noV"):       return mode::operator_pending_forced_line;
+        case constant("no" CTRL_V): return mode::operator_pending_forced_block;
+        case constant("v"):         return mode::visual_char;
+        case constant("V"):         return mode::visual_line;
+        case constant(CTRL_V):      return mode::visual_block;
+        case constant("s"):         return mode::select_char;
+        case constant("S"):         return mode::select_line;
+        case constant(CTRL_S):      return mode::select_block;
+        case constant("i"):         return mode::insert;
+        case constant("ic"):        return mode::insert_completion;
+        case constant("ix"):        return mode::insert_completion_ctrlx;
+        case constant("R"):         return mode::replace;
+        case constant("Rc"):        return mode::replace_completion;
+        case constant("Rx"):        return mode::replace_completion_ctrlx;
+        case constant("Rv"):        return mode::replace_virtual;
+        case constant("c"):         return mode::command_line;
+        case constant("cv"):        return mode::ex_mode_vim;
+        case constant("ce"):        return mode::ex_mode;
+        case constant("r"):         return mode::prompt_enter;
+        case constant("rm"):        return mode::prompt_more;
+        case constant("r?"):        return mode::prompt_confirm;
+        case constant("!"):         return mode::shell;
+        case constant("t"):         return mode::terminal;
     }
 
     return mode::unknown;
