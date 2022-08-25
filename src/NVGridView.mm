@@ -550,7 +550,7 @@ static void blinkCursorToggleOn(void *context) {
     desc.colorAttachments[0].texture = [drawable texture];
     desc.colorAttachments[0].clearColor = MTLClearColorMake(1.0, 1.0, 1.0, 1.0);
     desc.colorAttachments[0].loadAction = MTLLoadActionClear;
-    desc.colorAttachments[0].storeAction = MTLStoreActionDontCare;
+    desc.colorAttachments[0].storeAction = MTLStoreActionStore;
 
     id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
     id<MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:desc];
