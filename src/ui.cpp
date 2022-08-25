@@ -312,8 +312,9 @@ void ui_controller::grid_line(size_t grid_id, size_t row,
             }
             
             nvim::cell *left = cell - 1;
-            cell->attrs = left->attrs;
             left->attrs.flags |= cell_attributes::doublewidth;
+            cell->attrs = left->attrs;
+            cell->size = 0;
 
             // Double width chars never repeat.
             cell += 1;
