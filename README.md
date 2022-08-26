@@ -1,4 +1,4 @@
-<img align="left" src="https://i.postimg.cc/Fz9HWfbG/icon-128x128.png">
+<img align="left" src="https://i.postimg.cc/XNcvqZp4/icon-128x128.png">
 
 # Neovim for macOS
 
