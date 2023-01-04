@@ -355,6 +355,13 @@ static inline bool is_response(const msg::array &array) {
            array[0].get<msg::integer>() == 1;
 }
 
+static inline bool is_request(const msg::array &array) {
+    return array.size() == 4 &&
+           array[0].is<msg::integer>() &&
+           array[1].is<msg::integer>() &&
+           array[0].get<msg::integer>() == 0;
+}
+
 void process::on_rpc_message(const msg::object &obj) {
     if (obj.is<msg::array>()) {
         msg::array array = obj.get<msg::array>();
@@ -363,6 +370,8 @@ void process::on_rpc_message(const msg::object &obj) {
             return on_rpc_notification(array);
         } else if (is_response(array)) {
             return on_rpc_response(array);
+        } else if (is_request(array)) {
+            return on_rpc_request(array);
         }
     }
 
@@ -424,6 +433,16 @@ void process::on_rpc_notification(msg::array array) {
                 msg::to_string(args).c_str());
 }
 
+void process::on_rpc_request(msg::array array) {
+    uint32_t msgid = array[1].get<msg::integer>().as<uint32_t>();
+    msg::string name = array[2].get<msg::string>();
+    msg::array args = array[3].get<msg::array>();
+
+    rpc_respond(msgid, "Unknown method", nullptr);
+    os_log_info(rpc, "Unhanled request - Name=%.*s, Args=%s",
+                (int)std::min(name.size(), 128ul), name.data(),
+                msg::to_string(args).c_str());
+}
 
 template<typename ...Args>
 void process::rpc_request(uint32_t msgid,
@@ -436,6 +455,23 @@ void process::rpc_request(uint32_t msgid,
     packer.pack_string(method);
     packer.start_array(sizeof...(Args));
     (packer.pack(args), ...);
+
+    if (write_state == dispatch_source_state::suspended) {
+        dispatch_resume(write_source);
+        write_state = dispatch_source_state::resumed;
+    }
+}
+
+template<typename Error, typename Response>
+void process::rpc_respond(uint32_t msgid,
+                          const Error &error, const Response &response) {
+    std::lock_guard lock(write_lock);
+
+    packer.start_array(4);
+    packer.pack_uint64(1);
+    packer.pack_uint64(msgid);
+    packer.pack(error);
+    packer.pack(response);
 
     if (write_state == dispatch_source_state::suspended) {
         dispatch_resume(write_source);

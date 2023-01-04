@@ -247,10 +247,14 @@ private:
 
     void on_rpc_message(const msg::object &obj);
     void on_rpc_response(msg::array obj);
+    void on_rpc_request(msg::array obj);
     void on_rpc_notification(msg::array obj);
 
     template<typename ...Args>
     void rpc_request(uint32_t id, std::string_view method, const Args& ...args);
+
+    template<typename Error, typename Response>
+    void rpc_respond(uint32_t id, const Error &err, const Response &res);
 
 public:
     process();
