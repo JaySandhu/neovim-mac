@@ -661,7 +661,9 @@ public:
     void pack(const A &val) {
         // Overloading on these types would be a mess.
         // So we're doing this instead.
-        if constexpr (std::is_same_v<A, boolean>) {
+        if constexpr (std::is_same_v<A, std::nullptr_t>) {
+            pack_null();
+        } else if constexpr (std::is_same_v<A, boolean>) {
             pack_bool(val);
         } else if constexpr (std::is_floating_point_v<A>) {
             pack_float64(val);
