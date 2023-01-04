@@ -86,6 +86,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		69019FB02965D493008B3582 /* version.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = version.h; sourceTree = "<group>"; };
 		690A0C5B2498E0D00047E131 /* unfair_lock.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = unfair_lock.hpp; sourceTree = "<group>"; };
 		690C5332289046A9004C99C7 /* NVColorScheme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NVColorScheme.h; sourceTree = "<group>"; };
 		690C5333289046A9004C99C7 /* NVColorScheme.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = NVColorScheme.mm; sourceTree = "<group>"; };
@@ -202,6 +203,7 @@
 				69D42C4B244611AA0006FEF3 /* log.h */,
 				6945A1542434E593005D68ED /* neovim.hpp */,
 				6945A1532434E593005D68ED /* neovim.cpp */,
+				69019FB02965D493008B3582 /* version.h */,
 				69FB837B24A0F370008CCED1 /* NVRenderContext.h */,
 				69FB837C24A0F370008CCED1 /* NVRenderContext.mm */,
 				69C320D728897B7600A6EA0A /* NVWindow.h */,
