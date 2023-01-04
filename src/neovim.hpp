@@ -240,6 +240,8 @@ private:
     void io_error();
     void io_cancel();
 
+    void ui_attach_request(size_t width, size_t height, ui_options options);
+
     uint32_t store_handler(response_handler &&handler);
     uint32_t store_handler(dispatch_time_t timeout, response_handler &&handler);
 

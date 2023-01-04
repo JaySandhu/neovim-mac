@@ -17,6 +17,7 @@
 #include "log.h"
 #include "neovim.hpp"
 #include "spawn.hpp"
+#include "version.h"
 
 #define CTRL_S "\x13"
 #define CTRL_V "\x16"
@@ -553,36 +554,46 @@ void process::set_controller(window_controller window) {
     ui.window = window;
 }
 
-static std::array<std::pair<msg::string, bool>, 8>
-make_attach_otpions(ui_options options) {
-    return {{
-        {"ext_cmdline",     options.ext_cmdline},
-        {"ext_hlstate",     options.ext_hlstate},
-        {"ext_linegrid",    options.ext_linegrid},
-        {"ext_messages",    options.ext_messages},
-        {"ext_multigrid",   options.ext_multigrid},
-        {"ext_popupmenu",   options.ext_popupmenu},
-        {"ext_tabline",     options.ext_tabline},
-        {"ext_termcolors",  options.ext_termcolors}
+void process::ui_attach_request(size_t width, size_t height, ui_options opts) {
+    std::array<std::pair<msg::string, int>, 2> version{{
+        {"major", NEOVIM_MAC_MAJOR_VERSION},
+        {"minor", NEOVIM_MAC_MINOR_VERSION}
     }};
+
+    std::array<std::pair<msg::string, msg::string>, 0> methods;
+
+    std::array<std::pair<msg::string, msg::string>, 2> attributes{{
+        {"website", "https://github.com/JaySandhu/neovim-mac"},
+        {"license", "MIT"}
+    }};
+
+    rpc_request(null_msgid, "nvim_set_client_info",
+                "Neovim Mac", version, "ui", methods, attributes);
+
+    std::array<std::pair<msg::string, bool>, 8> options{{
+        {"ext_cmdline",     opts.ext_cmdline},
+        {"ext_hlstate",     opts.ext_hlstate},
+        {"ext_linegrid",    opts.ext_linegrid},
+        {"ext_messages",    opts.ext_messages},
+        {"ext_multigrid",   opts.ext_multigrid},
+        {"ext_popupmenu",   opts.ext_popupmenu},
+        {"ext_tabline",     opts.ext_tabline},
+        {"ext_termcolors",  opts.ext_termcolors}
+    }};
+
+    rpc_request(null_msgid, "nvim_ui_attach", width, height, options);
 }
 
 void process::ui_attach(size_t width, size_t height, ui_options options) {
     ui.signal_on_flush(semaphore);
-    rpc_request(null_msgid, "nvim_ui_attach",
-                width, height, make_attach_otpions(options));
+    ui_attach_request(width, height, options);
     dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
 }
 
 void process::ui_attach_wait(size_t width, size_t height,
                              ui_options options, dispatch_time_t timeout) {
     ui.signal_on_entered_flush(semaphore);
-
-    rpc_request(null_msgid, "nvim_command",
-                "autocmd VimEnter * call rpcnotify(1, 'vimenter')");
-
-    rpc_request(null_msgid, "nvim_ui_attach",
-                width, height, make_attach_otpions(options));
+    ui_attach_request(width, height, options);
 
     if (!dispatch_semaphore_wait(semaphore, timeout)) {
         return;
