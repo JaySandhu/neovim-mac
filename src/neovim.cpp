@@ -14,6 +14,7 @@
 #include <limits>
 #include <thread>
 
+#include "clipboard.hpp"
 #include "log.h"
 #include "neovim.hpp"
 #include "spawn.hpp"
@@ -437,6 +438,14 @@ void process::on_rpc_request(msg::array array) {
     uint32_t msgid = array[1].get<msg::integer>().as<uint32_t>();
     msg::string name = array[2].get<msg::string>();
     msg::array args = array[3].get<msg::array>();
+
+    if (name == "clipboard_set") {
+        clipboard_set(args);
+        return rpc_respond(msgid, nullptr, nullptr);
+    } else if (name == "clipboard_get") {
+        auto data = clipboard_get();
+        return rpc_respond(msgid, nullptr, data);
+    }
 
     rpc_respond(msgid, "Unknown method", nullptr);
     os_log_info(rpc, "Unhanled request - Name=%.*s, Args=%s",

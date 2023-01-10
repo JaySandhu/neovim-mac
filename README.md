@@ -23,7 +23,6 @@ A fast, minimal, Neovim GUI for macOS.
 ![screenshot 4](https://i.postimg.cc/BQz16gB0/screenshot-light-tabs.png)
 
 ## Color Scheme Support 
-
 Neovim for macOS comes with a light and dark theme. By default, a theme
 will be chosen in accordance to your system appearance settings. The colors of
 GUI elements can be further customized via the `neovim_mac#Colorscheme()`
@@ -54,25 +53,30 @@ To set the selected tab color to red:
 ```
 
 ## Building from Source
-Neovim for macOS uses a forked version of
-[Neovim](https://github.com/JaySandhu/neovim/tree/release-0.4-patched) which adds:
- * Native clipboard support (https://github.com/neovim/neovim/pull/12452).
- * ~~A mousescroll option~~ (https://github.com/neovim/neovim/pull/12355 - Merged).
- * ~~Scrolling fixes~~ (https://github.com/neovim/neovim/pull/12356 - Merged).
-
-Hopefully these changes will eventually be accepted into Neovim. Until then,
-we'll need to build our modified version from source, so before we begin, ensure you have the
-[build prerequisites](https://github.com/neovim/neovim/wiki/Building-Neovim#build-prerequisites).
-After that, building is as simple as:
+1. Clone the repository and change working directories.
 
 ```
 git clone https://github.com/JaySandhu/neovim-mac.git
 cd neovim-mac
-./build_nvim.sh
+```
+
+2. Build Neovim. 
+
+Ensure you have the required [build dependencies](https://github.com/neovim/neovim/wiki/Building-Neovim#macos),
+then run the build script. The build script accepts an optional [release tag](https://github.com/neovim/neovim/tags)
+argument, if none is provided, it defaults to `stable`.
+
+```
+./build_nvim.sh {release_tag}
+```
+
+3. Build the app.
+
+```
 xcodebuild -configuration Release -arch {x86_64 or arm64}
 ```
 
-If everything went as planned, you'll find Neovim.app in build/release.
+If everything went as planned, you'll find Neovim.app in `build/release`.
 
 ## Credits
  * https://github.com/vim - For Vim.
@@ -80,7 +84,6 @@ If everything went as planned, you'll find Neovim.app in build/release.
  * https://github.com/jasonlong - For the Neovim logo.
 
 ## License
-
 [![License](http://img.shields.io/:license-mit-blue.svg?style=flat-square)](http://badges.mit-license.org)
 
  * [MIT License](https://mit-license.org/).

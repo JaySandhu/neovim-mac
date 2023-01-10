@@ -9,14 +9,10 @@
 #
 # ------------------------------------------------------------------------------
 #
-# Neovim build script.
+# Neovim Build Script
 #
-# Builds our Neovim fork which includes a few UI related patches.
-# Available at: https://github.com/JaySandhu/neovim/tree/release-0.4-patched
-# Hopefully we can get these changes merged so we can drop our fork.
-#
-# The build prerequisites are the same as Neovim.
-# See: https://github.com/neovim/neovim/wiki/Building-Neovim#macos
+# Build Prerequisites:
+# https://github.com/neovim/neovim/wiki/Building-Neovim#macos
 #
 # Builds Neovim and its dependencies in build/neovim. Installs in build/nvim.
 #
@@ -32,7 +28,7 @@ mkdir -p build
 cd build
 
 if [ ! -d "neovim" ]; then
-    git clone --depth 1 "https://github.com/JaySandhu/neovim.git" -b "release-0.7-patched"
+    git clone --depth 1 --branch ${1-"stable"} "https://github.com/neovim/neovim.git"
 fi
 
 cd neovim
@@ -63,3 +59,4 @@ done
 
 echo "Done"
 popd
+
