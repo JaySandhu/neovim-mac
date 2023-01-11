@@ -822,6 +822,7 @@ static tabpage* get_tabpage(std::unordered_map<int, tabpage> &tabpage_map,
 
 void ui_controller::tabline_update(msg::extension selected, msg::array tabs) {
     size_t previous_tabs_count = tabpages.size();
+    auto previous_tabpage_selected = tabpage_selected;
     bool have_changes = false;
 
     for (auto &kv : tabpage_map) {
@@ -873,7 +874,8 @@ void ui_controller::tabline_update(msg::extension selected, msg::array tabs) {
     auto previous_end = begin + previous_tabs_count;
     auto end = tabpages.end();
 
-    if (!have_changes && std::equal(begin, previous_end, previous_end, end)) {
+    if (!have_changes && previous_tabpage_selected == tabpage_selected &&
+        std::equal(begin, previous_end, previous_end, end)) {
         tabpages.erase(previous_end, end);
     } else {
         tabpages.erase(begin, previous_end);
