@@ -1261,8 +1261,8 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
 }
 
 // MacVim opens files when they're drag and dropped into the window, the usual
-// behavior on macOS is to paste the file path. We diverge with MacVim here and
-// paste the path. This could be user configurable in the future.
+// behavior on macOS is to paste the file path. Both are useful, by default we
+// paste the file path, on option + drag we open the file.
 - (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
     NSPasteboard *pasteboard = [sender draggingPasteboard];
     NSArray<NSURL*> *urls = [pasteboard readObjectsForClasses:@[[NSURL class]] options:nil];
@@ -1273,11 +1273,20 @@ static std::string joinURLs(NSArray<NSURL*> *urls, char delim) {
 
     nvim::mode mode = nvim.get_mode();
 
-    if (is_busy(mode) || is_prompt(mode)) {
+    if (is_busy(mode) || is_prompt(mode) || is_ex_mode(mode)) {
         return NO;
     }
 
-    if (is_terminal_mode(mode) || is_command_line_mode(mode) || is_ex_mode(mode)) {
+    constexpr NSDragOperation copyMask = (NSDragOperationCopy | NSDragOperationLink);
+    NSDragOperation dragOperation = [sender draggingSourceOperationMask] & copyMask;
+
+    if (dragOperation == NSDragOperationCopy) {
+        nvim.feedkeys(CTRL_BACKSLASH CTRL_N);
+        nvim.open_tabs(URLPaths(urls));
+        return YES;
+    }
+
+    if (is_terminal_mode(mode) || is_command_line_mode(mode)) {
         std::string filenames = joinURLs(urls, ' ');
         nvim.paste(std::string_view(filenames.data(), filenames.size() - 1));
         return YES;
