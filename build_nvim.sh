@@ -11,6 +11,9 @@
 #
 # Neovim Build Script
 #
+# Syntax: download_nvim.sh {tag}
+# Where tag is a Neovim release tag. If no tag is provided defaults to stable.
+#
 # Build Prerequisites:
 # https://github.com/neovim/neovim/wiki/Building-Neovim#macos
 #

@@ -311,6 +311,7 @@
 				69CB6DEF24AB96600075229B /* CopyFiles */,
 				69B04DD324B76C43000DF9C4 /* CopyFiles */,
 				69019FB62966142D008B3582 /* CopyFiles */,
+				69B2C3F6296DE8CD0031B353 /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -400,6 +401,26 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		69B2C3F6296DE8CD0031B353 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "find \"$CONFIGURATION_BUILD_DIR/Neovim.app/Contents\" -maxdepth 1 -empty -type d -delete\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		69240E12242B9854004E0DE0 /* Sources */ = {

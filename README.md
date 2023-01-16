@@ -60,20 +60,31 @@ git clone https://github.com/JaySandhu/neovim-mac.git
 cd neovim-mac
 ```
 
-2. Build Neovim. 
+2. Build or download Neovim. 
 
-Ensure you have the required [build dependencies](https://github.com/neovim/neovim/wiki/Building-Neovim#macos),
-then run the build script. The build script accepts an optional [release tag](https://github.com/neovim/neovim/tags)
-argument, if none is provided, it defaults to `stable`.
+To build Neovim from source, ensure you have the required 
+[build dependencies](https://github.com/neovim/neovim/wiki/Building-Neovim#macos),
+then run the build script: 
 
 ```
 ./build_nvim.sh {release_tag}
 ```
 
+Alternatively, you can download a pre-built Neovim release:
+
+```
+./download_nvim.sh {release_tag}
+```
+
+Both the build script and the download script accept an optional [release
+tag](https://github.com/neovim/neovim/tags) argument (e.g. `v0.8.0`, `nightly`,
+`stable`). If no release is specified, the scripts default to `stable`. Neovim
+versions `v0.8.0` and newer supported.
+
 3. Build the app.
 
 ```
-xcodebuild -configuration Release -arch {x86_64 or arm64}
+xcodebuild -configuration Release
 ```
 
 If everything went as planned, you'll find Neovim.app in `build/release`.
