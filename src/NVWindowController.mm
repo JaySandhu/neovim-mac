@@ -1166,7 +1166,7 @@ static inline bool canSave(nvim::process &nvim) {
     } else if (is_visual_mode(mode)) {
         nvim.feedkeys("\"_dP");
     } else if (is_insert_mode(mode) || is_replace_mode(mode)) {
-        nvim.feedkeys(CTRL_O "\"+gP");
+        nvim.feedkeys(CTRL_R CTRL_O "+");
     } else if (is_select_mode(mode)) {
         nvim.feedkeys(CTRL_O "\"_dP");
     } else if (is_operator_pending(mode)) {
