@@ -638,6 +638,10 @@ void process::ui_attach(size_t width, size_t height, ui_options options) {
 void process::ui_attach_wait(size_t width, size_t height,
                              ui_options options, dispatch_time_t timeout) {
     ui.signal_on_entered_flush(semaphore);
+
+    rpc_request(null_msgid, "nvim_command",
+                "autocmd VimEnter * call rpcnotify(1, 'vimenter')");
+
     ui_attach_request(width, height, options);
 
     if (!dispatch_semaphore_wait(semaphore, timeout)) {
