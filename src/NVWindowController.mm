@@ -804,9 +804,6 @@ static inline bool pointInGrid(nvim::grid_point point, nvim::grid_size size) {
     }
 
     NSPoint windowLocation = [event locationInWindow];
-    if (!NSPointInRect(windowLocation, self.window.contentLayoutRect)) {
-        return;
-    }
     nvim::grid_point location = [gridView cellLocation:windowLocation clampTo:lastGridSize];
     nvim::grid_point &lastLocation = lastMouseLocation[button];
 
