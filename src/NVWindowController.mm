@@ -36,6 +36,14 @@ enum MouseButton {
     MouseButtonOther
 };
 
+struct MouseEvent {
+    nvim::grid_point location;
+    NSEventModifierFlags modifiers;
+    bool isDragging = false;
+};
+
+static void handleMouseDragEvents(void *context);
+
 static inline std::string_view buttonName(MouseButton button) {
     static constexpr std::string_view names[] = {
         "left",
@@ -69,7 +77,10 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
     nvim::showtabline showTabLineOption;
     nvim::ui_options uiOptions;
     nvim::grid_size lastGridSize;
-    nvim::grid_point lastMouseLocation[3];
+
+    dispatch_source_t mouseTimer;
+    int64_t mouseTimerRunningCount;
+    MouseEvent mouseEvents[3];
 
     CGFloat scrollingDeltaX;
     CGFloat scrollingDeltaY;
@@ -79,6 +90,14 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
     BOOL isOpen;
     BOOL isAlive;
     uint64_t isLiveResizing;
+}
+
+- (void)dealloc {
+    if (mouseTimerRunningCount == 0) {
+        dispatch_resume(mouseTimer);
+    }
+
+    dispatch_cancel(mouseTimer);
 }
 
 + (NSArray<NVWindowController*>*)windows {
@@ -149,6 +168,13 @@ static NSMutableArray<NVWindowController*> *neovimWindows = [[NSMutableArray all
         tabLine = [[NVTabLine alloc] initWithFrame:titlebarView.bounds delegate:self colorScheme:colorScheme];
         tabLine.translatesAutoresizingMaskIntoConstraints = NO;
     }
+
+    mouseTimerRunningCount = 0;
+    mouseTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+
+    dispatch_set_context(mouseTimer, (__bridge void*)self);
+    dispatch_source_set_event_handler_f(mouseTimer, handleMouseDragEvents);
+    dispatch_source_set_timer(mouseTimer, DISPATCH_TIME_NOW, NSEC_PER_SEC / 120, 1 * NSEC_PER_MSEC);
 
     return self;
 }
@@ -785,43 +811,70 @@ static inline bool pointInGrid(nvim::grid_point point, nvim::grid_size size) {
            point.column >= 0 && point.column < size.width;
 }
 
+static void handleMouseDragEvents(void *context) {
+    NVWindowController *self = (__bridge NVWindowController*)context;
+
+    for (int i=0; i<3; ++i) {
+        MouseButton button = (MouseButton)i;
+        MouseEvent &event = self->mouseEvents[button];
+
+        if (!event.isDragging) {
+            continue;
+        }
+
+        input_modifiers modifiers = input_modifiers(event.modifiers);
+        self->nvim.input_mouse(buttonName(button), "drag", modifiers, event.location.row, event.location.column);
+    }
+}
+
 - (void)mouseDown:(NSEvent *)event button:(MouseButton)button {
+    MouseEvent &mouseEvent = mouseEvents[button];
     nvim::grid_point location = [gridView cellLocation:event.locationInWindow];
 
     if (!pointInGrid(location, lastGridSize)) {
-        lastMouseLocation[button] = CellNotFound;
+        mouseEvent.location = CellNotFound;
         return;
     }
 
-    lastMouseLocation[button] = location;
-    input_modifiers modifiers = input_modifiers(event.modifierFlags);
+    NSEventModifierFlags modifierFlags = [event modifierFlags];
+    mouseEvent.location = location;
+    mouseEvent.modifiers = modifierFlags;
+    mouseEvent.isDragging = false;
+
+    input_modifiers modifiers = input_modifiers(modifierFlags);
     nvim.input_mouse(buttonName(button), "press", modifiers, location.row, location.column);
 }
 
 - (void)mouseDragged:(NSEvent *)event button:(MouseButton)button {
-    if (lastMouseLocation[button] == CellNotFound) {
+    MouseEvent &mouseEvent = mouseEvents[button];
+
+    if (mouseEvent.location == CellNotFound) {
         return;
     }
 
-    NSPoint windowLocation = [event locationInWindow];
-    nvim::grid_point location = [gridView cellLocation:windowLocation clampTo:lastGridSize];
-    nvim::grid_point &lastLocation = lastMouseLocation[button];
+    mouseEvent.location = [gridView cellLocation:event.locationInWindow];
+    mouseEvent.modifiers = [event modifierFlags];
 
-    if (location != lastLocation) {
-        input_modifiers modifiers = input_modifiers(event.modifierFlags);
-        nvim.input_mouse(buttonName(button), "drag", modifiers, location.row, location.column);
-        lastLocation = location;
+    if (!mouseEvent.isDragging) {
+        mouseEvent.isDragging = true;
+        mouseTimerRunningCount += 1;
+        dispatch_resume(mouseTimer);
     }
 }
 
 - (void)mouseUp:(NSEvent *)event button:(MouseButton)button {
-    if (lastMouseLocation[button] == CellNotFound) {
+    MouseEvent &mouseEvent = mouseEvents[button];
+
+    if (mouseEvent.location == CellNotFound) {
         return;
     }
 
-    NSPoint windowLocation = [event locationInWindow];
-    nvim::grid_point location = [gridView cellLocation:windowLocation clampTo:lastGridSize];
+    if (mouseEvent.isDragging && mouseTimerRunningCount > 0) {
+        mouseTimerRunningCount -= 1;
+        dispatch_suspend(mouseTimer);
+    }
 
+    nvim::grid_point location = [gridView cellLocation:event.locationInWindow];
     input_modifiers modifiers = input_modifiers(event.modifierFlags);
     nvim.input_mouse(buttonName(button), "release", modifiers, location.row, location.column);
 }
