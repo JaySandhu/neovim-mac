@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include <sanitizer/asan_interface.h>
+#include <cassert>
 
 #define NOINLINE    [[gnu::noinline]]
 #define LIKELY(x)   __builtin_expect((x), 1)
