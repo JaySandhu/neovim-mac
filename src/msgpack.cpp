@@ -162,7 +162,7 @@ auto get_current_promise() {
             return false;
         }
 
-        bool await_suspend(std::experimental::coroutine_handle<Promise> coro) {
+        bool await_suspend(std::coroutine_handle<Promise> coro) {
             promise = &coro.promise();
             return false;
         }

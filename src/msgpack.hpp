@@ -18,7 +18,7 @@
 #include <string>
 #include <variant>
 #include <vector>
-#include <experimental/coroutine>
+#include <coroutine>
 
 #include "bump_allocator.hpp"
 #include "circular_buffer.hpp"
@@ -305,7 +305,7 @@ std::string type_string(const msg::object &obj);
 class unpacker {
 public:
     class promise_type;
-    using handle_type = std::experimental::coroutine_handle<promise_type>;
+    using handle_type = std::coroutine_handle<promise_type>;
 
     // Unpacking is implemented as a C++20 coroutine. Clang complains if the
     // promise type is not public. Hopefully that changes soon.
@@ -350,17 +350,17 @@ public:
         }
 
         auto initial_suspend() noexcept {
-            return std::experimental::suspend_never();
+            return std::suspend_never();
         }
 
         auto final_suspend() noexcept {
-            return std::experimental::suspend_never();
+            return std::suspend_never();
         }
 
         auto yield_value(msg::object *value) noexcept {
             // We've unpacked an object. Store a pointer to it and suspend.
             obj = value;
-            return std::experimental::suspend_always();
+            return std::suspend_always();
         }
 
         void unhandled_exception() {
