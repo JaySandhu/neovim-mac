@@ -319,11 +319,12 @@ void ui_controller::grid_line(size_t grid_id, size_t row,
             // Double width chars never repeat.
             cell += 1;
             remaining -= 1;
-        } else {
-            *cell = nvim::cell(update.text, update.hlattr);
+        } else if (update.repeat > 0) {
+            const auto updated = nvim::cell(update.text, update.hlattr);
+            *cell = updated;
 
             for (int i=1; i<update.repeat; ++i) {
-                cell[i] = *cell;
+                cell[i] = updated;
             }
 
             cell += update.repeat;
