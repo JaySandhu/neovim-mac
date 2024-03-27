@@ -185,6 +185,10 @@ void ui_controller::redraw_event(const msg::object &event_object) {
         return apply(this, &ui_controller::tabline_update, name, args);
     } else if (name == "set_title") {
         return apply(this, &ui_controller::set_title, name, args);
+    } else if (name == "busy_start") {
+        return apply(this, &ui_controller::busy_start, name, args);
+    } else if (name == "busy_stop") {
+        return apply(this, &ui_controller::busy_stop, name, args);
     }
 
     // When options change, we should inform the delegate. Neovim tends to
@@ -398,6 +402,14 @@ void ui_controller::grid_scroll(size_t grid_id, size_t top, size_t bottom,
         dest += row_width;
         src += row_width;
     }
+}
+
+void ui_controller::busy_start() {
+    writing->cursor_hidden = true;
+}
+
+void ui_controller::busy_stop() {
+    writing->cursor_hidden = false;
 }
 
 void ui_controller::flush() {

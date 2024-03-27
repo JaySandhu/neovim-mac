@@ -327,6 +327,11 @@ static void blinkCursorToggleOn(void *context);
         return;
     }
 
+    if (grid->hide_cursor()) {
+        cursor.toggle_off();
+        return;
+    }
+
     if (cursor.blinks()) {
         auto time = dispatch_time(DISPATCH_TIME_NOW, cursor.blinkwait() * NSEC_PER_MSEC);
 
@@ -386,7 +391,9 @@ static void blinkCursorToggleOff(void *context) {
 static void blinkCursorToggleOn(void *context) {
     NVGridView *self = (__bridge NVGridView*)context;
 
-    self->cursor.toggle_on();
+    if (!self.grid->hide_cursor()) {
+        self->cursor.toggle_on();
+    }
     [self setNeedsDisplay:YES];
 
     auto time = dispatch_time(DISPATCH_TIME_NOW, self->cursor.blinkon() * NSEC_PER_MSEC);
